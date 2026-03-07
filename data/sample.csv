@@ -1,0 +1,2 @@
+date,workspace_id,job_id,job_run_id,job_duration_seconds,task_count,parallelism_ratio,avg_cpu_utilization_pct,avg_memory_utilization_pct,peak_cpu_utilization_pct,peak_memory_utilization_pct,avg_nodes_consumed,p95_nodes_consumed,p99_nodes_consumed,total_cost_usd,cost_per_hour_usd,rows_added,num_of_tables,workload_type,current_node_type,current_min_workers,current_max_workers
+2026-03-04,123456,76587657598757,0304-00099-yhj1ghyj,539.0,0,1.0,7.7158,9.3548,54.22,40.13,6.0,6.8,6.8,0,0,,4,Workflow Job,Standard_E8s_v3,1,17
