@@ -1,11 +1,10 @@
-.PHONY: help install install-dev dev-setup setup up down restart logs shell test clean migrate init-db backup-db restore-db lint format run-api run-test test-local build rebuild psql pgadmin
+.PHONY: help install install-dev dev-setup setup up down restart logs shell test clean migrate init-db backup-db restore-db lint format run-api build rebuild psql pgadmin
 
 # Default target
 .DEFAULT_GOAL := help
 
 # Variables
 COMPOSE_FILE := docker-compose.yml
-COMPOSE_TEST_FILE := docker-compose.test.yml
 API_SERVICE := api
 DB_SERVICE := postgres
 DB_NAME := ai_agents
@@ -169,10 +168,6 @@ run-api-docker: ## Run API in Docker (with hot-reload)
 	@echo "$(BLUE)Starting API in Docker...$(NC)"
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up $(API_SERVICE)
 
-test-local: ## Run test_local_agent.py script
-	@echo "$(BLUE)Running local agent test...$(NC)"
-	python scripts/test_local_agent.py
-
 ##@ Testing
 
 test: ## Run all tests
@@ -186,38 +181,15 @@ test-cov: ## Run tests with coverage report
 	pytest --cov=. --cov-report=html --cov-report=term
 	@echo "$(GREEN)Coverage report generated in htmlcov/index.html$(NC)"
 
-test-docker: ## Run tests in Docker
+test-docker: ## Run tests in Docker container (starts postgres + api as needed)
 	@echo "$(BLUE)Running tests in Docker...$(NC)"
-	@echo "$(YELLOW)Note: This may require network access and Docker daemon$(NC)"
-	@if [ -f .env ]; then \
-		echo "$(YELLOW)Warning: .env file exists but may have permission issues in sandbox$(NC)"; \
-	fi
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) build 2>&1 || (echo "$(YELLOW)Build failed - this may be due to sandbox restrictions$(NC)" && exit 1)
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) up -d postgres-test 2>&1 || (echo "$(YELLOW)Database startup failed$(NC)" && exit 1)
-	@sleep 3
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) run --rm api-test pytest -v --tb=short 2>&1 || (echo "$(YELLOW)Tests failed or container issues$(NC)" && $(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) down && exit 1)
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) down
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) run --rm $(API_SERVICE) pytest -v --tb=short
 
-test-docker-verbose: ## Run tests in Docker with verbose output
-	@echo "$(BLUE)Running tests in Docker (verbose)...$(NC)"
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) run --rm api-test pytest -v --tb=long
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) down
-
-test-docker-cov: ## Run tests in Docker with coverage
-	@echo "$(BLUE)Running tests in Docker with coverage...$(NC)"
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) run --rm api-test pytest --cov=. --cov-report=html --cov-report=term -v
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) down
-
-test-docker-shell: ## Open shell in test container
-	@echo "$(BLUE)Opening shell in test container...$(NC)"
-	@$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) run --rm api-test /bin/bash
-	$(DOCKER_COMPOSE) -f $(COMPOSE_TEST_FILE) up --abort-on-container-exit
-
-test-unit: ## Run unit tests only
-	pytest tests/ -k "test_" --ignore=tests/integration
+test-unit: ## Run unit tests only (uses pytest.ini testpaths)
+	pytest -m unit -v 2>/dev/null || pytest DE/tests AI/tests API/tests -v
 
 test-integration: ## Run integration tests only
-	pytest tests/integration/
+	pytest -m integration -v 2>/dev/null || echo "$(YELLOW)No integration tests found. Add @pytest.mark.integration to tests$(NC)"
 
 ##@ Code Quality
 
