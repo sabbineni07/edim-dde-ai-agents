@@ -1,8 +1,11 @@
 """Database connection management."""
-from sqlalchemy import create_engine, Engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
+
 from typing import Optional
+
+from sqlalchemy import Engine, create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
+
 from shared.config.settings import settings
 from shared.utils.logging import get_logger
 
@@ -46,15 +49,16 @@ def get_database_engine() -> Engine:
                 pool_size=10,
                 max_overflow=20,
                 pool_pre_ping=True,
-                echo=settings.app_env == "development"
+                echo=settings.app_env == "development",
             )
         else:
             _engine = create_engine(
-                database_url,
-                poolclass=NullPool,
-                echo=settings.app_env == "development"
+                database_url, poolclass=NullPool, echo=settings.app_env == "development"
             )
-        logger.info("database_engine_created", database_type="postgresql" if settings.use_postgres else "sqlserver")
+        logger.info(
+            "database_engine_created",
+            database_type="postgresql" if settings.use_postgres else "sqlserver",
+        )
     return _engine
 
 
@@ -68,6 +72,7 @@ def get_database_session() -> Session:
 
 def init_database():
     from shared.database.models import Base
+
     engine = get_database_engine()
     Base.metadata.create_all(bind=engine)
     logger.info("database_tables_initialized")

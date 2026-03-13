@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -17,55 +17,57 @@ if str(project_root) not in sys.path:
 
 # Import after path setup
 try:
-    from AI.src.agents.cluster_config_agent import ClusterConfigAgent
+    from AI.src.agents.cluster_config.agent import ClusterConfigAgent
     from AI.src.services.mock_llm_service import MockLLMService
 except ImportError as e:
     # If import fails, skip tests (for environments without full setup)
     pytest.skip(f"Could not import ClusterConfigAgent: {e}", allow_module_level=True)
 
 
-def _make_mock_azure_openai():
-    """Create a mock AzureOpenAIService that returns MockLLMService's LLM."""
+def _make_mock_llm_provider():
+    """Create a mock LLM provider (implements protocol)."""
     mock_instance = MagicMock()
     mock_instance.get_llm.return_value = MockLLMService().get_llm()
     mock_instance.get_embeddings.return_value = None
     return mock_instance
 
 
+def _create_agent_with_mock_llm():
+    """Create agent with mock LLM (no Azure required)."""
+    from AI.src.chains.cost_optimization_chain import CostOptimizationChain
+    from AI.src.chains.explanation_chain import ExplanationChain
+    from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
+
+    mock_llm = _make_mock_llm_provider()
+    pattern_chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+    cost_chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+    explanation_chain = ExplanationChain(llm_provider=mock_llm)
+    return ClusterConfigAgent(
+        pattern_chain=pattern_chain,
+        cost_chain=cost_chain,
+        explanation_chain=explanation_chain,
+        cost_logger=None,
+        search_service=None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_agent_initialization():
     """Test that agent initializes correctly."""
-    mock_openai = _make_mock_azure_openai()
-    with patch("AI.src.chains.pattern_analysis_chain.AzureOpenAIService", return_value=mock_openai):
-        with patch(
-            "AI.src.chains.cost_optimization_chain.AzureOpenAIService", return_value=mock_openai
-        ):
-            with patch(
-                "AI.src.chains.explanation_chain.AzureOpenAIService", return_value=mock_openai
-            ):
-                agent = ClusterConfigAgent()
-                assert agent is not None
-                assert hasattr(agent, "graph")
+    agent = _create_agent_with_mock_llm()
+    assert agent is not None
+    assert hasattr(agent, "graph")
 
 
 @pytest.mark.asyncio
 async def test_generate_recommendation_with_local_data():
     """Test recommendation generation with local CSV data and mock LLM."""
-    # Ensure local data mode is enabled
     os.environ["USE_LOCAL_DATA"] = "true"
 
-    mock_openai = _make_mock_azure_openai()
-    with patch("AI.src.chains.pattern_analysis_chain.AzureOpenAIService", return_value=mock_openai):
-        with patch(
-            "AI.src.chains.cost_optimization_chain.AzureOpenAIService", return_value=mock_openai
-        ):
-            with patch(
-                "AI.src.chains.explanation_chain.AzureOpenAIService", return_value=mock_openai
-            ):
-                agent = ClusterConfigAgent()
-                result = await agent.generate_recommendation(
-                    job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
-                )
+    agent = _create_agent_with_mock_llm()
+    result = await agent.generate_recommendation(
+        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+    )
 
     # Verify result structure
     assert result is not None
@@ -90,28 +92,13 @@ async def test_agent_with_rag_disabled():
     """Test agent works when RAG is disabled (Azure AI Search not available)."""
     os.environ["USE_LOCAL_DATA"] = "true"
 
-    mock_openai = _make_mock_azure_openai()
-    chain_patches = [
-        patch("AI.src.chains.pattern_analysis_chain.AzureOpenAIService", return_value=mock_openai),
-        patch("AI.src.chains.cost_optimization_chain.AzureOpenAIService", return_value=mock_openai),
-        patch("AI.src.chains.explanation_chain.AzureOpenAIService", return_value=mock_openai),
-    ]
-    # Mock AzureSearchService to return None client
-    with patch("AI.src.services.azure_search_service.AzureSearchService") as mock_search:
-        mock_instance = Mock()
-        mock_instance.client = None
-        mock_instance.index_recommendation = Mock(return_value=False)
-        mock_instance.link_recommendation_to_job = Mock(return_value=False)
-        mock_search.return_value = mock_instance
-        with chain_patches[0], chain_patches[1], chain_patches[2]:
-            agent = ClusterConfigAgent()
-            result = await agent.generate_recommendation(
-                job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
-            )
+    agent = _create_agent_with_mock_llm()
+    result = await agent.generate_recommendation(
+        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+    )
 
-        # Should still work without RAG
-        assert result is not None
-        assert "recommendation" in result
+    assert result is not None
+    assert "recommendation" in result
 
 
 @pytest.mark.asyncio
@@ -119,18 +106,10 @@ async def test_token_usage_tracking():
     """Test that token usage is tracked and included in response."""
     os.environ["USE_LOCAL_DATA"] = "true"
 
-    mock_openai = _make_mock_azure_openai()
-    with patch("AI.src.chains.pattern_analysis_chain.AzureOpenAIService", return_value=mock_openai):
-        with patch(
-            "AI.src.chains.cost_optimization_chain.AzureOpenAIService", return_value=mock_openai
-        ):
-            with patch(
-                "AI.src.chains.explanation_chain.AzureOpenAIService", return_value=mock_openai
-            ):
-                agent = ClusterConfigAgent()
-                result = await agent.generate_recommendation(
-                    job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
-                )
+    agent = _create_agent_with_mock_llm()
+    result = await agent.generate_recommendation(
+        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+    )
 
     # Verify token usage analysis
     token_usage = result.get("token_usage_analysis", {})

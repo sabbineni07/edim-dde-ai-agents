@@ -1,7 +1,9 @@
 """Tests for health check endpoint."""
-import pytest
+
 import sys
 from pathlib import Path
+
+import pytest
 from httpx import ASGITransport, AsyncClient
 
 # Add project root to path
@@ -36,4 +38,3 @@ async def test_readiness_endpoint():
         assert response.status_code in [200, 503]  # 503 if services not ready
         data = response.json()
         assert "status" in data
-

@@ -1,6 +1,9 @@
 """Databricks data collector: reads pre-aggregated job metrics from a centralized Delta table."""
+
+from typing import Any, Dict, List, Optional
+
 from databricks import sql
-from typing import List, Optional, Dict, Any
+
 from shared.config.settings import settings
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
@@ -14,6 +17,7 @@ def _delta_row_to_job_cluster_metrics(row: Dict[str, Any]) -> JobClusterMetrics:
     if isinstance(delta_tables, str):
         try:
             import json
+
             delta_tables = json.loads(delta_tables) if delta_tables else []
         except Exception:
             delta_tables = []
@@ -36,8 +40,12 @@ def _delta_row_to_job_cluster_metrics(row: Dict[str, Any]) -> JobClusterMetrics:
         job_duration_seconds=float(row.get("duration", row.get("job_duration_seconds", 0))),
         task_count=int(row.get("task_count", 0)),
         parallelism_ratio=float(row.get("parallelism_ratio", 1.0)),
-        avg_cpu_utilization_pct=float(row.get("cpu_utilization_pct", row.get("avg_cpu_utilization_pct", 0))),
-        avg_memory_utilization_pct=float(row.get("memory_utilization_pct", row.get("avg_memory_utilization_pct", 0))),
+        avg_cpu_utilization_pct=float(
+            row.get("cpu_utilization_pct", row.get("avg_cpu_utilization_pct", 0))
+        ),
+        avg_memory_utilization_pct=float(
+            row.get("memory_utilization_pct", row.get("avg_memory_utilization_pct", 0))
+        ),
         peak_cpu_utilization_pct=float(row.get("peak_cpu_utilization_pct", 0)),
         peak_memory_utilization_pct=float(row.get("peak_memory_utilization_pct", 0)),
         avg_nodes_consumed=float(row.get("avg_nodes_consumed", 0)),
@@ -48,9 +56,13 @@ def _delta_row_to_job_cluster_metrics(row: Dict[str, Any]) -> JobClusterMetrics:
         rows_added=row.get("rows_added"),
         num_of_tables=num_tables,
         workload_type=row.get("job_type", row.get("workload_type")),
-        current_node_type=str(row.get("node_type", row.get("current_node_type", "Standard_E8s_v3"))),
+        current_node_type=str(
+            row.get("node_type", row.get("current_node_type", "Standard_E8s_v3"))
+        ),
         current_min_workers=int(row.get("current_min_workers", 1)),
-        current_max_workers=int(max_nodes) if max_nodes is not None else int(row.get("current_max_workers", 16)),
+        current_max_workers=(
+            int(max_nodes) if max_nodes is not None else int(row.get("current_max_workers", 16))
+        ),
         job_date=str(row["job_date"]) if row.get("job_date") is not None else None,
         workspace_name=row.get("workspace_name"),
         job_name=row.get("job_name"),
@@ -103,7 +115,7 @@ class DatabricksCollector:
         start_date: str,
         end_date: str,
         job_ids: Optional[List[str]] = None,
-        workspace_id: Optional[str] = None
+        workspace_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Collect job cluster metrics by job_id and date range from the centralized Delta table."""
         logger.info(
@@ -155,17 +167,16 @@ class DatabricksCollector:
                             metrics.append(_delta_row_to_job_cluster_metrics(row_dict))
                         except Exception as e:
                             logger.warning("failed_to_parse_delta_row", error=str(e), row=row_dict)
-                    logger.info("collected_job_cluster_metrics_from_delta", count=len(metrics), table=table)
+                    logger.info(
+                        "collected_job_cluster_metrics_from_delta", count=len(metrics), table=table
+                    )
                     return metrics
         except Exception as e:
             logger.error("databricks_collection_error", error=str(e), table=table)
             raise
 
     def collect_cost_data(
-        self,
-        start_date: str,
-        end_date: str,
-        job_ids: Optional[List[str]] = None
+        self, start_date: str, end_date: str, job_ids: Optional[List[str]] = None
     ) -> List[Dict]:
         """Collect cost and usage data."""
         logger.info("collecting_cost_data", start_date=start_date, end_date=end_date)

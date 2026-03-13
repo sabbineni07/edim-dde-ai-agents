@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Database migration script."""
+
 import sys
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from shared.database.connection import init_database, get_database_engine
+from shared.database.connection import get_database_engine, init_database
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -16,7 +17,7 @@ logger = get_logger(__name__)
 def main():
     """Run database migrations."""
     logger.info("starting_database_migration")
-    
+
     try:
         # Initialize database (creates tables)
         init_database()
@@ -30,4 +31,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

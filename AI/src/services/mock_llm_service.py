@@ -1,9 +1,12 @@
 """Mock LLM service for local testing without Azure OpenAI."""
-from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import BaseMessage, AIMessage
+
+from typing import Any, List, Optional
+
 from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
-from typing import List, Optional, Any
+
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -11,18 +14,18 @@ logger = get_logger(__name__)
 
 class MockChatModel(BaseChatModel):
     """Mock chat model for local testing."""
-    
+
     def _generate(
         self,
         messages: List[BaseMessage],
         stop: Optional[List[str]] = None,
         run_manager: Optional[CallbackManagerForLLMRun] = None,
-        **kwargs: Any
+        **kwargs: Any,
     ) -> ChatResult:
         """Generate a mock response."""
         # Simple mock response based on the input
         prompt_text = str(messages[-1].content) if messages else ""
-        
+
         # Generate context-aware mock responses
         if "pattern" in prompt_text.lower() or "analyze" in prompt_text.lower():
             response = """Based on the job metrics provided, this workload shows:
@@ -39,11 +42,11 @@ class MockChatModel(BaseChatModel):
 - The recommended configuration maintains performance while reducing costs through better resource alignment."""
         else:
             response = "Mock LLM response for local testing. This is a placeholder response."
-        
+
         message = AIMessage(content=response)
         generation = ChatGeneration(message=message)
         return ChatResult(generations=[generation])
-    
+
     @property
     def _llm_type(self) -> str:
         """Return the LLM type."""
@@ -52,17 +55,16 @@ class MockChatModel(BaseChatModel):
 
 class MockLLMService:
     """Mock LLM service for local testing."""
-    
+
     def __init__(self):
         """Initialize mock LLM service."""
         self.llm = MockChatModel()
         logger.info("mock_llm_service_initialized")
-    
+
     def get_llm(self):
         """Get the mock LLM instance."""
         return self.llm
-    
+
     def get_embeddings(self):
         """Get mock embeddings (returns None for now)."""
         return None
-

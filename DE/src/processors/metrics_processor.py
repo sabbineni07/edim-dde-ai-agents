@@ -1,17 +1,30 @@
 """Metrics processing and aggregation."""
-from typing import List, Dict, Any
+
+from typing import Any, Dict, List
+
+import pandas as pd
+
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
-import pandas as pd
 
 logger = get_logger(__name__)
 
 # Optional Delta table fields to pass through to the agent (from centralized table)
 _OPTIONAL_DELTA_KEYS = (
-    "job_name", "workspace_name", "job_date", "cluster_id", "start_time", "end_time",
-    "delta_tables", "provisioning_efficiency_pct", "cpu_utilization_efficiency_pct",
-    "memory_utilization_efficiency_pct", "max_nodes_provisioned", "total_cpus_provisioned",
-    "total_memory_gb_provisioned", "workload_type",
+    "job_name",
+    "workspace_name",
+    "job_date",
+    "cluster_id",
+    "start_time",
+    "end_time",
+    "delta_tables",
+    "provisioning_efficiency_pct",
+    "cpu_utilization_efficiency_pct",
+    "memory_utilization_efficiency_pct",
+    "max_nodes_provisioned",
+    "total_cpus_provisioned",
+    "total_memory_gb_provisioned",
+    "workload_type",
 )
 
 
@@ -59,13 +72,13 @@ class MetricsProcessor:
 
         logger.info("aggregated_metrics", job_count=len(aggregated))
         return aggregated
-    
+
     def identify_workload_pattern(self, metrics: JobClusterMetrics) -> str:
         """Identify workload pattern from metrics.
-        
+
         Args:
             metrics: JobClusterMetrics object
-            
+
         Returns:
             Workload type string
         """
@@ -74,12 +87,11 @@ class MetricsProcessor:
             if metrics.num_of_tables and metrics.num_of_tables <= 3:
                 return "Large_ETL"
             return "Complex_ETL"
-        
+
         if metrics.avg_cpu_utilization_pct > 70:
             return "CPU_Intensive"
-        
+
         if metrics.avg_memory_utilization_pct > 70:
             return "Memory_Intensive"
-        
-        return "Balanced"
 
+        return "Balanced"

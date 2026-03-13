@@ -1,21 +1,34 @@
 """Explanation generation chain."""
-from langchain_core.prompts import ChatPromptTemplate
+
+from typing import TYPE_CHECKING
+
 from langchain_core.output_parsers import StrOutputParser
-from AI.src.services.azure_openai_service import AzureOpenAIService
+from langchain_core.prompts import ChatPromptTemplate
+
 from shared.utils.logging import get_logger
+
+if TYPE_CHECKING:
+    from shared.abstractions.protocols import LLMProvider
 
 logger = get_logger(__name__)
 
 
 class ExplanationChain:
     """LangChain for generating detailed explanations."""
-    
-    def __init__(self):
-        """Initialize explanation chain."""
-        self.llm = AzureOpenAIService().get_llm()
-        
-        self.prompt = ChatPromptTemplate.from_messages([
-            ("system", """## Role
+
+    def __init__(self, llm_provider: "LLMProvider"):
+        """Initialize explanation chain.
+
+        Args:
+            llm_provider: LLM provider (e.g. AzureOpenAIService)
+        """
+        self.llm = llm_provider.get_llm()
+
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """## Role
 You are an expert at explaining Databricks cluster recommendations. Your explanation will be read by platform or data engineers to decide whether to apply the recommendation.
 
 ## Task
@@ -38,8 +51,11 @@ Use exactly these markdown headings. One short block per section.
 ### 3. Current vs recommended configuration
 ### 4. Expected impact
 ### 5. Risks and mitigations
-### 6. Alternatives"""),
-            ("human", """## Input: Recommendation
+### 6. Alternatives""",
+                ),
+                (
+                    "human",
+                    """## Input: Recommendation
 {recommendation}
 
 ## Input: Job cluster metrics
@@ -52,29 +68,32 @@ Use exactly these markdown headings. One short block per section.
 {risk_assessment}
 
 ## Instruction
-Using only the four inputs above, write the structured explanation with the six sections: Rationale, Evidence, Current vs recommended configuration, Expected impact, Risks and mitigations, Alternatives. Cite specific numbers from the inputs.""")
-        ])
-        
+Using only the four inputs above, write the structured explanation with the six sections: Rationale, Evidence, Current vs recommended configuration, Expected impact, Risks and mitigations, Alternatives. Cite specific numbers from the inputs.""",
+                ),
+            ]
+        )
+
         self.chain = self.prompt | self.llm | StrOutputParser()
-    
+
     def explain(
         self,
         recommendation: dict,
         job_cluster_metrics: dict,
         pattern_analysis: str,
-        risk_assessment: dict
+        risk_assessment: dict,
     ) -> str:
         """Generate detailed explanation."""
         try:
-            result = self.chain.invoke({
-                "recommendation": str(recommendation),
-                "job_cluster_metrics": str(job_cluster_metrics),
-                "pattern_analysis": pattern_analysis,
-                "risk_assessment": str(risk_assessment)
-            })
+            result = self.chain.invoke(
+                {
+                    "recommendation": str(recommendation),
+                    "job_cluster_metrics": str(job_cluster_metrics),
+                    "pattern_analysis": pattern_analysis,
+                    "risk_assessment": str(risk_assessment),
+                }
+            )
             logger.info("explanation_generated")
             return result if isinstance(result, str) else str(result)
         except Exception as e:
             logger.error("explanation_error", error=str(e))
             raise
-

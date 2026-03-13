@@ -27,10 +27,34 @@ CREATE TABLE IF NOT EXISTS daily_cost_summary (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Recommendations history table
+-- Request logs table (one row per API request, success or failure; generic across endpoints)
+CREATE TABLE IF NOT EXISTS request_logs (
+    id SERIAL PRIMARY KEY,
+    request_id UUID UNIQUE,
+    endpoint VARCHAR(255) NOT NULL,
+    request_params JSONB NOT NULL DEFAULT '{}',
+    job_id VARCHAR(255),
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    status VARCHAR(50) NOT NULL,
+    duration_ms INTEGER,
+    error_code VARCHAR(100),
+    error_message TEXT,
+    user_id VARCHAR(255),
+    workspace_id VARCHAR(255),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_request_logs_endpoint ON request_logs(endpoint);
+CREATE INDEX IF NOT EXISTS idx_request_logs_job_id ON request_logs(job_id);
+CREATE INDEX IF NOT EXISTS idx_request_logs_timestamp ON request_logs(timestamp);
+CREATE INDEX IF NOT EXISTS idx_request_logs_status ON request_logs(status);
+CREATE INDEX IF NOT EXISTS idx_request_logs_request_id ON request_logs(request_id);
+
+-- Recommendations history table (request_log_request_id references request_logs.request_id)
 CREATE TABLE IF NOT EXISTS recommendations_history (
     id SERIAL PRIMARY KEY,
     request_id UUID UNIQUE,
+    request_log_request_id UUID REFERENCES request_logs(request_id),
     job_id VARCHAR(255) NOT NULL,
     user_id VARCHAR(255),
     workspace_id VARCHAR(255),
@@ -53,6 +77,7 @@ CREATE INDEX IF NOT EXISTS idx_cost_logs_chain ON cost_usage_logs(chain_name);
 CREATE INDEX IF NOT EXISTS idx_recommendations_job_id ON recommendations_history(job_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON recommendations_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_recommendations_request_id ON recommendations_history(request_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_request_log_request_id ON recommendations_history(request_log_request_id);
 
 -- Function to update daily summary
 CREATE OR REPLACE FUNCTION update_daily_cost_summary()

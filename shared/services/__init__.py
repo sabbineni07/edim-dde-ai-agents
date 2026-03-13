@@ -1,4 +1,5 @@
 """Shared services."""
-from .cost_logging_service import CostLoggingService
 
-__all__ = ["CostLoggingService"]
+from .observability_service import ObservabilityService
+
+__all__ = ["ObservabilityService"]

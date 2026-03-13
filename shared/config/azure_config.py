@@ -1,8 +1,11 @@
 """Azure credential management."""
+
 import os
-from azure.identity import DefaultAzureCredential, ManagedIdentityCredential, ClientSecretCredential
-from azure.keyvault.secrets import SecretClient
 from typing import Optional
+
+from azure.identity import ClientSecretCredential, DefaultAzureCredential, ManagedIdentityCredential
+from azure.keyvault.secrets import SecretClient
+
 from .settings import settings
 
 
@@ -20,7 +23,7 @@ class AzureConfig:
                 self._credential = ClientSecretCredential(
                     tenant_id=settings.azure_tenant_id,
                     client_id=settings.azure_client_id,
-                    client_secret=settings.azure_client_secret
+                    client_secret=settings.azure_client_secret,
                 )
             else:
                 self._credential = DefaultAzureCredential()

@@ -23,10 +23,11 @@ except ImportError as e:
     pytest.skip(f"Could not import required modules: {e}", allow_module_level=True)
 
 
-def _make_mock_openai_with_real_llm():
-    """Create a mock AzureOpenAIService that returns a real Runnable (MockChatModel)."""
+def _make_mock_llm_provider():
+    """Create a mock LLM provider (implements protocol)."""
     mock_instance = MagicMock()
     mock_instance.get_llm.return_value = MockLLMService().get_llm()
+    mock_instance.get_embeddings.return_value = None
     return mock_instance
 
 
@@ -89,28 +90,24 @@ class TestPatternAnalysisChain:
     """Tests for PatternAnalysisChain with RAG."""
 
     def test_initialization_with_rag(self):
-        """Test chain initializes with RAG enabled."""
-        with patch(
-            "AI.src.chains.pattern_analysis_chain.AzureOpenAIService",
-            return_value=_make_mock_openai_with_real_llm(),
-        ):
-            chain = PatternAnalysisChain(use_rag=True)
-            assert chain.use_rag is True
+        """Test chain initializes with RAG when search service provided."""
+        mock_llm = _make_mock_llm_provider()
+        mock_search = MagicMock()
+        chain = PatternAnalysisChain(
+            llm_provider=mock_llm, search_service=mock_search, use_rag=True
+        )
+        assert chain.use_rag is True
 
     def test_initialization_without_rag(self):
-        """Test chain initializes with RAG disabled."""
-        with patch(
-            "AI.src.chains.pattern_analysis_chain.AzureOpenAIService",
-            return_value=_make_mock_openai_with_real_llm(),
-        ):
-            chain = PatternAnalysisChain(use_rag=False)
-            assert chain.use_rag is False
+        """Test chain initializes with RAG disabled when no search service."""
+        mock_llm = _make_mock_llm_provider()
+        chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        assert chain.use_rag is False
 
-    @patch("AI.src.chains.pattern_analysis_chain.AzureOpenAIService")
-    def test_analyze_without_rag(self, mock_openai):
+    def test_analyze_without_rag(self):
         """Test analyze works without RAG."""
-        mock_openai.return_value = _make_mock_openai_with_real_llm()
-        chain = PatternAnalysisChain(use_rag=False)
+        mock_llm = _make_mock_llm_provider()
+        chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
         chain.chain = Mock()
         chain.chain.invoke = Mock(return_value="Test analysis")
 
@@ -124,30 +121,26 @@ class TestCostOptimizationChain:
     """Tests for CostOptimizationChain with RAG."""
 
     def test_initialization_with_rag(self):
-        """Test chain initializes with RAG enabled."""
-        with patch(
-            "AI.src.chains.cost_optimization_chain.AzureOpenAIService",
-            return_value=_make_mock_openai_with_real_llm(),
-        ):
-            chain = CostOptimizationChain(use_rag=True)
-            assert chain.use_rag is True
+        """Test chain initializes with RAG when search service provided."""
+        mock_llm = _make_mock_llm_provider()
+        mock_search = MagicMock()
+        chain = CostOptimizationChain(
+            llm_provider=mock_llm, search_service=mock_search, use_rag=True
+        )
+        assert chain.use_rag is True
 
     def test_initialization_without_rag(self):
-        """Test chain initializes with RAG disabled."""
-        with patch(
-            "AI.src.chains.cost_optimization_chain.AzureOpenAIService",
-            return_value=_make_mock_openai_with_real_llm(),
-        ):
-            chain = CostOptimizationChain(use_rag=False)
-            assert chain.use_rag is False
+        """Test chain initializes with RAG disabled when no search service."""
+        mock_llm = _make_mock_llm_provider()
+        chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        assert chain.use_rag is False
 
-    @patch("AI.src.chains.cost_optimization_chain.AzureOpenAIService")
-    def test_optimize_without_rag(self, mock_openai):
+    def test_optimize_without_rag(self):
         """Test optimize works without RAG."""
         import json
 
-        mock_openai.return_value = _make_mock_openai_with_real_llm()
-        chain = CostOptimizationChain(use_rag=False)
+        mock_llm = _make_mock_llm_provider()
+        chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
         chain.chain = Mock()
         chain.chain.invoke = Mock(
             return_value=json.dumps(

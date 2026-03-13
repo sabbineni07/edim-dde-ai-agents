@@ -203,20 +203,18 @@ lint: ## Run linter
 		echo "$(YELLOW)Linter not installed. Install ruff or flake8$(NC)"; \
 	fi
 
-format: ## Format code with black and isort
+format: ## Format code with black and isort (uses .venv if present)
 	@echo "$(BLUE)Formatting code...$(NC)"
-	@if command -v isort > /dev/null; then \
-		isort .; \
-		echo "$(GREEN)Imports sorted$(NC)"; \
-	else \
-		echo "$(YELLOW)isort not installed. Run: make dev-setup$(NC)"; \
-	fi
-	@if command -v black > /dev/null; then \
-		black .; \
-		echo "$(GREEN)Code formatted$(NC)"; \
-	else \
-		echo "$(YELLOW)Black not installed. Run: make dev-setup$(NC)"; \
-	fi
+	@[ -x .venv/bin/isort ] && ISORT=.venv/bin/isort || ISORT=$$(command -v isort 2>/dev/null); \
+	if [ -z "$$ISORT" ]; then \
+		echo "$(YELLOW)isort not found. Run: make dev-setup$(NC)"; exit 1; \
+	fi; \
+	"$$ISORT" . && echo "$(GREEN)Imports sorted$(NC)"
+	@[ -x .venv/bin/black ] && BLACK=.venv/bin/black || BLACK=$$(command -v black 2>/dev/null); \
+	if [ -z "$$BLACK" ]; then \
+		echo "$(YELLOW)black not found. Run: make dev-setup$(NC)"; exit 1; \
+	fi; \
+	"$$BLACK" . && echo "$(GREEN)Code formatted$(NC)"
 
 type-check: ## Run type checking with mypy
 	@echo "$(BLUE)Running type checker...$(NC)"

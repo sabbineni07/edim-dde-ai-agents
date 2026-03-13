@@ -1,7 +1,9 @@
 """Application settings."""
+
+from typing import Optional
+
 from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -56,15 +58,23 @@ class Settings(BaseSettings):
     use_local_data: bool = False
     local_data_path: Optional[str] = None
 
+    # Agent/recommendation defaults (overridable via env)
+    default_monthly_budget: float = 500.0
+    default_model_name: str = "gpt-4o"
+    default_confidence_score: float = 0.85
+
+    # Guardrails (input/output/safety)
+    guardrail_max_job_id_length: int = 256
+    guardrail_max_date_range_days: int = 30
+    guardrail_supported_intent: str = "cluster_recommendation"
+
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )
 
 
-import warnings
 import os
+import warnings
 
 use_env_file = True
 if os.path.exists(".env"):
