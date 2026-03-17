@@ -46,6 +46,14 @@ class MetricsProcessor:
         for job_id in df["job_id"].unique():
             job_df = df[df["job_id"] == job_id]
             first = job_df.iloc[0]
+            # Derive last run date if job_date is present
+            last_run_date = None
+            if "job_date" in job_df.columns:
+                try:
+                    # job_date is stored as string YYYY-MM-DD in JobClusterMetrics
+                    last_run_date = max(job_df["job_date"])
+                except Exception:
+                    last_run_date = None
 
             agg: Dict[str, Any] = {
                 "avg_duration_seconds": job_df["job_duration_seconds"].mean(),
@@ -63,6 +71,7 @@ class MetricsProcessor:
                 "current_node_type": first["current_node_type"],
                 "current_min_workers": int(first["current_min_workers"]),
                 "current_max_workers": int(first["current_max_workers"]),
+                "last_run_date": last_run_date,
             }
             # Pass through optional Delta fields for the agent
             for key in _OPTIONAL_DELTA_KEYS:

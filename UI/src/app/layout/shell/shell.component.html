@@ -1,0 +1,38 @@
+<div class="shell">
+  <header class="shell-header">
+    <div class="header-content">
+      <div class="header-left">
+        <button class="sidebar-toggle-btn" (click)="toggleSidebar()" type="button" aria-label="Toggle sidebar">
+          <i class="bi" [ngClass]="sidebarOpen ? 'bi-chevron-left' : 'bi-chevron-right'"></i>
+        </button>
+        <i class="bi bi-cpu app-icon me-2"></i>
+        <h1 class="app-title">Cluster Advisor</h1>
+      </div>
+      <div class="header-right">
+        <span class="user-text">{{ username }}</span>
+        <div class="dropdown">
+          <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="bi bi-person-circle me-1"></i> Account
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><span class="dropdown-item-text text-muted small">{{ username }}</span></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><button class="dropdown-item" type="button" (click)="logout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</button></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="shell-body">
+    <app-sidebar
+      [menuItems]="menuItems"
+      [activeMenuItem]="activeMenuItem"
+      [isOpen]="sidebarOpen"
+      (menuItemClick)="onMenuItemClick($event)"
+    ></app-sidebar>
+    <main class="main-content" [class.sidebar-closed]="!sidebarOpen">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>

@@ -1,0 +1,59 @@
+<div class="page-header mb-4">
+  <nav class="mb-2">
+    <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
+    <span class="mx-2 text-muted">/</span>
+    <span class="small" *ngIf="workspaceId">Jobs</span>
+  </nav>
+  <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
+  <p class="text-muted small mb-0 mt-1" *ngIf="workspaceId">Workspace: <code>{{ workspaceId }}</code></p>
+</div>
+
+<div class="alert alert-info" *ngIf="!workspaceId">
+  Select a workspace from <a routerLink="/app/workspaces">Workspaces</a> to see jobs.
+</div>
+
+<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+
+<div class="mb-3" *ngIf="workspaceId">
+  <input type="text" class="form-control form-control-sm" style="max-width: 300px;" placeholder="Filter by job id, name, workload..." [(ngModel)]="filterText" />
+</div>
+
+<div class="card" *ngIf="loading && workspaceId">
+  <div class="card-body text-center py-5">
+    <div class="spinner-border text-primary"></div>
+    <p class="mt-2 mb-0 text-muted">Loading jobs...</p>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && workspaceId && !jobs.length && !error">
+  <div class="card-body text-center py-5 text-muted">No jobs in this workspace for the default date range.</div>
+</div>
+
+<div class="table-responsive" *ngIf="!loading && workspaceId && filteredJobs.length > 0">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Job ID</th>
+        <th>Name</th>
+        <th>Workload</th>
+        <th>Avg CPU %</th>
+        <th>Avg Mem %</th>
+        <th>Runs</th>
+        <th>Node type</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let j of filteredJobs">
+        <td><code class="small">{{ j.job_id }}</code></td>
+        <td>{{ j.job_name || '–' }}</td>
+        <td>{{ j.workload_type || '–' }}</td>
+        <td>{{ j.avg_cpu_utilization_pct != null ? (j.avg_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td>{{ j.avg_memory_utilization_pct != null ? (j.avg_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td>{{ j.total_runs ?? '–' }}</td>
+        <td class="small">{{ j.current_node_type || '–' }}</td>
+        <td><button class="btn btn-primary btn-sm" (click)="openDetail(j)">View details</button></td>
+      </tr>
+    </tbody>
+  </table>
+</div>

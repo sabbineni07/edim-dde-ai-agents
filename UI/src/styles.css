@@ -1,0 +1,36 @@
+:root {
+  --navy-primary: #003087;
+  --navy-secondary: #004C97;
+  --navy-dark: #001F5C;
+  --navy-accent: #0066CC;
+  --navy-text: #1A1A1A;
+  --navy-text-light: #666666;
+  --navy-bg: #F5F5F5;
+  --navy-white: #FFFFFF;
+  --navy-border: #CCCCCC;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: var(--navy-text);
+  background-color: var(--navy-bg);
+}
+
+.btn-primary {
+  background-color: var(--navy-primary);
+  border-color: var(--navy-primary);
+}
+.btn-primary:hover {
+  background-color: var(--navy-secondary);
+  border-color: var(--navy-secondary);
+}
+.form-control:focus {
+  border-color: var(--navy-accent);
+  box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+}

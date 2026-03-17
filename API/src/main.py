@@ -7,7 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
-from API.src.routes import agents, cost_analytics, health, recommendations
+from API.src.routes import agents, chat, cost_analytics, health, jobs, recommendations
 from shared.config.settings import settings
 from shared.guardrails.exceptions import (
     GuardrailValidationError,
@@ -95,6 +95,8 @@ app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(cost_analytics.router, prefix="/api/cost", tags=["cost-analytics"])
+app.include_router(jobs.router, prefix="/api", tags=["jobs"])
+app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
 
 if __name__ == "__main__":

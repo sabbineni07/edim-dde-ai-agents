@@ -1,0 +1,17 @@
+<aside class="sidebar" [class.sidebar-closed]="!isOpen">
+  <nav class="sidebar-nav">
+    <ul class="nav-list">
+      <li *ngFor="let item of menuItems" class="nav-item">
+        <a
+          class="nav-link"
+          [class.active]="activeMenuItem?.label === item.label"
+          (click)="onItemClick(item)"
+          href="javascript:void(0)"
+        >
+          <i class="nav-icon" [ngClass]="getIconClass(item.icon)"></i>
+          <span class="nav-label">{{ item.label }}</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+</aside>

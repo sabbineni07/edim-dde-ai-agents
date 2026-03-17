@@ -1,0 +1,50 @@
+<div class="page-header d-flex justify-content-between align-items-center mb-4">
+  <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
+  <button class="btn btn-outline-primary btn-sm" (click)="load()" [disabled]="loading">
+    <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
+  </button>
+</div>
+
+<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+
+<div class="card" *ngIf="loading && !workspaces.length">
+  <div class="card-body text-center py-5">
+    <div class="spinner-border text-primary"></div>
+    <p class="mt-2 mb-0 text-muted">Loading workspaces...</p>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && workspaces.length === 0 && !error">
+  <div class="card-body text-center py-5 text-muted">
+    <i class="bi bi-inbox display-4"></i>
+    <p class="mt-2 mb-0">No workspaces found. Ensure the data source (CSV or Delta) has metrics for the date range.</p>
+  </div>
+</div>
+
+<div class="table-responsive" *ngIf="!loading && workspaces.length > 0">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Workspace</th>
+        <th>ID</th>
+        <th>Jobs</th>
+        <th>Date range</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let w of workspaces">
+        <td>{{ w.workspace_name || w.workspace_id }}</td>
+        <td><code class="small">{{ w.workspace_id }}</code></td>
+        <td>{{ w.job_count }}</td>
+        <td class="small text-muted">
+          <span *ngIf="w.first_seen_date">{{ w.first_seen_date }} – {{ w.last_seen_date }}</span>
+          <span *ngIf="!w.first_seen_date">–</span>
+        </td>
+        <td>
+          <button class="btn btn-primary btn-sm" (click)="openJobs(w)">View jobs</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
