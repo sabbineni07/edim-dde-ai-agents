@@ -70,19 +70,21 @@ setup: ## Initial project setup (create venv and install dependencies)
 
 ##@ Docker
 
-up: ## Start all Docker services (fetches Azure access token for container if 'az' is available)
+up: ## Start all Docker services (fetches Azure tokens for container if 'az' is available)
 	@echo "$(BLUE)Starting Docker services...$(NC)"
 	@if command -v az >/dev/null 2>&1; then \
-		echo "$(BLUE)Fetching Azure access token for container...$(NC)"; \
+		echo "$(BLUE)Fetching Azure access tokens for container...$(NC)"; \
 		export AZURE_OPENAI_ACCESS_TOKEN=$$(az account get-access-token --resource https://cognitiveservices.azure.com --query accessToken -o tsv 2>/dev/null) || true; \
-		if [ -n "$$AZURE_OPENAI_ACCESS_TOKEN" ]; then echo "$(GREEN)Token set for AZURE_OPENAI_ACCESS_TOKEN$(NC)"; else echo "$(YELLOW)No token (run 'az login' if needed); container will use API key or DefaultAzureCredential$(NC)"; fi; \
+		if [ -n "$$AZURE_OPENAI_ACCESS_TOKEN" ]; then echo "$(GREEN)Token set for AZURE_OPENAI_ACCESS_TOKEN$(NC)"; else echo "$(YELLOW)No OpenAI token (run 'az login' if needed); container will use API key or DefaultAzureCredential$(NC)"; fi; \
+		export DATABRICKS_TOKEN=$$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query accessToken -o tsv 2>/dev/null) || true; \
+		if [ -n "$$DATABRICKS_TOKEN" ]; then echo "$(GREEN)Token set for DATABRICKS_TOKEN (Azure AD)$(NC)"; else echo "$(YELLOW)No Databricks token; set DATABRICKS_TOKEN in .env or use PAT$(NC)"; fi; \
 	fi; \
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
 	@echo "$(GREEN)Services started. Use 'make logs' to view logs$(NC)"
 
-down: ## Stop all Docker services
+down: ## Stop all Docker services (includes pgAdmin when started with make pgadmin)
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) down
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) --profile tools down
 	@echo "$(GREEN)Services stopped$(NC)"
 
 restart: ## Restart all Docker services
