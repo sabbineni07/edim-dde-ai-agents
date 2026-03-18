@@ -5,8 +5,8 @@ export interface User {
   displayName?: string;
 }
 
-const AUTH_KEY = 'cluster_advisor_auth';
-const USER_KEY = 'cluster_advisor_user';
+const AUTH_KEY = 'insights_hub_auth';
+const USER_KEY = 'insights_hub_user';
 
 @Injectable({ providedIn: 'root' })
 export class AuthService {

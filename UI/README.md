@@ -1,6 +1,6 @@
-# Cluster Advisor UI
+# Insights Hub UI
 
-Angular 17 UI for the Cluster Advisor API (workspaces, jobs, recommendations, chat).
+Angular 17 UI for Insights Hub (workspaces, jobs, recommendations, chat).
 
 ## Prerequisites
 
@@ -37,7 +37,7 @@ The app will be at **http://localhost:4200**. API requests are proxied to **http
 npm run build
 ```
 
-Output is in `dist/cluster-advisor-ui/`. Serve with any static server or point your backend to this folder.
+Output is in `dist/cluster-advisor-ui/`. Serve with any static server or point your backend to this folder. (Project internal name remains cluster-advisor-ui; the app title is "Insights Hub".)
 
 ## Auth
 
