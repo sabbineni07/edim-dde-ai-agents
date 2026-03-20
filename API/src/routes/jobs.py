@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Set
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
-from DE.src.processors.metrics_processor import MetricsProcessor
 from shared.database.connection import get_database_session
 from shared.database.models import CostUsageLog, RecommendationHistory, RequestLog
 from shared.factories.data_collector_factory import get_data_collector
@@ -53,43 +52,13 @@ def list_workspaces(
     dr = _default_date_range(start_date, end_date)
     collector = get_data_collector()
     try:
-        metrics = collector.collect_job_cluster_metrics(
+        return collector.list_workspaces(
             start_date=dr["start_date"],
             end_date=dr["end_date"],
-            job_ids=None,
-            workspace_id=None,
         )
     except Exception as e:
         logger.error("list_workspaces_error", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to load workspaces") from e
-
-    workspaces: Dict[str, Dict[str, Any]] = {}
-    for m in metrics:
-        # JobClusterMetrics model; use dict view
-        rec = m.model_dump() if hasattr(m, "model_dump") else m.dict()
-        wid = rec.get("workspace_id") or "unknown"
-        wname = rec.get("workspace_name") or wid
-        job_id = rec.get("job_id")
-        job_date = rec.get("job_date") or rec.get("date")
-        ws = workspaces.setdefault(
-            wid,
-            {
-                "workspace_id": wid,
-                "workspace_name": wname,
-                "job_count": 0,
-                "first_seen_date": job_date,
-                "last_seen_date": job_date,
-            },
-        )
-        if job_id:
-            ws["job_count"] += 1
-        if job_date:
-            if ws["first_seen_date"] is None or job_date < ws["first_seen_date"]:
-                ws["first_seen_date"] = job_date
-            if ws["last_seen_date"] is None or job_date > ws["last_seen_date"]:
-                ws["last_seen_date"] = job_date
-
-    return list(workspaces.values())
 
 
 @router.get("/workspaces/{workspace_id}/jobs")
@@ -108,44 +77,14 @@ def list_jobs_for_workspace(
     dr = _default_date_range(start_date, end_date)
     collector = get_data_collector()
     try:
-        metrics = collector.collect_job_cluster_metrics(
+        return collector.list_jobs_for_workspace(
+            workspace_id=workspace_id,
             start_date=dr["start_date"],
             end_date=dr["end_date"],
-            job_ids=None,
-            workspace_id=workspace_id,
         )
     except Exception as e:
         logger.error("list_jobs_error", error=str(e), workspace_id=workspace_id)
         raise HTTPException(status_code=500, detail="Failed to load jobs") from e
-
-    if not metrics:
-        return []
-
-    processor = MetricsProcessor()
-    aggregated = processor.aggregate_by_job(metrics)
-
-    jobs: List[Dict[str, Any]] = []
-    for job_id, agg in aggregated.items():
-        jobs.append(
-            {
-                "workspace_id": workspace_id,
-                "job_id": job_id,
-                "job_name": agg.get("job_name"),
-                "workload_type": agg.get("workload_type"),
-                "avg_cpu_utilization_pct": agg.get("avg_cpu_utilization"),
-                "avg_memory_utilization_pct": agg.get("avg_memory_utilization"),
-                "total_runs": agg.get("total_runs"),
-                "avg_duration_seconds": agg.get("avg_duration_seconds"),
-                "current_node_type": agg.get("current_node_type"),
-                "current_min_workers": agg.get("current_min_workers"),
-                "current_max_workers": agg.get("current_max_workers"),
-                "last_run_date": agg.get("last_run_date"),
-            }
-        )
-
-    # Sort by job_name then job_id for stable UI
-    jobs.sort(key=lambda j: (j.get("job_name") or "", j.get("job_id") or ""))
-    return jobs
 
 
 @router.get("/workspaces/{workspace_id}/jobs/{job_id}/metrics")
@@ -169,11 +108,11 @@ def get_job_metrics(
     dr = _default_date_range(start_date, end_date)
     collector = get_data_collector()
     try:
-        metrics = collector.collect_job_cluster_metrics(
+        agg = collector.get_job_metrics(
+            workspace_id=workspace_id,
+            job_id=job_id,
             start_date=dr["start_date"],
             end_date=dr["end_date"],
-            job_ids=[job_id],
-            workspace_id=workspace_id,
         )
     except Exception as e:
         logger.error(
@@ -184,15 +123,8 @@ def get_job_metrics(
         )
         raise HTTPException(status_code=500, detail="Failed to load job metrics") from e
 
-    if not metrics:
-        raise HTTPException(status_code=404, detail="No metrics found for job in date range")
-
-    processor = MetricsProcessor()
-    aggregated = processor.aggregate_by_job(metrics)
-    # Keys in aggregated match job_id (string). Try exact and stringified.
-    agg = aggregated.get(job_id) or aggregated.get(str(job_id))
     if not agg:
-        raise HTTPException(status_code=404, detail="Job metrics not found after aggregation")
+        raise HTTPException(status_code=404, detail="No metrics found for job in date range")
 
     return {
         "workspace_id": workspace_id,

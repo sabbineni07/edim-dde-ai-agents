@@ -85,3 +85,61 @@ def test_collect_cost_data():
     assert isinstance(cost_data, list)
     # Should return empty list or list of dicts
     assert isinstance(cost_data, list)
+
+
+def test_list_workspaces():
+    """Test listing distinct workspaces with summary fields."""
+    collector = LocalDataCollector()
+
+    workspaces = collector.list_workspaces(start_date="2024-01-15", end_date="2024-01-20")
+
+    assert isinstance(workspaces, list)
+    assert len(workspaces) > 0
+
+    first = workspaces[0]
+    assert "workspace_id" in first
+    assert "workspace_name" in first
+    assert "job_count" in first
+    assert "first_seen_date" in first
+    assert "last_seen_date" in first
+    assert isinstance(first["job_count"], int)
+
+
+def test_list_jobs_for_workspace():
+    """Test listing aggregated jobs for a given workspace."""
+    collector = LocalDataCollector()
+
+    jobs = collector.list_jobs_for_workspace(
+        workspace_id="1234567890123456",
+        start_date="2024-01-15",
+        end_date="2024-01-20",
+    )
+
+    assert isinstance(jobs, list)
+    assert len(jobs) > 0
+    first = jobs[0]
+    assert first["workspace_id"] == "1234567890123456"
+    assert "job_id" in first
+    assert "job_name" in first
+    assert "avg_cpu_utilization_pct" in first
+    assert "avg_memory_utilization_pct" in first
+    assert "total_runs" in first
+    assert "avg_duration_seconds" in first
+    assert "last_run_date" in first
+
+
+def test_get_job_metrics():
+    """Test aggregated metrics for one job/workspace."""
+    collector = LocalDataCollector()
+    metrics = collector.get_job_metrics(
+        workspace_id="1234567890123456",
+        job_id="job-001",
+        start_date="2024-01-15",
+        end_date="2024-01-20",
+    )
+    assert isinstance(metrics, dict)
+    assert metrics is not None
+    assert metrics["total_runs"] > 0
+    assert "avg_cpu_utilization" in metrics
+    assert "avg_memory_utilization" in metrics
+    assert "current_node_type" in metrics
