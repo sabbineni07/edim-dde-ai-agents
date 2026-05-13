@@ -90,24 +90,22 @@ class TestPatternAnalysisChain:
     """Tests for PatternAnalysisChain with RAG."""
 
     def test_initialization_with_rag(self):
-        """Test chain initializes with RAG when search service provided."""
+        """Test chain initializes with RAG when rag provider provided."""
         mock_llm = _make_mock_llm_provider()
-        mock_search = MagicMock()
-        chain = PatternAnalysisChain(
-            llm_provider=mock_llm, search_service=mock_search, use_rag=True
-        )
+        mock_rag = MagicMock()
+        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=mock_rag, use_rag=True)
         assert chain.use_rag is True
 
     def test_initialization_without_rag(self):
-        """Test chain initializes with RAG disabled when no search service."""
+        """Test chain initializes with RAG disabled when no rag provider."""
         mock_llm = _make_mock_llm_provider()
-        chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         assert chain.use_rag is False
 
     def test_analyze_without_rag(self):
         """Test analyze works without RAG."""
         mock_llm = _make_mock_llm_provider()
-        chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         chain.chain = Mock()
         chain.chain.invoke = Mock(return_value="Test analysis")
 
@@ -121,18 +119,16 @@ class TestCostOptimizationChain:
     """Tests for CostOptimizationChain with RAG."""
 
     def test_initialization_with_rag(self):
-        """Test chain initializes with RAG when search service provided."""
+        """Test chain initializes with RAG when rag provider provided."""
         mock_llm = _make_mock_llm_provider()
-        mock_search = MagicMock()
-        chain = CostOptimizationChain(
-            llm_provider=mock_llm, search_service=mock_search, use_rag=True
-        )
+        mock_rag = MagicMock()
+        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=mock_rag, use_rag=True)
         assert chain.use_rag is True
 
     def test_initialization_without_rag(self):
-        """Test chain initializes with RAG disabled when no search service."""
+        """Test chain initializes with RAG disabled when no rag provider."""
         mock_llm = _make_mock_llm_provider()
-        chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         assert chain.use_rag is False
 
     def test_optimize_without_rag(self):
@@ -140,7 +136,7 @@ class TestCostOptimizationChain:
         import json
 
         mock_llm = _make_mock_llm_provider()
-        chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         chain.chain = Mock()
         chain.chain.invoke = Mock(
             return_value=json.dumps(

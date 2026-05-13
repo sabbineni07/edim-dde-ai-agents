@@ -7,6 +7,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.deps import get_cost_logger, get_recommendation_agent_dep
 from shared.guardrails import NoJobMetricsError, validate_intent, validate_recommendation_request
 from shared.utils.logging import get_logger
@@ -110,6 +111,16 @@ async def generate_recommendation(
             error_message=e.message,
         )
         raise
+    except AzureOpenAINotConfiguredError:
+        duration_ms = int((time.perf_counter() - start_time) * 1000)
+        cost_logger.update_request(
+            request_id=request_id,
+            status="error",
+            duration_ms=duration_ms,
+            error_code="AZURE_OPENAI_NOT_CONFIGURED",
+            error_message="Azure OpenAI is not configured",
+        )
+        raise
     except Exception as e:
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         cost_logger.update_request(
@@ -119,5 +130,5 @@ async def generate_recommendation(
             error_code="INTERNAL_ERROR",
             error_message=str(e),
         )
-        logger.error("recommendation_generation_error", error=str(e))
+        logger.exception("recommendation_generation_error")
         raise HTTPException(status_code=500, detail=str(e))

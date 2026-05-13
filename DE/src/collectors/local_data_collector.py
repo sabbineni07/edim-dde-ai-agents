@@ -11,6 +11,9 @@ from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Excel / some editors save CSV with BOM; strip so column names match ("date" not "\ufeffdate")
+_READ_CSV_KWARGS = {"encoding": "utf-8-sig"}
+
 
 class LocalDataCollector:
     """Collects data from local CSV files for local development and testing."""
@@ -60,7 +63,7 @@ class LocalDataCollector:
 
         try:
             # Read CSV file
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             logger.info("local_csv_loaded", rows=len(df), path=str(self.csv_path))
 
             # Normalize job_id and workspace_id to string for filtering (CSV may have numeric types)
@@ -74,8 +77,8 @@ class LocalDataCollector:
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
 
-            # Filter by date range (end_date is exclusive)
-            df_filtered = df[(df["date"] >= start_dt) & (df["date"] < end_dt)]
+            # Filter by date range (end_date inclusive — matches list_workspaces / list_jobs)
+            df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
             logger.info(
                 "local_csv_after_date_filter", rows=len(df_filtered), start=start_date, end=end_date
             )
@@ -222,7 +225,7 @@ class LocalDataCollector:
         """List distinct workspaces with summary details from local CSV data."""
         logger.info("listing_workspaces_from_csv", start_date=start_date, end_date=end_date)
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             if "workspace_id" not in df.columns or "date" not in df.columns:
                 return []
 
@@ -299,7 +302,7 @@ class LocalDataCollector:
             end_date=end_date,
         )
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             required_cols = {
                 "workspace_id",
                 "job_id",
@@ -388,7 +391,7 @@ class LocalDataCollector:
             end_date=end_date,
         )
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             required_cols = {
                 "workspace_id",
                 "job_id",

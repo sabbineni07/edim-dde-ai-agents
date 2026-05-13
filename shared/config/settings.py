@@ -55,8 +55,12 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    use_local_data: bool = False
+    use_local_data: bool = True
     local_data_path: Optional[str] = None
+
+    # RAG retrieval: azure_search (default), faiss (local index), none (disable RAG in chains)
+    vector_retrieval_backend: str = "azure_search"
+    faiss_index_path: Optional[str] = None
 
     # Agent/recommendation defaults (overridable via env)
     default_monthly_budget: float = 500.0

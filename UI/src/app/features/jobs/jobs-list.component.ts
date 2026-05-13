@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, JobSummary } from '../../services/api.service';
+import { last30DaysDateStrings } from '../../core/date-range.util';
 
 @Component({
   selector: 'app-jobs-list',
@@ -13,6 +14,8 @@ import { ApiService, JobSummary } from '../../services/api.service';
 })
 export class JobsListComponent implements OnInit {
   workspaceId: string | null = null;
+  startDate = '';
+  endDate = '';
   jobs: JobSummary[] = [];
   loading = true;
   error = '';
@@ -27,6 +30,11 @@ export class JobsListComponent implements OnInit {
   ngOnInit(): void {
     this.route.queryParams.subscribe((qp) => {
       this.workspaceId = qp['workspaceId'] ?? null;
+      const s = typeof qp['start_date'] === 'string' ? qp['start_date'].trim() : '';
+      const e = typeof qp['end_date'] === 'string' ? qp['end_date'].trim() : '';
+      const fallback = last30DaysDateStrings();
+      this.startDate = s || fallback.startDate;
+      this.endDate = e || fallback.endDate;
       if (this.workspaceId) this.load();
       else {
         this.loading = false;
@@ -39,7 +47,7 @@ export class JobsListComponent implements OnInit {
     if (!this.workspaceId) return;
     this.loading = true;
     this.error = '';
-    this.api.getJobs(this.workspaceId).subscribe({
+    this.api.getJobs(this.workspaceId, this.startDate, this.endDate).subscribe({
       next: (list) => {
         this.jobs = list;
         this.loading = false;
@@ -64,6 +72,8 @@ export class JobsListComponent implements OnInit {
 
   openDetail(j: JobSummary): void {
     if (!this.workspaceId) return;
-    this.router.navigate(['/app/jobs', this.workspaceId, j.job_id]);
+    this.router.navigate(['/app/jobs', this.workspaceId, j.job_id], {
+      queryParams: { start_date: this.startDate, end_date: this.endDate },
+    });
   }
 }

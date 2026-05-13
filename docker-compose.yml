@@ -26,7 +26,11 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: edim-dde-ai-agents-api
+    # Load host .env so Azure Search, guardrails, etc. reach the container (.dockerignore excludes .env from the image).
+    env_file:
+      - .env
     environment:
+      # Overrides env_file: must point at the postgres service, not localhost
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
@@ -36,7 +40,7 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       API_HOST: 0.0.0.0
       API_PORT: 8000
-      # Local data
+      # Local CSV under ./data (mount). If false, needs DATABRICKS_JOB_CLUSTER_METRICS_TABLE or workspaces API returns [].
       USE_LOCAL_DATA: ${USE_LOCAL_DATA:-true}
       LOCAL_DATA_PATH: ${LOCAL_DATA_PATH:-/app/data/sample_job_metrics.csv}
       # Azure OpenAI

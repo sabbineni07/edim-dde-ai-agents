@@ -1,8 +1,9 @@
 import { Component, OnInit, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterLink } from '@angular/router';
+import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, JobMetricsResponse, RecommendationHistoryEntry } from '../../services/api.service';
+import { last30DaysDateStrings } from '../../core/date-range.util';
 
 @Component({
   selector: 'app-job-detail',
@@ -24,20 +25,25 @@ export class JobDetailComponent implements OnInit {
   startDate = '';
   endDate = '';
 
-  constructor(private api: ApiService) {}
+  constructor(
+    private api: ApiService,
+    private route: ActivatedRoute
+  ) {}
 
   ngOnInit(): void {
-    this.setDefaultDates();
+    const qp = this.route.snapshot.queryParamMap;
+    const qs = qp.get('start_date')?.trim();
+    const qe = qp.get('end_date')?.trim();
+    if (qs && qe) {
+      this.startDate = qs;
+      this.endDate = qe;
+    } else {
+      const r = last30DaysDateStrings();
+      this.startDate = r.startDate;
+      this.endDate = r.endDate;
+    }
     this.loadMetrics();
     this.loadRecommendations();
-  }
-
-  setDefaultDates(): void {
-    const end = new Date();
-    const start = new Date();
-    start.setDate(start.getDate() - 30);
-    this.endDate = end.toISOString().slice(0, 10);
-    this.startDate = start.toISOString().slice(0, 10);
   }
 
   loadMetrics(): void {

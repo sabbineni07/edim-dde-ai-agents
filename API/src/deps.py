@@ -1,12 +1,13 @@
 """FastAPI dependency injection - provides services for routes."""
 
-from typing import Optional
+from typing import Any, Optional
 
 from AI.src.agents import cluster_config  # noqa: F401 - ensures agents registered
 from AI.src.agents.registry import create_agent, get_registered_agent_ids
 from AI.src.chains.cost_optimization_chain import CostOptimizationChain
 from AI.src.chains.explanation_chain import ExplanationChain
 from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
+from AI.src.retrieval import create_rag_context_provider
 from AI.src.services.azure_openai_service import AzureOpenAIService
 from AI.src.services.azure_search_service import AzureSearchService
 from shared.config.settings import settings
@@ -20,6 +21,7 @@ _llm_provider: Optional[AzureOpenAIService] = None
 _search_service: Optional[AzureSearchService] = None
 _cost_logger: Optional[ObservabilityService] = None
 _cluster_config_agent = None
+_rag_context_provider: Optional[Any] = None
 
 
 def get_llm_provider() -> AzureOpenAIService:
@@ -43,6 +45,16 @@ def get_search_service() -> Optional[AzureSearchService]:
     return _search_service
 
 
+def get_rag_context_provider():
+    """RAG text context for pattern/cost chains (Azure AI Search or FAISS per settings). Cached singleton."""
+    global _rag_context_provider
+    if _rag_context_provider is None:
+        _rag_context_provider = create_rag_context_provider(
+            settings, get_llm_provider, get_search_service
+        )
+    return _rag_context_provider
+
+
 def get_cost_logger() -> ObservabilityService:
     """Get cost logging service. Cached singleton."""
     global _cost_logger
@@ -51,20 +63,20 @@ def get_cost_logger() -> ObservabilityService:
     return _cost_logger
 
 
-def get_pattern_chain(llm_provider=None, search_service=None) -> PatternAnalysisChain:
+def get_pattern_chain(llm_provider=None, rag_provider=None) -> PatternAnalysisChain:
     """Create pattern analysis chain with injected dependencies."""
     llm = llm_provider or get_llm_provider()
-    search = search_service if search_service is not None else get_search_service()
-    use_rag = search is not None
-    return PatternAnalysisChain(llm_provider=llm, search_service=search, use_rag=use_rag)
+    rag = rag_provider if rag_provider is not None else get_rag_context_provider()
+    use_rag = rag is not None
+    return PatternAnalysisChain(llm_provider=llm, rag_provider=rag, use_rag=use_rag)
 
 
-def get_cost_chain(llm_provider=None, search_service=None) -> CostOptimizationChain:
+def get_cost_chain(llm_provider=None, rag_provider=None) -> CostOptimizationChain:
     """Create cost optimization chain with injected dependencies."""
     llm = llm_provider or get_llm_provider()
-    search = search_service if search_service is not None else get_search_service()
-    use_rag = search is not None
-    return CostOptimizationChain(llm_provider=llm, search_service=search, use_rag=use_rag)
+    rag = rag_provider if rag_provider is not None else get_rag_context_provider()
+    use_rag = rag is not None
+    return CostOptimizationChain(llm_provider=llm, rag_provider=rag, use_rag=use_rag)
 
 
 def get_explanation_chain(llm_provider=None) -> ExplanationChain:
@@ -118,7 +130,9 @@ def get_agent(agent_id: str, overrides: Optional[dict] = None):
 def reset_dependencies():
     """Reset cached singletons (for testing)."""
     global _llm_provider, _search_service, _cost_logger, _cluster_config_agent
+    global _rag_context_provider
     _llm_provider = None
     _search_service = None
     _cost_logger = None
     _cluster_config_agent = None
+    _rag_context_provider = None

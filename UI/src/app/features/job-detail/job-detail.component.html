@@ -1,8 +1,12 @@
 <div class="page-header mb-4">
   <nav class="mb-2">
-    <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
+    <a routerLink="/app/workspaces" [queryParams]="{ start_date: startDate, end_date: endDate }" class="text-decoration-none small text-muted">Workspaces</a>
     <span class="mx-2 text-muted">/</span>
-    <a [routerLink]="['/app/jobs']" [queryParams]="{ workspaceId: workspaceId() }" class="text-decoration-none small text-muted">Jobs</a>
+    <a
+      [routerLink]="['/app/jobs']"
+      [queryParams]="{ workspaceId: workspaceId(), start_date: startDate, end_date: endDate }"
+      class="text-decoration-none small text-muted">
+      Jobs</a>
     <span class="mx-2 text-muted">/</span>
     <span class="small">Job {{ jobId() }}</span>
   </nav>

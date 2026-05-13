@@ -39,8 +39,8 @@ def _create_agent_with_mock_llm():
     from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
 
     mock_llm = _make_mock_llm_provider()
-    pattern_chain = PatternAnalysisChain(llm_provider=mock_llm, search_service=None, use_rag=False)
-    cost_chain = CostOptimizationChain(llm_provider=mock_llm, search_service=None, use_rag=False)
+    pattern_chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
+    cost_chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
     explanation_chain = ExplanationChain(llm_provider=mock_llm)
     return ClusterConfigAgent(
         pattern_chain=pattern_chain,

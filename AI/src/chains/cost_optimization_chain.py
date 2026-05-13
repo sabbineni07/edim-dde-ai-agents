@@ -10,7 +10,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from shared.utils.logging import get_logger
 
 if TYPE_CHECKING:
-    from shared.abstractions.protocols import LLMProvider, SearchService
+    from AI.src.retrieval.protocol import RagContextProvider
+    from shared.abstractions.protocols import LLMProvider
 
 logger = get_logger(__name__)
 
@@ -47,19 +48,19 @@ class CostOptimizationChain:
     def __init__(
         self,
         llm_provider: "LLMProvider",
-        search_service: Optional["SearchService"] = None,
+        rag_provider: Optional["RagContextProvider"] = None,
         use_rag: bool = True,
     ):
         """Initialize cost optimization chain.
 
         Args:
             llm_provider: LLM provider (e.g. AzureOpenAIService)
-            search_service: Optional search service for RAG
-            use_rag: If True and search_service provided, use RAG
+            rag_provider: Optional retrieval provider (Azure AI Search or FAISS via factory)
+            use_rag: If True and rag_provider provided, use RAG for historical context
         """
         self.llm = llm_provider.get_llm()
-        self.search_service = search_service
-        self.use_rag = use_rag and search_service is not None
+        self.rag_provider = rag_provider
+        self.use_rag = use_rag and rag_provider is not None
 
         self.prompt = ChatPromptTemplate.from_messages(
             [
@@ -141,82 +142,13 @@ Using only the inputs above, output a single JSON object with keys node_family, 
         try:
             historical_context = ""
 
-            # Use RAG to find similar recommendations if enabled
-            if self.use_rag and self.search_service:
+            if self.use_rag and self.rag_provider:
                 try:
-                    # First, try to find similar successful recommendations
-                    # Only use validated optimal recommendations by default
-                    similar_recommendations = self.search_service.search_similar(
-                        pattern_analysis if pattern_analysis else str(job_cluster_metrics),
-                        top_k=3,
-                        filter_quality=True,  # Only use optimal recommendations
+                    historical_context = self.rag_provider.cost_chain_historical_context(
+                        pattern_analysis, job_cluster_metrics
                     )
-
-                    # Filter to only recommendations (not raw metrics)
-                    recommendations = [
-                        r
-                        for r in similar_recommendations
-                        if r.get("is_recommendation", False)
-                        or r.get("document_type") == "recommendation"
-                    ]
-
-                    if recommendations:
-                        # Build context from successful recommendations
-                        rec_contexts = []
-                        for rec in recommendations[:3]:  # Top 3
-                            rec_data = rec.get("recommendation", {})
-                            rec_contexts.append(
-                                f"- Recommended: {rec_data.get('node_family', 'N/A')} family, "
-                                f"{rec_data.get('vcpus', 'N/A')} vCPUs, "
-                                f"{rec_data.get('min_workers', 'N/A')}-{rec_data.get('max_workers', 'N/A')} workers. "
-                                f"Rationale: {rec_data.get('rationale', 'N/A')[:100]}"
-                            )
-
-                        historical_context = f"""
-                        
-                        Similar Successful Recommendations Found ({len(recommendations)}):
-                        {chr(10).join(rec_contexts)}
-                        
-                        Use these as guidance, but optimize based on current job's actual needs.
-                        """
-                    else:
-                        # Fallback: find similar job patterns for context
-                        similar_jobs = self.search_service.search_similar_jobs(
-                            job_cluster_metrics, top_k=3, filter_recommendations=False
-                        )
-
-                        if similar_jobs:
-                            # Extract patterns only (not configs)
-                            patterns = []
-                            for job in similar_jobs:
-                                metrics = job.get("metrics", {})
-                                patterns.append(
-                                    {
-                                        "cpu": metrics.get("avg_cpu_utilization_pct", 0),
-                                        "memory": metrics.get("avg_memory_utilization_pct", 0),
-                                        "nodes": metrics.get("avg_nodes_consumed", 0),
-                                    }
-                                )
-
-                            if patterns:
-                                avg_cpu = sum(p["cpu"] for p in patterns) / len(patterns)
-                                avg_memory = sum(p["memory"] for p in patterns) / len(patterns)
-                                avg_nodes = sum(p["nodes"] for p in patterns) / len(patterns)
-
-                                historical_context = f"""
-                                
-                                Similar Workload Patterns Found ({len(patterns)} jobs):
-                                - Average CPU: {avg_cpu:.1f}%
-                                - Average Memory: {avg_memory:.1f}%
-                                - Average Nodes: {avg_nodes:.1f}
-                                
-                                NOTE: These are utilization patterns for context only.
-                                Historical configurations may be suboptimal. Optimize based on
-                                utilization needs, not by copying historical configs.
-                                """
                 except Exception as e:
                     logger.warning("rag_search_failed", error=str(e))
-                    # Continue without RAG context
 
             result = self.chain.invoke(
                 {
