@@ -11,6 +11,9 @@ from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+# Excel / some editors save CSV with BOM; strip so column names match ("date" not "\ufeffdate")
+_READ_CSV_KWARGS = {"encoding": "utf-8-sig"}
+
 
 class LocalDataCollector:
     """Collects data from local CSV files for local development and testing."""
@@ -38,6 +41,7 @@ class LocalDataCollector:
         end_date: str,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Collect job cluster metrics from CSV file.
 
@@ -46,6 +50,7 @@ class LocalDataCollector:
             end_date: End date in YYYY-MM-DD format
             job_ids: Optional list of job IDs to filter
             workspace_id: Optional workspace ID to filter
+            job_run_id: Optional run ID filter (per-run recommendations)
 
         Returns:
             List of JobClusterMetrics objects
@@ -60,7 +65,7 @@ class LocalDataCollector:
 
         try:
             # Read CSV file
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             logger.info("local_csv_loaded", rows=len(df), path=str(self.csv_path))
 
             # Normalize job_id and workspace_id to string for filtering (CSV may have numeric types)
@@ -74,8 +79,8 @@ class LocalDataCollector:
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
 
-            # Filter by date range (end_date is exclusive)
-            df_filtered = df[(df["date"] >= start_dt) & (df["date"] < end_dt)]
+            # Filter by date range (end_date inclusive — matches list_workspaces / list_jobs)
+            df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
             logger.info(
                 "local_csv_after_date_filter", rows=len(df_filtered), start=start_date, end=end_date
             )
@@ -91,6 +96,9 @@ class LocalDataCollector:
             # Filter by workspace_id if provided
             if workspace_id:
                 df_filtered = df_filtered[df_filtered["workspace_id"] == str(workspace_id)]
+
+            if job_run_id and "job_run_id" in df_filtered.columns:
+                df_filtered = df_filtered[df_filtered["job_run_id"].astype(str) == str(job_run_id)]
 
             # Convert date back to string format
             df_filtered = df_filtered.copy()
@@ -222,7 +230,7 @@ class LocalDataCollector:
         """List distinct workspaces with summary details from local CSV data."""
         logger.info("listing_workspaces_from_csv", start_date=start_date, end_date=end_date)
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             if "workspace_id" not in df.columns or "date" not in df.columns:
                 return []
 
@@ -299,7 +307,7 @@ class LocalDataCollector:
             end_date=end_date,
         )
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             required_cols = {
                 "workspace_id",
                 "job_id",
@@ -376,6 +384,79 @@ class LocalDataCollector:
             )
             raise
 
+    def list_job_runs(
+        self, workspace_id: str, job_id: str, start_date: str, end_date: str
+    ) -> List[Dict[str, Any]]:
+        """List distinct job runs for a job in a workspace within the date range."""
+        logger.info(
+            "listing_job_runs_from_csv",
+            workspace_id=workspace_id,
+            job_id=job_id,
+            start_date=start_date,
+            end_date=end_date,
+        )
+        try:
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
+            if "job_run_id" not in df.columns:
+                return []
+
+            df["workspace_id"] = df["workspace_id"].astype(str)
+            df["job_id"] = df["job_id"].astype(str)
+            df["job_run_id"] = df["job_run_id"].astype(str)
+            df["date"] = pd.to_datetime(df["date"])
+            start_dt = pd.to_datetime(start_date)
+            end_dt = pd.to_datetime(end_date)
+            df_filtered = df[
+                (df["workspace_id"] == str(workspace_id))
+                & (df["job_id"] == str(job_id))
+                & (df["date"] >= start_dt)
+                & (df["date"] <= end_dt)
+            ].copy()
+            if df_filtered.empty:
+                return []
+
+            runs: List[Dict[str, Any]] = []
+            for run_id, group in df_filtered.groupby("job_run_id", sort=False):
+                first = group.iloc[0]
+                last_date = group["date"].max()
+                runs.append(
+                    {
+                        "job_run_id": str(run_id),
+                        "run_date": last_date.strftime("%Y-%m-%d") if pd.notna(last_date) else None,
+                        "job_duration_seconds": float(group["job_duration_seconds"].iloc[0]),
+                        "avg_cpu_utilization_pct": float(group["avg_cpu_utilization_pct"].mean()),
+                        "avg_memory_utilization_pct": float(
+                            group["avg_memory_utilization_pct"].mean()
+                        ),
+                        "avg_nodes_consumed": float(group["avg_nodes_consumed"].mean()),
+                        "peak_cpu_utilization_pct": float(group["peak_cpu_utilization_pct"].max()),
+                        "peak_memory_utilization_pct": float(
+                            group["peak_memory_utilization_pct"].max()
+                        ),
+                        "total_cost_usd": float(group["total_cost_usd"].sum()),
+                        "current_node_type": first.get("current_node_type"),
+                        "current_min_workers": int(first.get("current_min_workers", 1)),
+                        "current_max_workers": int(first.get("current_max_workers", 16)),
+                        "workload_type": first.get("workload_type"),
+                        "task_count": (
+                            int(first.get("task_count", 0))
+                            if pd.notna(first.get("task_count"))
+                            else None
+                        ),
+                    }
+                )
+
+            runs.sort(key=lambda r: (r.get("run_date") or "", r["job_run_id"]), reverse=True)
+            return runs
+        except Exception as e:
+            logger.error(
+                "list_job_runs_from_csv_error",
+                error=str(e),
+                workspace_id=workspace_id,
+                job_id=job_id,
+            )
+            raise
+
     def get_job_metrics(
         self, workspace_id: str, job_id: str, start_date: str, end_date: str
     ) -> Optional[Dict[str, Any]]:
@@ -388,7 +469,7 @@ class LocalDataCollector:
             end_date=end_date,
         )
         try:
-            df = pd.read_csv(self.csv_path)
+            df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             required_cols = {
                 "workspace_id",
                 "job_id",

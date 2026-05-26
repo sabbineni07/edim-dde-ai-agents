@@ -1,124 +1,59 @@
-"""FastAPI dependency injection - provides services for routes."""
+"""FastAPI dependency injection — platform singletons and agent factory."""
 
-from typing import Optional
+from typing import Any, Optional
 
-from AI.src.agents import cluster_config  # noqa: F401 - ensures agents registered
-from AI.src.agents.registry import create_agent, get_registered_agent_ids
-from AI.src.chains.cost_optimization_chain import CostOptimizationChain
-from AI.src.chains.explanation_chain import ExplanationChain
-from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
-from AI.src.services.azure_openai_service import AzureOpenAIService
-from AI.src.services.azure_search_service import AzureSearchService
-from shared.config.settings import settings
-from shared.services.observability_service import ObservabilityService
+from AI.src.agents import job_run_cluster_sizing  # noqa: F401 - register agents
+from AI.src.agents.job_run_cluster_sizing import AGENT_ID
+from AI.src.core.platform import (
+    get_cost_logger,
+    get_llm_provider,
+    get_rag_context_provider,
+    get_search_service,
+    reset_platform_singletons,
+)
+from AI.src.core.registry import create_agent, get_registered_agent_ids
+from shared.config.loader import reset_settings_cache
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Singletons - created at first request, reused
-_llm_provider: Optional[AzureOpenAIService] = None
-_search_service: Optional[AzureSearchService] = None
-_cost_logger: Optional[ObservabilityService] = None
-_cluster_config_agent = None
+_agent_cache: dict[str, Any] = {}
 
 
-def get_llm_provider() -> AzureOpenAIService:
-    """Get LLM provider (Azure OpenAI). Cached singleton."""
-    global _llm_provider
-    if _llm_provider is None:
-        _llm_provider = AzureOpenAIService()
-    return _llm_provider
-
-
-def get_search_service() -> Optional[AzureSearchService]:
-    """Get search service if configured. Cached singleton."""
-    global _search_service
-    if _search_service is None:
-        try:
-            svc = AzureSearchService()
-            _search_service = svc if svc.client is not None else None
-        except Exception as e:
-            logger.warning("search_service_unavailable", error=str(e))
-            _search_service = None
-    return _search_service
-
-
-def get_cost_logger() -> ObservabilityService:
-    """Get cost logging service. Cached singleton."""
-    global _cost_logger
-    if _cost_logger is None:
-        _cost_logger = ObservabilityService()
-    return _cost_logger
-
-
-def get_pattern_chain(llm_provider=None, search_service=None) -> PatternAnalysisChain:
-    """Create pattern analysis chain with injected dependencies."""
-    llm = llm_provider or get_llm_provider()
-    search = search_service if search_service is not None else get_search_service()
-    use_rag = search is not None
-    return PatternAnalysisChain(llm_provider=llm, search_service=search, use_rag=use_rag)
-
-
-def get_cost_chain(llm_provider=None, search_service=None) -> CostOptimizationChain:
-    """Create cost optimization chain with injected dependencies."""
-    llm = llm_provider or get_llm_provider()
-    search = search_service if search_service is not None else get_search_service()
-    use_rag = search is not None
-    return CostOptimizationChain(llm_provider=llm, search_service=search, use_rag=use_rag)
-
-
-def get_explanation_chain(llm_provider=None) -> ExplanationChain:
-    """Create explanation chain with injected dependencies."""
-    llm = llm_provider or get_llm_provider()
-    return ExplanationChain(llm_provider=llm)
-
-
-def _get_cluster_config_deps():
-    """Deps for ClusterConfigAgent - used by agent factory."""
-    return {
-        "pattern_chain": get_pattern_chain(),
-        "cost_chain": get_cost_chain(),
-        "explanation_chain": get_explanation_chain(),
-        "cost_logger": get_cost_logger(),
-        "search_service": get_search_service(),
-    }
+def get_agent(agent_id: str = AGENT_ID, overrides: Optional[dict] = None):
+    """Create or return cached agent by registry id (default: job_run_cluster_sizing)."""
+    if overrides:
+        return create_agent(agent_id, **overrides)
+    if agent_id not in _agent_cache:
+        _agent_cache[agent_id] = create_agent(agent_id)
+    return _agent_cache[agent_id]
 
 
 def get_recommendation_agent(overrides: Optional[dict] = None):
-    """Get cluster config agent. Uses registry; cached when using defaults.
-    For the recommendation API use Depends(get_recommendation_agent_dep). For tests, call with overrides dict.
-    """
-    global _cluster_config_agent
-    if overrides:
-        deps = _get_cluster_config_deps()
-        deps.update(overrides)
-        return create_agent("cluster_config", **deps)
-    if _cluster_config_agent is not None:
-        return _cluster_config_agent
-    _cluster_config_agent = create_agent(
-        "cluster_config",
-        **_get_cluster_config_deps(),
-    )
-    return _cluster_config_agent
+    """Job-run cluster sizing agent (registry id job_run_cluster_sizing)."""
+    return get_agent(AGENT_ID, overrides=overrides)
 
 
 def get_recommendation_agent_dep():
-    """Dependency for recommendation route: returns cached agent (no query/body params)."""
+    """FastAPI Depends() entry for recommendation routes."""
     return get_recommendation_agent()
 
 
-def get_agent(agent_id: str, overrides: Optional[dict] = None):
-    """Get agent by ID. Uses registry. Cached for cluster_config when no overrides."""
-    if agent_id == "cluster_config":
-        return get_recommendation_agent(overrides=overrides)
-    # Future agents: add _get_<agent>_deps() and extend create_agent call
-    raise KeyError(f"Unknown agent_id: {agent_id}. Available: {get_registered_agent_ids()}")
-
-
 def reset_dependencies():
-    """Reset cached singletons (for testing)."""
-    global _llm_provider, _search_service, _cost_logger, _cluster_config_agent
-    _llm_provider = None
-    _search_service = None
-    _cost_logger = None
-    _cluster_config_agent = None
+    """Reset cached singletons (tests)."""
+    _agent_cache.clear()
+    reset_platform_singletons()
+    reset_settings_cache()
+
+
+__all__ = [
+    "get_llm_provider",
+    "get_search_service",
+    "get_rag_context_provider",
+    "get_cost_logger",
+    "get_agent",
+    "get_recommendation_agent",
+    "get_recommendation_agent_dep",
+    "get_registered_agent_ids",
+    "reset_dependencies",
+]

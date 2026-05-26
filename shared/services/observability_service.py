@@ -17,6 +17,8 @@ try:
         RecommendationHistory,
         RequestLog,
     )
+    from shared.recommendation_lifecycle import LIFECYCLE_RECOMMENDED, utc_now
+    from shared.services.recommendation_lifecycle_service import RecommendationLifecycleService
 
     DATABASE_AVAILABLE = True
 except Exception as e:
@@ -96,6 +98,7 @@ class ObservabilityService:
         token_usage_analysis: Optional[Dict] = None,
         user_id: Optional[str] = None,
         workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
         request_log_request_id: Optional[UUID] = None,
     ) -> bool:
         if not DATABASE_AVAILABLE:
@@ -103,20 +106,28 @@ class ObservabilityService:
         try:
             session = get_database_session()
             try:
+                now = utc_now()
                 rec_history = RecommendationHistory(
                     request_id=request_id,
                     job_id=job_id,
+                    job_run_id=job_run_id,
                     user_id=user_id,
                     workspace_id=workspace_id,
                     request_log_request_id=request_log_request_id,
-                    timestamp=datetime.utcnow(),
+                    timestamp=now,
                     recommendation=recommendation,
                     explanation=explanation,
                     pattern_analysis=pattern_analysis,
                     risk_assessment=risk_assessment,
                     token_usage_analysis=token_usage_analysis,
+                    lifecycle_status=LIFECYCLE_RECOMMENDED,
+                    lifecycle_updated_at=now,
+                    lifecycle_updated_by="system",
                 )
                 session.add(rec_history)
+                RecommendationLifecycleService.record_initial_recommended(
+                    session, request_id, changed_by="system"
+                )
                 session.commit()
                 return True
             except Exception as e:

@@ -60,6 +60,7 @@ class DataCollector(Protocol):
         end_date: str,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
     ) -> List[Any]:
         """Collect job cluster metrics."""
         ...
@@ -102,6 +103,9 @@ class CostLogger(Protocol):
         pattern_analysis: str,
         risk_assessment: dict,
         token_usage_analysis: Optional[dict] = None,
+        workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
+        request_log_request_id: Optional[UUID] = None,
     ) -> bool:
         """Log recommendation to history."""
         ...

@@ -4,11 +4,17 @@ from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from shared.database.connection import get_database_session
 from shared.database.models import CostUsageLog, RecommendationHistory, RequestLog
 from shared.factories.data_collector_factory import get_data_collector
+from shared.recommendation_lifecycle import (
+    allowed_next_statuses,
+    lifecycle_display_label,
+    normalize_lifecycle_status,
+)
+from shared.services.recommendation_lifecycle_service import RecommendationLifecycleService
 from shared.utils.logging import get_logger
 
 router = APIRouter()
@@ -87,6 +93,62 @@ def list_jobs_for_workspace(
         raise HTTPException(status_code=500, detail="Failed to load jobs") from e
 
 
+class JobRunSummary(BaseModel):
+    job_run_id: str
+    run_date: Optional[str] = None
+    job_duration_seconds: Optional[float] = None
+    avg_cpu_utilization_pct: Optional[float] = None
+    avg_memory_utilization_pct: Optional[float] = None
+    avg_nodes_consumed: Optional[float] = None
+    peak_cpu_utilization_pct: Optional[float] = None
+    peak_memory_utilization_pct: Optional[float] = None
+    total_cost_usd: Optional[float] = None
+    current_node_type: Optional[str] = None
+    current_min_workers: Optional[int] = None
+    current_max_workers: Optional[int] = None
+    workload_type: Optional[str] = None
+    task_count: Optional[int] = None
+
+
+@router.get(
+    "/workspaces/{workspace_id}/jobs/{job_id}/runs",
+    response_model=List[JobRunSummary],
+)
+def list_job_runs(
+    workspace_id: str,
+    job_id: str,
+    start_date: Optional[date] = Query(
+        None,
+        description="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
+    ),
+    end_date: Optional[date] = Query(
+        None,
+        description="End date (YYYY-MM-DD). Defaults to today.",
+    ),
+) -> List[JobRunSummary]:
+    """List job runs for a job in a workspace (for run picker in UI)."""
+    dr = _default_date_range(start_date, end_date)
+    collector = get_data_collector()
+    if not hasattr(collector, "list_job_runs"):
+        raise HTTPException(status_code=501, detail="Job run listing not supported by collector")
+    try:
+        rows = collector.list_job_runs(
+            workspace_id=workspace_id,
+            job_id=job_id,
+            start_date=dr["start_date"],
+            end_date=dr["end_date"],
+        )
+        return [JobRunSummary(**row) for row in rows]
+    except Exception as e:
+        logger.error(
+            "list_job_runs_error",
+            error=str(e),
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to load job runs") from e
+
+
 @router.get("/workspaces/{workspace_id}/jobs/{job_id}/metrics")
 def get_job_metrics(
     workspace_id: str,
@@ -135,11 +197,47 @@ def get_job_metrics(
     }
 
 
+def _job_run_id_from_history(
+    rec: RecommendationHistory,
+    req_log: Optional[RequestLog],
+) -> Optional[str]:
+    """Resolve job_run_id from history row or linked request log (legacy rows)."""
+    if rec.job_run_id:
+        return str(rec.job_run_id)
+    if req_log and req_log.request_params:
+        params = req_log.request_params
+        if isinstance(params, dict):
+            run_id = params.get("job_run_id")
+            if run_id is not None and str(run_id).strip():
+                return str(run_id).strip()
+    return None
+
+
+class LifecycleEventSummary(BaseModel):
+    id: Optional[int] = None
+    from_status: Optional[str] = None
+    to_status: str
+    changed_by: str
+    changed_at: Optional[str] = None
+    notes: Optional[str] = None
+
+
 class RecommendationHistoryResponse(BaseModel):
     request_id: str
     job_id: str
+    job_run_id: Optional[str] = None
     workspace_id: Optional[str] = None
     timestamp: str
+    lifecycle_status: str = "RECOMMENDED"
+    lifecycle_status_label: str = "Recommended"
+    lifecycle_updated_at: Optional[str] = None
+    lifecycle_updated_by: Optional[str] = None
+    allowed_next_statuses: List[str] = Field(default_factory=list)
+    lifecycle_events: List[LifecycleEventSummary] = Field(default_factory=list)
+    api_request_status: Optional[str] = Field(
+        default=None,
+        description="API call status for POST /recommendations/generate (e.g. success)",
+    )
     recommendation: Dict[str, Any]
     explanation: Optional[str] = None
     pattern_analysis: Optional[str] = None
@@ -191,8 +289,11 @@ def list_job_recommendations(
         if not rows:
             return []
 
-        # Collect request_ids to fetch cost usage logs
+        lifecycle_svc = RecommendationLifecycleService()
         request_ids: Set[Any] = {rec.request_id for rec, _ in rows}
+        events_by_request = lifecycle_svc.list_events_for_requests(list(request_ids))
+
+        # Collect request_ids to fetch cost usage logs
         cost_logs: Dict[Any, List[CostUsageLog]] = {}
         if request_ids:
             logs = (
@@ -244,12 +345,36 @@ def list_job_recommendations(
                     "by_chain": by_chain,
                 }
 
+            lifecycle_status = normalize_lifecycle_status(rec.lifecycle_status)
+            lifecycle_events_raw = events_by_request.get(str(rec.request_id), [])
+            lifecycle_events = [
+                LifecycleEventSummary(
+                    id=e.get("id"),
+                    from_status=e.get("from_status"),
+                    to_status=e.get("to_status", ""),
+                    changed_by=e.get("changed_by", ""),
+                    changed_at=e.get("changed_at"),
+                    notes=e.get("notes"),
+                )
+                for e in lifecycle_events_raw
+            ]
+
             responses.append(
                 RecommendationHistoryResponse(
                     request_id=str(rec.request_id),
                     job_id=rec.job_id,
+                    job_run_id=_job_run_id_from_history(rec, req_log),
                     workspace_id=rec.workspace_id,
                     timestamp=rec.timestamp.isoformat() if rec.timestamp else "",
+                    lifecycle_status=lifecycle_status,
+                    lifecycle_status_label=lifecycle_display_label(lifecycle_status),
+                    lifecycle_updated_at=(
+                        rec.lifecycle_updated_at.isoformat() if rec.lifecycle_updated_at else None
+                    ),
+                    lifecycle_updated_by=rec.lifecycle_updated_by,
+                    allowed_next_statuses=allowed_next_statuses(lifecycle_status),
+                    lifecycle_events=lifecycle_events,
+                    api_request_status=req_log.status if req_log else None,
                     recommendation=rec.recommendation or {},
                     explanation=rec.explanation,
                     pattern_analysis=rec.pattern_analysis,

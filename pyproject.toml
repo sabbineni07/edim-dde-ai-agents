@@ -18,7 +18,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-testpaths = ["DE/tests", "AI/tests", "API/tests"]
+testpaths = ["DE/tests", "AI/tests", "API/tests", "shared/tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]

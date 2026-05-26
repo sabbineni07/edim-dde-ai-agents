@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 COPY . .
 
 ENV PYTHONPATH=/app
+# Prefer bundled CSV when compose/runtime env does not set USE_LOCAL_DATA
+ENV USE_LOCAL_DATA=true
 EXPOSE 8000
 
 CMD ["uvicorn", "API.src.main:app", "--host", "0.0.0.0", "--port", "8000"]

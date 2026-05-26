@@ -1,0 +1,49 @@
+# Platform-wide settings (non-secret). Secrets use ${env:VAR} from .env / Key Vault.
+# Agent-specific overrides: config/agents/<agent_id>.yaml
+
+platform:
+  app_env: development
+  log_level: INFO
+  api_host: 0.0.0.0
+  api_port: 8000
+  use_postgres: true
+  use_local_data: true
+  local_data_path: ${resolve:default_local_data_csv}
+
+databricks:
+  server_hostname: ${env:DATABRICKS_SERVER_HOSTNAME}
+  http_path: ${env:DATABRICKS_HTTP_PATH}
+  token: ${env:DATABRICKS_TOKEN}
+  metrics_table: ${env:DATABRICKS_JOB_CLUSTER_METRICS_TABLE}
+
+postgres:
+  host: ${env:POSTGRES_HOST}
+  port: ${env:POSTGRES_PORT}
+  user: ${env:POSTGRES_USER}
+  password: ${env:POSTGRES_PASSWORD}
+  database: ${env:POSTGRES_DATABASE}
+  ssl_mode: prefer
+
+azure_openai:
+  endpoint: ${env:AZURE_OPENAI_ENDPOINT}
+  api_key: ${env:AZURE_OPENAI_API_KEY}
+  access_token: ${env:AZURE_OPENAI_ACCESS_TOKEN}
+  api_version: ${env:AZURE_OPENAI_API_VERSION}
+  deployment: ${resolve:default_openai_deployment}
+  embedding_deployment: ${env:AZURE_OPENAI_EMBEDDING_DEPLOYMENT}
+
+azure_search:
+  endpoint: ${env:AZURE_SEARCH_ENDPOINT}
+  api_key: ${env:AZURE_SEARCH_API_KEY}
+  index_name: ${env:AZURE_SEARCH_INDEX_NAME}
+
+azure_storage:
+  account: ${env:AZURE_STORAGE_ACCOUNT}
+  key: ${env:AZURE_STORAGE_KEY}
+  container: ${env:AZURE_STORAGE_CONTAINER}
+
+azure_key_vault_name: ${env:AZURE_KEY_VAULT_NAME}
+
+vector_retrieval:
+  backend: azure_search
+  faiss_index_path: ${env:FAISS_INDEX_PATH}

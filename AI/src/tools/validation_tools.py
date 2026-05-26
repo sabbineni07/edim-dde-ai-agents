@@ -1,9 +1,11 @@
 """Validation tools for LangChain."""
 
 import re
-from typing import Dict
+from typing import Dict, Optional
 
 from langchain_core.tools import tool
+
+from shared.sizing.policy import recommended_min_max_workers
 
 
 def parse_vcpus_from_node_type(node_type: str) -> int:
@@ -46,6 +48,7 @@ def validate_performance(
     recommended_max_workers: int,
     current_vcpus: int,
     current_max_workers: int,
+    job_run_ingest: Optional[Dict] = None,
 ) -> Dict:
     """Validate that recommended configuration meets performance requirements.
 
@@ -63,8 +66,17 @@ def validate_performance(
     current_capacity = current_vcpus * current_max_workers
     recommended_capacity = recommended_vcpus * recommended_max_workers
 
-    # Conservative check: recommended should be at least 80% of current
     meets_requirements = recommended_capacity >= (current_capacity * 0.8)
+    if job_run_ingest:
+        _, floor_max = recommended_min_max_workers(job_run_ingest)
+        if recommended_max_workers < floor_max:
+            meets_requirements = False
+        target = 90.0
+        peak_cpu = float(job_run_ingest.get("peak_cpu_utilization_pct") or current_peak_cpu)
+        peak_mem = float(job_run_ingest.get("peak_memory_utilization_pct") or current_peak_memory)
+        if peak_cpu > target * 1.05 or peak_mem > target * 1.05:
+            if recommended_capacity < current_capacity * 0.9:
+                meets_requirements = False
 
     # Check if we're reducing too much
     reduction_pct = (

@@ -56,6 +56,7 @@ CREATE TABLE IF NOT EXISTS recommendations_history (
     request_id UUID UNIQUE,
     request_log_request_id UUID REFERENCES request_logs(request_id),
     job_id VARCHAR(255) NOT NULL,
+    job_run_id VARCHAR(255),
     user_id VARCHAR(255),
     workspace_id VARCHAR(255),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -64,8 +65,39 @@ CREATE TABLE IF NOT EXISTS recommendations_history (
     pattern_analysis TEXT,
     risk_assessment JSONB,
     token_usage_analysis JSONB,
+    lifecycle_status VARCHAR(64) DEFAULT 'RECOMMENDED',
+    lifecycle_updated_at TIMESTAMP,
+    lifecycle_updated_by VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Recommendation lifecycle audit (Phase 5.4)
+CREATE TABLE IF NOT EXISTS recommendation_lifecycle_events (
+    id SERIAL PRIMARY KEY,
+    request_id UUID NOT NULL REFERENCES recommendations_history(request_id),
+    from_status VARCHAR(64),
+    to_status VARCHAR(64) NOT NULL,
+    changed_by VARCHAR(255) NOT NULL,
+    changed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_lifecycle_events_request_id ON recommendation_lifecycle_events(request_id);
+CREATE INDEX IF NOT EXISTS idx_lifecycle_events_changed_at ON recommendation_lifecycle_events(changed_at);
+
+-- Agent profiles table (Phase 9)
+CREATE TABLE IF NOT EXISTS agent_profiles (
+    id UUID PRIMARY KEY,
+    agent_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    overrides JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_profiles_agent_id ON agent_profiles(agent_id);
+CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cost_logs_job_id ON cost_usage_logs(job_id);
@@ -75,6 +107,8 @@ CREATE INDEX IF NOT EXISTS idx_cost_logs_model ON cost_usage_logs(model_name);
 CREATE INDEX IF NOT EXISTS idx_cost_logs_chain ON cost_usage_logs(chain_name);
 
 CREATE INDEX IF NOT EXISTS idx_recommendations_job_id ON recommendations_history(job_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_job_run_id ON recommendations_history(job_run_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_lifecycle_status ON recommendations_history(lifecycle_status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON recommendations_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_recommendations_request_id ON recommendations_history(request_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_request_log_request_id ON recommendations_history(request_log_request_id);

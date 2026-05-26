@@ -26,4 +26,5 @@ async def test_list_agents():
     data = response.json()
     assert "agent_ids" in data
     assert isinstance(data["agent_ids"], list)
-    assert "cluster_config" in data["agent_ids"]
+    assert "job_run_cluster_sizing" in data["agent_ids"]
+    assert "cluster_config" in data["agent_ids"]  # deprecated alias

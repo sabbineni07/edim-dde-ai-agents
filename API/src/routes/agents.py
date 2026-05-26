@@ -3,7 +3,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from AI.src.agents.registry import get_registered_agent_ids
+from AI.src.core.registry import get_registered_agent_ids
 
 router = APIRouter()
 
