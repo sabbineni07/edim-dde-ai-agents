@@ -128,6 +128,24 @@ def test_list_jobs_for_workspace():
     assert "last_run_date" in first
 
 
+def test_list_job_runs():
+    """Test listing distinct runs for a job in a workspace."""
+    collector = LocalDataCollector()
+    runs = collector.list_job_runs(
+        workspace_id="1234567890123456",
+        job_id="job-001",
+        start_date="2024-01-15",
+        end_date="2024-01-20",
+    )
+    assert isinstance(runs, list)
+    assert len(runs) > 0
+    first = runs[0]
+    assert "job_run_id" in first
+    assert first["job_run_id"].startswith("run-001-")
+    assert "run_date" in first
+    assert "avg_cpu_utilization_pct" in first
+
+
 def test_get_job_metrics():
     """Test aggregated metrics for one job/workspace."""
     collector = LocalDataCollector()

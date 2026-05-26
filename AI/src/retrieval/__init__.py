@@ -1,6 +1,3 @@
-"""Config-driven RAG context for chains (Azure AI Search or FAISS)."""
+"""Deprecated: use AI.src.core.retrieval."""
 
-from AI.src.retrieval.factory import create_rag_context_provider
-from AI.src.retrieval.protocol import RagContextProvider
-
-__all__ = ["create_rag_context_provider", "RagContextProvider"]
+from AI.src.core.retrieval import *  # noqa: F403,F401

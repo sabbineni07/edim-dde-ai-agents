@@ -1,7 +1,15 @@
-"""LangChain chains."""
+"""Deprecated: chains live under AI.src.agents.<agent_id>.chains."""
 
-from .cost_optimization_chain import CostOptimizationChain
-from .explanation_chain import ExplanationChain
-from .pattern_analysis_chain import PatternAnalysisChain
+from AI.src.agents.job_run_cluster_sizing.chains import (
+    ClusterSizingChain,
+    CostOptimizationChain,
+    ExplanationChain,
+    RecommendationExplanationChain,
+)
 
-__all__ = ["PatternAnalysisChain", "CostOptimizationChain", "ExplanationChain"]
+__all__ = [
+    "ClusterSizingChain",
+    "CostOptimizationChain",
+    "ExplanationChain",
+    "RecommendationExplanationChain",
+]

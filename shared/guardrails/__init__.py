@@ -6,7 +6,14 @@ from shared.guardrails.exceptions import (
     TopicNotSupportedError,
 )
 from shared.guardrails.input_guardrails import validate_intent, validate_recommendation_request
-from shared.guardrails.output_guardrails import validate_and_clamp_recommendation
+from shared.guardrails.output_guardrails import (
+    validate_and_clamp_recommendation,
+    validate_and_clamp_with_adjustments,
+)
+from shared.guardrails.retry_policy import (
+    build_guardrail_feedback,
+    should_retry_cost_recommendation,
+)
 
 __all__ = [
     "NoJobMetricsError",
@@ -15,4 +22,7 @@ __all__ = [
     "validate_recommendation_request",
     "validate_intent",
     "validate_and_clamp_recommendation",
+    "validate_and_clamp_with_adjustments",
+    "should_retry_cost_recommendation",
+    "build_guardrail_feedback",
 ]

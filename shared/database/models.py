@@ -73,6 +73,7 @@ class RecommendationHistory(Base):
         index=True,
     )
     job_id = Column(String(255), nullable=False, index=True)
+    job_run_id = Column(String(255), nullable=True, index=True)
     user_id = Column(String(255), nullable=True)
     workspace_id = Column(String(255), nullable=True)
     timestamp = Column(DateTime(timezone=True), default=func.now(), index=True)
@@ -81,4 +82,40 @@ class RecommendationHistory(Base):
     pattern_analysis = Column(Text, nullable=True)
     risk_assessment = Column(JSONB, nullable=True)
     token_usage_analysis = Column(JSONB, nullable=True)
+    lifecycle_status = Column(String(64), nullable=True, index=True)
+    lifecycle_updated_at = Column(DateTime(timezone=True), nullable=True)
+    lifecycle_updated_by = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class RecommendationLifecycleEvent(Base):
+    """Audit trail for recommendation adoption lifecycle transitions."""
+
+    __tablename__ = "recommendation_lifecycle_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    request_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("recommendations_history.request_id"),
+        nullable=False,
+        index=True,
+    )
+    from_status = Column(String(64), nullable=True)
+    to_status = Column(String(64), nullable=False, index=True)
+    changed_by = Column(String(255), nullable=False)
+    changed_at = Column(DateTime(timezone=True), default=func.now(), index=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+
+
+class AgentProfile(Base):
+    """Persisted agent settings profile (JSONB overrides, no secrets)."""
+
+    __tablename__ = "agent_profiles"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    agent_id = Column(String(255), nullable=False, index=True)
+    name = Column(String(255), nullable=False, index=True)
+    overrides = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())

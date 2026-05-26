@@ -1,5 +1,5 @@
-"""Cluster configuration recommendation agent."""
+"""Deprecated package — use AI.src.agents.job_run_cluster_sizing."""
 
-from AI.src.agents.cluster_config.agent import ClusterConfigAgent
+from AI.src.agents.job_run_cluster_sizing import ClusterConfigAgent, JobRunClusterSizingAgent
 
-__all__ = ["ClusterConfigAgent"]
+__all__ = ["ClusterConfigAgent", "JobRunClusterSizingAgent"]

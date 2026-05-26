@@ -1,4 +1,4 @@
-"""Application settings."""
+"""Application settings (flat model). Load via shared.config.loader for YAML merge."""
 
 from typing import Optional
 
@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    """Flat settings schema: platform + optional agent overrides + env secrets."""
+
     azure_subscription_id: Optional[str] = None
     azure_tenant_id: Optional[str] = None
     azure_client_id: Optional[str] = None
@@ -58,39 +60,45 @@ class Settings(BaseSettings):
     use_local_data: bool = True
     local_data_path: Optional[str] = None
 
-    # RAG retrieval: azure_search (default), faiss (local index), none (disable RAG in chains)
     vector_retrieval_backend: str = "azure_search"
     faiss_index_path: Optional[str] = None
 
-    # Agent/recommendation defaults (overridable via env)
     default_monthly_budget: float = 500.0
     default_model_name: str = "gpt-4o"
     default_confidence_score: float = 0.85
+    recommendation_auto_termination_minutes: int = 0
+    recommendation_cost_retry_enabled: bool = False
 
-    # Guardrails (input/output/safety)
     guardrail_max_job_id_length: int = 256
     guardrail_max_date_range_days: int = 30
     guardrail_supported_intent: str = "cluster_recommendation"
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=False,
+        populate_by_name=True,
     )
 
 
-import os
-import warnings
+DEFAULT_AGENT_ID = "job_run_cluster_sizing"
 
-use_env_file = True
-if os.path.exists(".env"):
-    try:
-        with open(".env", "r"):
-            pass
-    except (PermissionError, IOError):
-        use_env_file = False
-        warnings.warn("Could not read .env file. Using environment variables only.")
 
-try:
-    settings = Settings() if use_env_file else Settings(_env_file=None)
-except Exception as e:
-    warnings.warn(f"Error loading settings: {e}. Using defaults.")
-    settings = Settings(_env_file=None)
+class _SettingsProxy:
+    """Backward-compatible module-level `settings` (default agent merge)."""
+
+    def __getattr__(self, name: str):
+        from shared.config.loader import get_agent_settings
+
+        return getattr(get_agent_settings(DEFAULT_AGENT_ID), name)
+
+    def __setattr__(self, name: str, value):
+        if name.startswith("_"):
+            super().__setattr__(name, value)
+            return
+        from shared.config.loader import get_agent_settings
+
+        setattr(get_agent_settings(DEFAULT_AGENT_ID), name, value)
+
+
+settings: Settings = _SettingsProxy()  # type: ignore[assignment]

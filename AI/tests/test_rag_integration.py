@@ -13,10 +13,9 @@ if str(project_root) not in sys.path:
 
 # Import after path setup
 try:
-    from AI.src.chains.cost_optimization_chain import CostOptimizationChain
-    from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
-    from AI.src.services.azure_search_service import AzureSearchService
-    from AI.src.services.mock_llm_service import MockLLMService
+    from AI.src.agents.job_run_cluster_sizing.chains.sizing import ClusterSizingChain
+    from AI.src.core.llm.azure_search_service import AzureSearchService
+    from AI.src.core.llm.mock_llm_service import MockLLMService
     from shared.models.job_cluster_metrics import JobClusterMetrics
 except ImportError as e:
     # If import fails, skip tests (for environments without full setup)
@@ -36,7 +35,7 @@ class TestAzureSearchService:
 
     def test_initialization_without_config(self):
         """Test graceful degradation when Azure AI Search is not configured."""
-        with patch("AI.src.services.azure_search_service.settings") as mock_settings:
+        with patch("AI.src.core.llm.azure_search_service.settings") as mock_settings:
             mock_settings.azure_search_endpoint = None
             mock_settings.azure_search_api_key = None
 
@@ -86,49 +85,20 @@ class TestAzureSearchService:
         assert result is False  # Because client is None, but validation passed
 
 
-class TestPatternAnalysisChain:
-    """Tests for PatternAnalysisChain with RAG."""
+class TestClusterSizingChain:
+    """Tests for ClusterSizingChain with RAG."""
 
     def test_initialization_with_rag(self):
         """Test chain initializes with RAG when rag provider provided."""
         mock_llm = _make_mock_llm_provider()
         mock_rag = MagicMock()
-        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=mock_rag, use_rag=True)
+        chain = ClusterSizingChain(llm_provider=mock_llm, rag_provider=mock_rag, use_rag=True)
         assert chain.use_rag is True
 
     def test_initialization_without_rag(self):
         """Test chain initializes with RAG disabled when no rag provider."""
         mock_llm = _make_mock_llm_provider()
-        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
-        assert chain.use_rag is False
-
-    def test_analyze_without_rag(self):
-        """Test analyze works without RAG."""
-        mock_llm = _make_mock_llm_provider()
-        chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
-        chain.chain = Mock()
-        chain.chain.invoke = Mock(return_value="Test analysis")
-
-        result = chain.analyze({"job_id": "test-123"})
-
-        assert result == "Test analysis"
-        chain.chain.invoke.assert_called_once()
-
-
-class TestCostOptimizationChain:
-    """Tests for CostOptimizationChain with RAG."""
-
-    def test_initialization_with_rag(self):
-        """Test chain initializes with RAG when rag provider provided."""
-        mock_llm = _make_mock_llm_provider()
-        mock_rag = MagicMock()
-        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=mock_rag, use_rag=True)
-        assert chain.use_rag is True
-
-    def test_initialization_without_rag(self):
-        """Test chain initializes with RAG disabled when no rag provider."""
-        mock_llm = _make_mock_llm_provider()
-        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
+        chain = ClusterSizingChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         assert chain.use_rag is False
 
     def test_optimize_without_rag(self):
@@ -136,16 +106,17 @@ class TestCostOptimizationChain:
         import json
 
         mock_llm = _make_mock_llm_provider()
-        chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
+        chain = ClusterSizingChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
         chain.chain = Mock()
         chain.chain.invoke = Mock(
             return_value=json.dumps(
                 {
+                    "pattern_analysis": "### 1. Workload type\n- Test\n",
                     "node_family": "E",
                     "vcpus": 8,
                     "min_workers": 1,
                     "max_workers": 8,
-                    "auto_termination_minutes": None,
+                    "auto_termination_minutes": 0,
                     "rationale": "Test rationale",
                 }
             )
@@ -153,11 +124,11 @@ class TestCostOptimizationChain:
 
         result = chain.optimize(
             current_config={},
-            job_cluster_metrics={},
-            budget_constraints={},
-            pattern_analysis="Test analysis",
+            job_run_ingest={"workflow_task_count": 1, "p95_worker_nodes_consumed": 2},
+            sizing_hints={"recommended_max_workers": 4},
         )
 
         assert result["node_family"] == "E"
         assert result["vcpus"] == 8
+        assert "### 1. Workload type" in result["pattern_analysis"]
         chain.chain.invoke.assert_called_once()

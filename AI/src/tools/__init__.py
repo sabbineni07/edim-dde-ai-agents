@@ -1,14 +1,9 @@
-"""AI agent tools."""
+"""Deprecated: tools live under AI.src.agents.<agent_id>.tools."""
 
-from .cost_calculator_tools import calculate_cluster_cost, calculate_cost_savings
-from .databricks_tools import get_cost_analysis, get_job_cluster_metrics
-from .validation_tools import assess_risks, validate_performance
+from AI.src.agents.job_run_cluster_sizing.tools import (
+    cost_calculator_tools,
+    databricks_tools,
+    validation_tools,
+)
 
-__all__ = [
-    "get_job_cluster_metrics",
-    "get_cost_analysis",
-    "calculate_cluster_cost",
-    "calculate_cost_savings",
-    "validate_performance",
-    "assess_risks",
-]
+__all__ = ["cost_calculator_tools", "databricks_tools", "validation_tools"]

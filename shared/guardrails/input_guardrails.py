@@ -32,10 +32,12 @@ def validate_recommendation_request(
     job_id: str,
     start_date: str,
     end_date: str,
+    job_run_id: str | None = None,
 ) -> None:
     """Validate recommendation request inputs. Raises GuardrailValidationError if invalid.
 
     - job_id: non-empty, within max length
+    - job_run_id: required for per-run recommendations, non-empty when provided
     - start_date, end_date: YYYY-MM-DD format, end >= start, range <= max_date_range_days
     """
     if not job_id or not str(job_id).strip():
@@ -50,6 +52,19 @@ def validate_recommendation_request(
             f"job_id length exceeds maximum ({max_len} characters).",
             error_code="INVALID_INPUT",
         )
+
+    if job_run_id is not None:
+        run_str = str(job_run_id).strip()
+        if not run_str:
+            raise GuardrailValidationError(
+                "job_run_id is required and cannot be empty.",
+                error_code="INVALID_INPUT",
+            )
+        if len(run_str) > max_len:
+            raise GuardrailValidationError(
+                f"job_run_id length exceeds maximum ({max_len} characters).",
+                error_code="INVALID_INPUT",
+            )
 
     if not DATE_PATTERN.match(str(start_date).strip()):
         raise GuardrailValidationError(

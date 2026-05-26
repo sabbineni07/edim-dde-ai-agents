@@ -42,7 +42,12 @@ services:
       API_PORT: 8000
       # Local CSV under ./data (mount). If false, needs DATABRICKS_JOB_CLUSTER_METRICS_TABLE or workspaces API returns [].
       USE_LOCAL_DATA: ${USE_LOCAL_DATA:-true}
-      LOCAL_DATA_PATH: ${LOCAL_DATA_PATH:-/app/data/sample_job_metrics.csv}
+      # Use container path (avoid leaking host paths via compose substitution)
+      LOCAL_DATA_PATH: /app/data/sample_job_metrics.csv
+      # YAML configuration root inside container
+      CONFIG_DIR: ${CONFIG_DIR:-/app/config}
+      # Use mock LLM provider (tests/local) instead of Azure OpenAI
+      USE_MOCK_LLM: ${USE_MOCK_LLM:-false}
       # Azure OpenAI
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
@@ -63,6 +68,7 @@ services:
       - ./AI:/app/AI:ro
       - ./API:/app/API:ro
       - ./DE:/app/DE:ro
+      - ./config:/app/config:ro
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,7 +1,13 @@
 """Database utilities and connection management."""
 
 from .connection import get_database_engine, get_database_session
-from .models import CostUsageLog, DailyCostSummary, RecommendationHistory, RequestLog
+from .models import (
+    CostUsageLog,
+    DailyCostSummary,
+    RecommendationHistory,
+    RecommendationLifecycleEvent,
+    RequestLog,
+)
 
 __all__ = [
     "get_database_engine",
@@ -9,5 +15,6 @@ __all__ = [
     "CostUsageLog",
     "DailyCostSummary",
     "RecommendationHistory",
+    "RecommendationLifecycleEvent",
     "RequestLog",
 ]

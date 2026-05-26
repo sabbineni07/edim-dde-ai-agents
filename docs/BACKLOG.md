@@ -24,8 +24,21 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 ## Product / UX
 
-- [ ] **Date range UX** — Users must pick ranges that overlap their data source (CSV vs Delta); consider in-app hints when workspaces/jobs are empty.
-- [ ] **Recommendation guardrails** — `GUARDRAIL_MAX_DATE_RANGE_DAYS` caps request window; align UI defaults or surface the limit in Job details.
+Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5** (refined for Phases 6–9).
+
+- [x] **Phase 5.0** — List job runs API; fix recommendation history `workspace_id`
+- [x] **Phase 5.1 (core)** — Run-centric UI: agent/profile pickers, Phase 6 response panels, per-run recommend
+- [ ] **Phase 5.2** — Agents screen: profile CRUD (Phase 9 backend done)
+- [x] **Phase 5.3 (partial)** — History with `job_run_id`; API vs lifecycle badges
+- [x] **Phase 5.4** — Adoption lifecycle: RECOMMENDED → … → APPROVED + audit UI/API
+- [ ] **Phase 5.5** — RAG by `job_run_id`
+- [ ] **Phase 5.6** — Ops docs (batch metrics vs on-demand LLM)
+- [x] **Pipeline transparency (Phase 6)** — see [recommendation-pipeline.md](./recommendation-pipeline.md)
+- [x] **Multi-agent layout (Phase 7)** — see [architecture.md](./architecture.md)
+- [x] **YAML settings (Phase 8)** — see [configuration.md](./configuration.md)
+- [x] **Agent profiles API (Phase 9 backend)** — `/api/agent-profiles`, `agent_id` + `profile_id` on recommend
+- [ ] **Drop `cluster_config` agent alias** — UI defaults to `job_run_cluster_sizing` (Phase 5.7)
+- [ ] **Enable cost retry in prod** — after measuring guardrail adjustment rate
 
 ---
 
@@ -44,4 +57,4 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 ---
 
-*Last updated: backlog seed from engineering review.*
+*Last updated: Phase 5.4 adoption lifecycle implemented.*

@@ -1,11 +1,8 @@
-"""AI agents - registry and agent implementations.
+"""AI agents — import packages to trigger registration."""
 
-Import agent subpackages to trigger registration.
-"""
-
-# Trigger registration of all agents (import causes @register_agent to run)
-from AI.src.agents import cluster_config  # noqa: F401
-from AI.src.agents.registry import (
+from AI.src.agents import job_run_cluster_sizing  # noqa: F401
+from AI.src.core.registry import (
+    AGENT_ALIASES,
     AGENT_DEPS_FACTORIES,
     AGENT_REGISTRY,
     create_agent,
@@ -17,9 +14,10 @@ from AI.src.agents.registry import (
 __all__ = [
     "AGENT_REGISTRY",
     "AGENT_DEPS_FACTORIES",
+    "AGENT_ALIASES",
     "get_agent_class",
     "get_registered_agent_ids",
     "create_agent",
     "register_agent",
-    "cluster_config",
+    "job_run_cluster_sizing",
 ]

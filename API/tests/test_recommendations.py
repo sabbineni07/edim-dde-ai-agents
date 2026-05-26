@@ -25,6 +25,11 @@ async def test_generate_recommendation_endpoint():
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.post(
             "/api/recommendations/generate",
-            json={"job_id": "test-job-123", "start_date": "2024-01-01", "end_date": "2024-01-31"},
+            json={
+                "job_id": "test-job-123",
+                "job_run_id": "run-123",
+                "start_date": "2024-01-01",
+                "end_date": "2024-01-31",
+            },
         )
         assert response.status_code in [200, 500]  # 500 if services not configured

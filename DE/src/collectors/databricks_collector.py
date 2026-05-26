@@ -28,6 +28,7 @@ class DatabricksCollector:
         end_date: str,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Collect job cluster metrics by job_id and date range from the centralized Delta table."""
         logger.info(
@@ -42,7 +43,9 @@ class DatabricksCollector:
                 message="DATABRICKS_JOB_CLUSTER_METRICS_TABLE is required; returning no metrics.",
             )
             return []
-        return self._collect_from_delta_table(start_date, end_date, job_ids, workspace_id)
+        return self._collect_from_delta_table(
+            start_date, end_date, job_ids, workspace_id, job_run_id
+        )
 
     def _collect_from_delta_table(
         self,
@@ -50,6 +53,7 @@ class DatabricksCollector:
         end_date: str,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Fetch records from centralized Delta table by job_id and date range."""
         table = self._metrics_table
@@ -63,6 +67,9 @@ class DatabricksCollector:
         if workspace_id:
             conditions.append("workspace_id = ?")
             params.append(workspace_id)
+        if job_run_id:
+            conditions.append("CAST(COALESCE(cluster_id, job_run_id) AS STRING) = ?")
+            params.append(str(job_run_id))
         where = " AND ".join(conditions)
         query = f"""
         SELECT
@@ -221,6 +228,60 @@ class DatabricksCollector:
                 "list_jobs_for_workspace_error",
                 error=str(e),
                 workspace_id=workspace_id,
+                table=table,
+            )
+            raise
+
+    def list_job_runs(
+        self, workspace_id: str, job_id: str, start_date: str, end_date: str
+    ) -> List[Dict[str, Any]]:
+        """List distinct job runs for a job in a workspace within the date range."""
+        if not self._metrics_table:
+            logger.warning(
+                "databricks_list_job_runs_table_not_set",
+                message="DATABRICKS_JOB_CLUSTER_METRICS_TABLE is required.",
+            )
+            return []
+
+        table = self._metrics_table
+        query = f"""
+        SELECT
+          CAST(job_run_id AS STRING) AS job_run_id,
+          MAX(job_date) AS run_date,
+          COALESCE(MAX(job_duration_seconds), MAX(duration), 0.0) AS job_duration_seconds,
+          COALESCE(AVG(avg_cpu_utilization_pct), 0.0) AS avg_cpu_utilization_pct,
+          COALESCE(AVG(avg_memory_utilization_pct), 0.0) AS avg_memory_utilization_pct,
+          COALESCE(AVG(avg_nodes_consumed), 0.0) AS avg_nodes_consumed,
+          COALESCE(MAX(peak_cpu_utilization_pct), 0.0) AS peak_cpu_utilization_pct,
+          COALESCE(MAX(peak_memory_utilization_pct), 0.0) AS peak_memory_utilization_pct,
+          COALESCE(SUM(total_cost_usd), 0.0) AS total_cost_usd,
+          COALESCE(MAX(current_node_type), MAX(node_type), 'Standard_E8s_v3') AS current_node_type,
+          CAST(COALESCE(MAX(current_min_workers), 1) AS BIGINT) AS current_min_workers,
+          CAST(COALESCE(MAX(current_max_workers), 16) AS BIGINT) AS current_max_workers,
+          MAX(workload_type) AS workload_type,
+          CAST(MAX(task_count) AS BIGINT) AS task_count
+        FROM {table}
+        WHERE workspace_id = ?
+          AND job_id = ?
+          AND job_date >= ?
+          AND job_date <= ?
+          AND job_run_id IS NOT NULL
+        GROUP BY job_run_id
+        ORDER BY run_date DESC, job_run_id DESC
+        """
+        params: List[Any] = [workspace_id, job_id, start_date, end_date]
+        try:
+            with sql.connect(**self.connection_params) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(query, params)
+                    columns = [desc[0] for desc in cursor.description]
+                    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        except Exception as e:
+            logger.error(
+                "list_job_runs_error",
+                error=str(e),
+                workspace_id=workspace_id,
+                job_id=job_id,
                 table=table,
             )
             raise

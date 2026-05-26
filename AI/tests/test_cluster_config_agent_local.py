@@ -7,18 +7,20 @@ from unittest.mock import MagicMock
 
 import pytest
 
+project_root = Path(__file__).parent.parent.parent
+_sample_csv = project_root / "data" / "sample_job_metrics.csv"
+
 # Set environment variable for local data mode before any imports
 os.environ["USE_LOCAL_DATA"] = "true"
+os.environ["LOCAL_DATA_PATH"] = str(_sample_csv)
 
-# Add project root to path
-project_root = Path(__file__).parent.parent.parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
 # Import after path setup
 try:
-    from AI.src.agents.cluster_config.agent import ClusterConfigAgent
-    from AI.src.services.mock_llm_service import MockLLMService
+    from AI.src.agents.job_run_cluster_sizing import JobRunClusterSizingAgent
+    from AI.src.core.llm.mock_llm_service import MockLLMService
 except ImportError as e:
     # If import fails, skip tests (for environments without full setup)
     pytest.skip(f"Could not import ClusterConfigAgent: {e}", allow_module_level=True)
@@ -34,21 +36,31 @@ def _make_mock_llm_provider():
 
 def _create_agent_with_mock_llm():
     """Create agent with mock LLM (no Azure required)."""
-    from AI.src.chains.cost_optimization_chain import CostOptimizationChain
-    from AI.src.chains.explanation_chain import ExplanationChain
-    from AI.src.chains.pattern_analysis_chain import PatternAnalysisChain
+    from AI.src.agents.job_run_cluster_sizing.chains.explanation import (
+        RecommendationExplanationChain,
+    )
+    from AI.src.agents.job_run_cluster_sizing.chains.sizing import ClusterSizingChain
 
     mock_llm = _make_mock_llm_provider()
-    pattern_chain = PatternAnalysisChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
-    cost_chain = CostOptimizationChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
-    explanation_chain = ExplanationChain(llm_provider=mock_llm)
-    return ClusterConfigAgent(
-        pattern_chain=pattern_chain,
-        cost_chain=cost_chain,
+    sizing_chain = ClusterSizingChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
+    explanation_chain = RecommendationExplanationChain(llm_provider=mock_llm)
+    return JobRunClusterSizingAgent(
+        sizing_chain=sizing_chain,
         explanation_chain=explanation_chain,
         cost_logger=None,
         search_service=None,
     )
+
+
+@pytest.fixture(autouse=True)
+def _local_data_collector_path():
+    from shared.factories.data_collector_factory import reset_data_collector
+
+    os.environ["USE_LOCAL_DATA"] = "true"
+    os.environ["LOCAL_DATA_PATH"] = str(_sample_csv)
+    reset_data_collector()
+    yield
+    reset_data_collector()
 
 
 @pytest.mark.asyncio
@@ -66,16 +78,29 @@ async def test_generate_recommendation_with_local_data():
 
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
-        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+        job_id="job-001",
+        job_run_id="run-001-001",
+        start_date="2024-01-15",
+        end_date="2024-01-18",
+        include_explanation=True,
     )
 
     # Verify result structure
     assert result is not None
     assert "request_id" in result
+    assert result.get("job_run_id") == "run-001-001"
     assert "recommendation" in result
     assert "explanation" in result
     assert "pattern_analysis" in result
+    assert "### 1. Workload type" in result["pattern_analysis"]
     assert "risk_assessment" in result
+    assert "reason_codes" in result
+    assert "job_run_ingest" in result
+    assert "llm_recommendation" in result
+    assert "guardrail_recommendation" in result
+    assert "guardrail_adjustments" in result
+    assert result.get("recommendation_attempts", 0) >= 1
+    assert "comparison" in result
     assert "token_usage_analysis" in result
 
     # Verify recommendation structure
@@ -94,7 +119,10 @@ async def test_agent_with_rag_disabled():
 
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
-        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+        job_id="job-001",
+        job_run_id="run-001-001",
+        start_date="2024-01-15",
+        end_date="2024-01-18",
     )
 
     assert result is not None
@@ -108,7 +136,10 @@ async def test_token_usage_tracking():
 
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
-        job_id="job-001", start_date="2024-01-15", end_date="2024-01-18"
+        job_id="job-001",
+        job_run_id="run-001-001",
+        start_date="2024-01-15",
+        end_date="2024-01-18",
     )
 
     # Verify token usage analysis

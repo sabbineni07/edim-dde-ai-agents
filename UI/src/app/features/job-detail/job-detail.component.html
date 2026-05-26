@@ -16,10 +16,10 @@
 
 <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
 
-<!-- Date range & Refresh -->
+<!-- Date range & actions -->
 <div class="card mb-4">
   <div class="card-body">
-    <div class="row g-2 align-items-end">
+    <div class="row g-2 align-items-end flex-wrap">
       <div class="col-auto">
         <label class="form-label small mb-0">Start date</label>
         <input type="date" class="form-control form-control-sm" [(ngModel)]="startDate" />
@@ -29,11 +29,35 @@
         <input type="date" class="form-control form-control-sm" [(ngModel)]="endDate" />
       </div>
       <div class="col-auto">
-        <button class="btn btn-outline-primary btn-sm" (click)="loadMetrics()" [disabled]="loadingMetrics">Refresh metrics</button>
+        <button class="btn btn-outline-primary btn-sm" (click)="refreshData()" [disabled]="loadingMetrics || loadingRuns">
+          Refresh
+        </button>
       </div>
       <div class="col-auto">
-        <button class="btn btn-primary btn-sm" (click)="runRecommendation()" [disabled]="runningRecommendation || loadingMetrics">
-          <span *ngIf="!runningRecommendation">Run recommendation</span>
+        <label class="form-label small mb-0">Agent</label>
+        <select class="form-select form-select-sm" [(ngModel)]="selectedAgentId" (ngModelChange)="onAgentChange()">
+          <option *ngFor="let id of agentIds" [value]="id">{{ id }}</option>
+        </select>
+      </div>
+      <div class="col-auto">
+        <label class="form-label small mb-0">Profile</label>
+        <select class="form-select form-select-sm" [(ngModel)]="selectedProfileId">
+          <option value="">Default settings</option>
+          <option *ngFor="let p of profiles" [value]="p.id">{{ p.name }}</option>
+        </select>
+      </div>
+      <div class="col-auto d-flex align-items-center pt-4">
+        <div class="form-check mb-0">
+          <input class="form-check-input" type="checkbox" id="includeExplanation" [(ngModel)]="includeExplanation" />
+          <label class="form-check-label small" for="includeExplanation">Include explanation</label>
+        </div>
+      </div>
+      <div class="col-auto">
+        <button
+          class="btn btn-primary btn-sm"
+          (click)="runRecommendation()"
+          [disabled]="runningRecommendation || !selectedRunId">
+          <span *ngIf="!runningRecommendation">Recommend for selected run</span>
           <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>Running...</span>
         </button>
       </div>
@@ -41,9 +65,57 @@
   </div>
 </div>
 
-<!-- Current metrics -->
+<!-- Job runs -->
 <div class="card mb-4">
-  <div class="card-header"><strong>Current metrics</strong></div>
+  <div class="card-header"><strong>Job runs</strong></div>
+  <div class="card-body p-0">
+    <div *ngIf="loadingRuns" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
+    <div *ngIf="!loadingRuns && runs.length === 0" class="p-3 text-muted small">
+      No runs in this date range. {{ sampleDataHint }}
+    </div>
+    <div class="table-responsive" *ngIf="!loadingRuns && runs.length > 0">
+      <table class="table table-sm table-hover mb-0">
+        <thead>
+          <tr>
+            <th></th>
+            <th>Run ID</th>
+            <th>Date</th>
+            <th>CPU %</th>
+            <th>Memory %</th>
+            <th>Nodes</th>
+            <th>Node type</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            *ngFor="let run of runs"
+            [class.table-active]="run.job_run_id === selectedRunId"
+            (click)="selectRun(run.job_run_id)"
+            role="button">
+            <td>
+              <input
+                type="radio"
+                name="selectedRun"
+                [value]="run.job_run_id"
+                [checked]="run.job_run_id === selectedRunId"
+                (click)="$event.stopPropagation(); selectRun(run.job_run_id)" />
+            </td>
+            <td><code class="small">{{ run.job_run_id }}</code></td>
+            <td>{{ run.run_date ?? '–' }}</td>
+            <td>{{ run.avg_cpu_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.avg_memory_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.avg_nodes_consumed | number:'1.1-1' }}</td>
+            <td>{{ run.current_node_type ?? '–' }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Current metrics (job aggregate) -->
+<div class="card mb-4">
+  <div class="card-header"><strong>Job metrics (date range aggregate)</strong></div>
   <div class="card-body">
     <div *ngIf="loadingMetrics" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingMetrics && metricsData?.metrics" class="row g-3">
@@ -54,7 +126,102 @@
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg nodes</strong><br>{{ metricsData!.metrics!['avg_nodes_consumed'] ?? '–' }}</div></div>
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
     </div>
-    <div *ngIf="!loadingMetrics && !metricsData" class="text-muted">No metrics for this job in the selected date range.</div>
+    <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">
+      No aggregated metrics for this job in the selected range. {{ sampleDataHint }}
+    </div>
+  </div>
+</div>
+
+<!-- Latest recommendation result -->
+<div class="card mb-4" *ngIf="lastResult">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <strong>Latest recommendation</strong>
+    <span class="badge bg-secondary" *ngIf="lastResult.request_id">{{ lastResult.request_id }}</span>
+  </div>
+  <div class="card-body">
+  <div *ngIf="lastResult.reason_codes?.length" class="mb-3">
+    <strong class="small text-muted d-block mb-1">Reason codes</strong>
+    <span class="badge bg-info text-dark me-1 mb-1" *ngFor="let code of lastResult.reason_codes">{{ code }}</span>
+  </div>
+
+  <div class="row g-3 mb-3" *ngIf="comparisonCurrent() || comparisonRecommended()">
+    <div class="col-md-6" *ngIf="comparisonCurrent()">
+      <div class="p-2 border rounded">
+        <strong class="small">Current configuration</strong>
+        <pre class="small mb-0 mt-1 bg-light p-2 rounded">{{ comparisonCurrent() | json }}</pre>
+      </div>
+    </div>
+    <div class="col-md-6" *ngIf="comparisonRecommended()">
+      <div class="p-2 border rounded border-success">
+        <strong class="small">Recommended (applied)</strong>
+        <pre class="small mb-0 mt-1 bg-light p-2 rounded">{{ comparisonRecommended() | json }}</pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.guardrail_recommendation">
+    <strong class="small text-muted">Applied recommendation</strong>
+    <pre class="small bg-light p-2 rounded mb-0">{{ lastResult.guardrail_recommendation | json }}</pre>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.guardrail_adjustments?.length">
+    <strong class="small text-muted">Guardrail adjustments</strong>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered mb-0">
+        <thead>
+          <tr>
+            <th>Field</th>
+            <th>From</th>
+            <th>To</th>
+            <th>Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let adj of lastResult.guardrail_adjustments">
+            <td>{{ adj['field'] }}</td>
+            <td><code>{{ adj['from'] | json }}</code></td>
+            <td><code>{{ adj['to'] | json }}</code></td>
+            <td>{{ adj['reason'] }}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.job_run_ingest">
+    <details>
+      <summary class="small fw-semibold">Ingest summary</summary>
+      <pre class="small bg-light p-2 rounded mt-2 mb-0">{{ lastResult.job_run_ingest | json }}</pre>
+    </details>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.llm_recommendation">
+    <details>
+      <summary class="small fw-semibold">Model output (not for apply)</summary>
+      <pre class="small bg-light p-2 rounded mt-2 mb-0">{{ lastResult.llm_recommendation | json }}</pre>
+    </details>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.sizing_hints">
+    <details>
+      <summary class="small fw-semibold">Sizing hints</summary>
+      <pre class="small bg-light p-2 rounded mt-2 mb-0">{{ lastResult.sizing_hints | json }}</pre>
+    </details>
+  </div>
+
+  <div class="mb-3" *ngIf="lastResult.pattern_analysis">
+    <strong class="small text-muted">Pattern analysis</strong>
+    <pre class="small bg-light p-2 rounded mb-0">{{ lastResult.pattern_analysis }}</pre>
+  </div>
+
+  <div *ngIf="lastResult.explanation">
+    <strong class="small text-muted">Explanation</strong>
+    <p class="small mb-0 mt-1">{{ lastResult.explanation }}</p>
+  </div>
+
+  <div class="mt-2 small text-muted" *ngIf="lastResult.recommendation_attempts">
+    Attempts: {{ lastResult.recommendation_attempts }}
+  </div>
   </div>
 </div>
 
@@ -63,17 +230,108 @@
   <div class="card-header"><strong>Recommendation history</strong></div>
   <div class="card-body">
     <div *ngIf="loadingRecs" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
-    <div *ngIf="!loadingRecs && recommendations.length === 0" class="text-muted">No recommendations yet. Click &quot;Run recommendation&quot; above.</div>
+    <div *ngIf="!loadingRecs && recommendations.length === 0" class="text-muted small">
+      No recommendations yet. Select a run and click &quot;Recommend for selected run&quot;.
+    </div>
     <div *ngIf="!loadingRecs && recommendations.length > 0">
       <div class="accordion" id="recAccordion">
         <div class="accordion-item" *ngFor="let rec of recommendations; let i = index">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" [attr.data-bs-target]="'#rec' + i" [attr.aria-controls]="'rec' + i">
-              {{ rec.timestamp | date:'short' }} · {{ rec.request_log?.['status'] ?? '–' }}
+              <span class="me-2">{{ rec.timestamp | date:'short' }}</span>
+              <code class="small me-2" *ngIf="rec.job_run_id">{{ rec.job_run_id }}</code>
+              <span class="badge rounded-pill bg-primary me-1">
+                {{ rec.lifecycle_status_label || lifecycleLabel(rec.lifecycle_status) }}
+              </span>
+              <span
+                class="badge rounded-pill"
+                [class.bg-success]="rec.api_request_status === 'success' || rec.request_log?.['status'] === 'success'"
+                [class.bg-secondary]="rec.api_request_status !== 'success' && rec.request_log?.['status'] !== 'success'">
+                {{ apiStatusLabel(rec) }}
+              </span>
             </button>
           </h2>
           <div [id]="'rec' + i" class="accordion-collapse collapse" data-bs-parent="#recAccordion">
             <div class="accordion-body small">
+              <div class="mb-3 p-2 border rounded bg-light">
+                <strong class="d-block mb-2">Adoption lifecycle</strong>
+                <div class="small text-muted mb-2" *ngIf="signedInUser">
+                  Changes will be recorded as <strong>{{ signedInUser }}</strong>
+                </div>
+                <div class="small text-warning mb-2" *ngIf="!signedInUser">
+                  Sign in to update lifecycle status.
+                </div>
+                <div class="small text-muted mb-2" *ngIf="rec.lifecycle_updated_at">
+                  Last updated {{ rec.lifecycle_updated_at | date:'short' }}
+                  <span *ngIf="rec.lifecycle_updated_by"> by {{ rec.lifecycle_updated_by }}</span>
+                </div>
+                <div
+                  class="alert alert-sm py-1 px-2 small mb-2"
+                  *ngIf="lifecycleFeedback[rec.request_id] as fb"
+                  [class.alert-success]="fb.type === 'success'"
+                  [class.alert-danger]="fb.type === 'error'">
+                  {{ fb.message }}
+                </div>
+                <div class="row g-2 align-items-end" *ngIf="rec.allowed_next_statuses?.length">
+                  <div class="col-auto">
+                    <label class="form-label small mb-0">Move to</label>
+                    <select
+                      class="form-select form-select-sm"
+                      [ngModel]="getLifecycleTarget(rec.request_id)"
+                      (ngModelChange)="setLifecycleTarget(rec.request_id, $event)">
+                      <option value="">Select status…</option>
+                      <option *ngFor="let st of rec.allowed_next_statuses" [value]="st">
+                        {{ lifecycleLabel(st) }}
+                      </option>
+                    </select>
+                  </div>
+                  <div class="col">
+                    <label class="form-label small mb-0">Notes (optional)</label>
+                    <input
+                      type="text"
+                      class="form-control form-control-sm"
+                      [ngModel]="lifecycleNotes[rec.request_id] || ''"
+                      (ngModelChange)="setLifecycleNotes(rec.request_id, $event)"
+                      placeholder="e.g. deployed via CHG-1234" />
+                  </div>
+                  <div class="col-auto">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-outline-primary"
+                      [disabled]="!getLifecycleTarget(rec.request_id) || updatingLifecycle[rec.request_id] || !signedInUser"
+                      (click)="applyLifecycleTransition(rec)">
+                      <span *ngIf="!updatingLifecycle[rec.request_id]">Update status</span>
+                      <span *ngIf="updatingLifecycle[rec.request_id]">Updating…</span>
+                    </button>
+                  </div>
+                </div>
+                <div class="small text-muted" *ngIf="!rec.allowed_next_statuses?.length">
+                  Terminal lifecycle state — no further transitions.
+                </div>
+                <details class="mt-2" *ngIf="rec.lifecycle_events?.length">
+                  <summary class="small">Lifecycle history ({{ rec.lifecycle_events!.length }})</summary>
+                  <table class="table table-sm table-bordered mt-2 mb-0">
+                    <thead>
+                      <tr>
+                        <th>When</th>
+                        <th>From</th>
+                        <th>To</th>
+                        <th>By</th>
+                        <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr *ngFor="let ev of rec.lifecycle_events">
+                        <td>{{ ev.changed_at | date:'short' }}</td>
+                        <td>{{ ev.from_status ? lifecycleLabel(ev.from_status) : '—' }}</td>
+                        <td>{{ lifecycleLabel(ev.to_status) }}</td>
+                        <td>{{ ev.changed_by }}</td>
+                        <td>{{ ev.notes || '–' }}</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </details>
+              </div>
               <div class="mb-2" *ngIf="rec.recommendation">
                 <strong>Recommendation:</strong>
                 <pre class="bg-light p-2 rounded mt-1 mb-0">{{ rec.recommendation | json }}</pre>
