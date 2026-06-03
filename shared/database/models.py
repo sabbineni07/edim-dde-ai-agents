@@ -82,6 +82,8 @@ class RecommendationHistory(Base):
     pattern_analysis = Column(Text, nullable=True)
     risk_assessment = Column(JSONB, nullable=True)
     token_usage_analysis = Column(JSONB, nullable=True)
+    comparison = Column(JSONB, nullable=True)
+    reason_codes = Column(JSONB, nullable=True)
     lifecycle_status = Column(String(64), nullable=True, index=True)
     lifecycle_updated_at = Column(DateTime(timezone=True), nullable=True)
     lifecycle_updated_by = Column(String(255), nullable=True)
@@ -117,5 +119,36 @@ class AgentProfile(Base):
     agent_id = Column(String(255), nullable=False, index=True)
     name = Column(String(255), nullable=False, index=True)
     overrides = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class WorkspaceConnection(Base):
+    """Workspace-scoped integration (non-secret config in JSONB)."""
+
+    __tablename__ = "workspace_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    workspace_id = Column(String(255), nullable=False, index=True)
+    workspace_name = Column(String(512), nullable=True)
+    connection_type = Column(String(64), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    config = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class WorkspaceAgent(Base):
+    """Agent enabled on a workspace with connection bindings per role."""
+
+    __tablename__ = "workspace_agents"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    workspace_id = Column(String(255), nullable=False, index=True)
+    workspace_name = Column(String(512), nullable=True)
+    agent_id = Column(String(255), nullable=False, index=True)
+    name = Column(String(255), nullable=False)
+    bindings = Column(JSONB, nullable=False, default=dict)
+    agent_settings = Column(JSONB, nullable=False, default=dict)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())

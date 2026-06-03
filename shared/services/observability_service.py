@@ -100,6 +100,8 @@ class ObservabilityService:
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
         request_log_request_id: Optional[UUID] = None,
+        comparison: Optional[Dict] = None,
+        reason_codes: Optional[List] = None,
     ) -> bool:
         if not DATABASE_AVAILABLE:
             return True
@@ -120,6 +122,8 @@ class ObservabilityService:
                     pattern_analysis=pattern_analysis,
                     risk_assessment=risk_assessment,
                     token_usage_analysis=token_usage_analysis,
+                    comparison=comparison,
+                    reason_codes=reason_codes,
                     lifecycle_status=LIFECYCLE_RECOMMENDED,
                     lifecycle_updated_at=now,
                     lifecycle_updated_by="system",

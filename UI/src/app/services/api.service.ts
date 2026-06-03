@@ -74,6 +74,8 @@ export interface RecommendationHistoryEntry {
   allowed_next_statuses?: string[];
   lifecycle_events?: LifecycleEventSummary[];
   api_request_status?: string;
+  comparison?: Record<string, unknown>;
+  reason_codes?: string[];
   recommendation: Record<string, unknown>;
   explanation?: string;
   pattern_analysis?: string;
@@ -83,16 +85,22 @@ export interface RecommendationHistoryEntry {
   cost_usage_summary?: Record<string, unknown>;
 }
 
-export interface LifecycleMeta {
-  statuses: string[];
-  display_labels: Record<string, string>;
-  allowed_transitions: Record<string, string[]>;
+export interface AgentInfo {
+  agent_id: string;
+  name: string;
+  description: string;
+  get_started_route: string;
 }
 
-export interface LifecycleTransitionRequest {
-  status: string;
-  changed_by?: string;
-  notes?: string;
+export interface EditableSettingsField {
+  key: string;
+  label: string;
+  type: string;
+  options?: string[];
+  placeholder?: string;
+  min?: number;
+  max?: number;
+  step?: number;
 }
 
 export interface AgentProfile {
@@ -104,9 +112,66 @@ export interface AgentProfile {
   updated_at: string;
 }
 
+export interface UiHints {
+  guardrail_max_date_range_days: number;
+  use_local_data: boolean;
+  sample_data_start_date: string;
+  sample_data_end_date: string;
+  default_agent_id: string;
+}
+
+export interface ConnectionTypeField {
+  key: string;
+  label: string;
+  type: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+}
+
+export interface ConnectionTypeMeta {
+  connection_type: string;
+  label: string;
+  description: string;
+  fields: ConnectionTypeField[];
+  credential_hints: string[];
+}
+
+export interface WorkspaceConnection {
+  id: string;
+  workspace_id: string;
+  workspace_name?: string | null;
+  connection_type: string;
+  name: string;
+  config: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceAgent {
+  id: string;
+  workspace_id: string;
+  workspace_name?: string | null;
+  agent_id: string;
+  name: string;
+  bindings: Record<string, string>;
+  agent_settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentConnectionManifest {
+  agent_id: string;
+  roles: Record<string, string[]>;
+  required_roles: string[];
+  optional_roles: string[];
+  agent_settings_keys: string[];
+}
+
 export interface GenerateRecommendationRequest {
   agent_id?: string;
   profile_id?: string | null;
+  workspace_agent_id?: string | null;
   job_id: string;
   job_run_id: string;
   start_date: string;
@@ -133,6 +198,18 @@ export interface GenerateRecommendationResponse {
   token_usage_analysis?: Record<string, unknown>;
 }
 
+export interface LifecycleMeta {
+  statuses: string[];
+  display_labels: Record<string, string>;
+  allowed_transitions: Record<string, string[]>;
+}
+
+export interface LifecycleTransitionRequest {
+  status: string;
+  changed_by?: string;
+  notes?: string;
+}
+
 export interface ChatRequest {
   question: string;
   workspace_id?: string;
@@ -149,6 +226,20 @@ export interface ChatResponse {
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   constructor(private http: HttpClient) {}
+
+  getUiHints(): Observable<UiHints> {
+    return this.http.get<UiHints>(`${API_BASE}/platform/ui-hints`).pipe(
+      catchError(() =>
+        of({
+          guardrail_max_date_range_days: 30,
+          use_local_data: true,
+          sample_data_start_date: '2024-01-15',
+          sample_data_end_date: '2024-01-20',
+          default_agent_id: 'job_run_cluster_sizing',
+        })
+      )
+    );
+  }
 
   getWorkspaces(start_date?: string, end_date?: string): Observable<Workspace[]> {
     let params = new HttpParams();
@@ -212,12 +303,7 @@ export class ApiService {
         `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/metrics`,
         { params }
       )
-      .pipe(
-        catchError((err) => {
-          console.error('getJobMetrics error', err);
-          return of(null);
-        })
-      );
+      .pipe(catchError(() => of(null)));
   }
 
   getRecommendations(
@@ -238,12 +324,156 @@ export class ApiService {
       );
   }
 
-  getAgents(): Observable<{ agent_ids: string[] }> {
-    return this.http.get<{ agent_ids: string[] }>(`${API_BASE}/agents/`).pipe(
+  getAgents(): Observable<{ agents: AgentInfo[] }> {
+    return this.http.get<{ agents: AgentInfo[] }>(`${API_BASE}/agents/`).pipe(
       catchError((err) => {
         console.error('getAgents error', err);
-        return of({ agent_ids: ['job_run_cluster_sizing'] });
+        return of({
+          agents: [
+            {
+              agent_id: 'job_run_cluster_sizing',
+              name: 'Job run cluster sizing',
+              description: 'Per-run cluster right-sizing.',
+              get_started_route: '/app/workspaces',
+            },
+          ],
+        });
       })
+    );
+  }
+
+  getEditableSettings(agentId: string): Observable<{ agent_id: string; fields: EditableSettingsField[] }> {
+    return this.http.get<{ agent_id: string; fields: EditableSettingsField[] }>(
+      `${API_BASE}/agents/${agentId}/editable-settings`
+    );
+  }
+
+  previewEffectiveSettings(
+    agentId: string,
+    overrides: Record<string, unknown>
+  ): Observable<{ agent_id: string; effective_settings: Record<string, unknown> }> {
+    return this.http.post<{ agent_id: string; effective_settings: Record<string, unknown> }>(
+      `${API_BASE}/agents/${agentId}/effective-settings-preview`,
+      { overrides }
+    );
+  }
+
+  getConnectionTypes(): Observable<{ connection_types: ConnectionTypeMeta[] }> {
+    return this.http
+      .get<{ connection_types: ConnectionTypeMeta[] }>(`${API_BASE}/platform/connection-types`)
+      .pipe(
+        catchError((err) => {
+          console.error('getConnectionTypes error', err);
+          return of({ connection_types: [] });
+        })
+      );
+  }
+
+  getWorkspaceConnections(
+    workspaceId: string,
+    connectionType?: string
+  ): Observable<WorkspaceConnection[]> {
+    let params = new HttpParams();
+    if (connectionType) params = params.set('connection_type', connectionType);
+    return this.http
+      .get<WorkspaceConnection[]>(`${API_BASE}/workspaces/${workspaceId}/connections`, { params })
+      .pipe(
+        catchError((err) => {
+          console.error('getWorkspaceConnections error', err);
+          return of([]);
+        })
+      );
+  }
+
+  createWorkspaceConnection(
+    workspaceId: string,
+    body: {
+      connection_type: string;
+      name: string;
+      config: Record<string, unknown>;
+      workspace_name?: string;
+    }
+  ): Observable<WorkspaceConnection> {
+    return this.http.post<WorkspaceConnection>(
+      `${API_BASE}/workspaces/${workspaceId}/connections`,
+      body
+    );
+  }
+
+  updateWorkspaceConnection(
+    workspaceId: string,
+    connectionId: string,
+    body: { name?: string; config?: Record<string, unknown>; workspace_name?: string }
+  ): Observable<WorkspaceConnection> {
+    return this.http.put<WorkspaceConnection>(
+      `${API_BASE}/workspaces/${workspaceId}/connections/${connectionId}`,
+      body
+    );
+  }
+
+  deleteWorkspaceConnection(
+    workspaceId: string,
+    connectionId: string
+  ): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(
+      `${API_BASE}/workspaces/${workspaceId}/connections/${connectionId}`
+    );
+  }
+
+  getWorkspaceAgents(workspaceId: string, agentId?: string): Observable<WorkspaceAgent[]> {
+    let params = new HttpParams();
+    if (agentId) params = params.set('agent_id', agentId);
+    return this.http
+      .get<WorkspaceAgent[]>(`${API_BASE}/workspaces/${workspaceId}/agents`, { params })
+      .pipe(
+        catchError((err) => {
+          console.error('getWorkspaceAgents error', err);
+          return of([]);
+        })
+      );
+  }
+
+  getAgentConnectionManifest(agentId: string): Observable<AgentConnectionManifest> {
+    return this.http.get<AgentConnectionManifest>(
+      `${API_BASE}/agents/${agentId}/connection-manifest`
+    );
+  }
+
+  createWorkspaceAgent(
+    workspaceId: string,
+    body: {
+      agent_id: string;
+      name: string;
+      bindings: Record<string, string>;
+      agent_settings?: Record<string, unknown>;
+      workspace_name?: string;
+    }
+  ): Observable<WorkspaceAgent> {
+    return this.http.post<WorkspaceAgent>(`${API_BASE}/workspaces/${workspaceId}/agents`, body);
+  }
+
+  updateWorkspaceAgent(
+    workspaceId: string,
+    workspaceAgentId: string,
+    body: {
+      name?: string;
+      bindings?: Record<string, string>;
+      agent_settings?: Record<string, unknown>;
+      workspace_name?: string;
+    }
+  ): Observable<WorkspaceAgent> {
+    return this.http.put<WorkspaceAgent>(
+      `${API_BASE}/workspaces/${workspaceId}/agents/${workspaceAgentId}`,
+      body
+    );
+  }
+
+  deleteWorkspaceAgent(
+    workspaceId: string,
+    workspaceAgentId: string
+  ): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(
+      `${API_BASE}/workspaces/${workspaceId}/agents/${workspaceAgentId}`
     );
   }
 
@@ -256,6 +486,25 @@ export class ApiService {
         return of([]);
       })
     );
+  }
+
+  createAgentProfile(body: {
+    agent_id: string;
+    name: string;
+    overrides: Record<string, unknown>;
+  }): Observable<AgentProfile> {
+    return this.http.post<AgentProfile>(`${API_BASE}/agent-profiles/`, body);
+  }
+
+  updateAgentProfile(
+    profileId: string,
+    body: { name?: string; overrides?: Record<string, unknown> }
+  ): Observable<AgentProfile> {
+    return this.http.put<AgentProfile>(`${API_BASE}/agent-profiles/${profileId}`, body);
+  }
+
+  deleteAgentProfile(profileId: string): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(`${API_BASE}/agent-profiles/${profileId}`);
   }
 
   generateRecommendation(

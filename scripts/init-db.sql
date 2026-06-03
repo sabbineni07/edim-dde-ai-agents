@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS recommendations_history (
     pattern_analysis TEXT,
     risk_assessment JSONB,
     token_usage_analysis JSONB,
+    comparison JSONB,
+    reason_codes JSONB,
     lifecycle_status VARCHAR(64) DEFAULT 'RECOMMENDED',
     lifecycle_updated_at TIMESTAMP,
     lifecycle_updated_by VARCHAR(255),
@@ -98,6 +100,36 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
 
 CREATE INDEX IF NOT EXISTS idx_agent_profiles_agent_id ON agent_profiles(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
+
+-- Workspace connections & agents (Phase 10)
+CREATE TABLE IF NOT EXISTS workspace_connections (
+    id UUID PRIMARY KEY,
+    workspace_id VARCHAR(255) NOT NULL,
+    workspace_name VARCHAR(512),
+    connection_type VARCHAR(64) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_connections_workspace_id ON workspace_connections(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_connections_type ON workspace_connections(connection_type);
+
+CREATE TABLE IF NOT EXISTS workspace_agents (
+    id UUID PRIMARY KEY,
+    workspace_id VARCHAR(255) NOT NULL,
+    workspace_name VARCHAR(512),
+    agent_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    bindings JSONB NOT NULL DEFAULT '{}',
+    agent_settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_agents_workspace_id ON workspace_agents(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_agents_agent_id ON workspace_agents(agent_id);
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cost_logs_job_id ON cost_usage_logs(job_id);

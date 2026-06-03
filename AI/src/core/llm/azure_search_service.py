@@ -68,11 +68,14 @@ class AzureSearchService:
 
             embedding = self.openai_service.get_embeddings().embed_query(text)
 
+            job_run_id = recommendation.get("job_run_id") or ""
             document = {
                 "id": recommendation.get(
                     "recommendation_id", f"rec-{recommendation.get('job_id', 'unknown')}"
                 ),
                 "job_id": recommendation.get("job_id", ""),
+                "job_run_id": job_run_id,
+                "workspace_id": recommendation.get("workspace_id", ""),
                 "workload_type": recommendation.get("workload_type", ""),
                 "content": text,
                 "embedding": embedding,

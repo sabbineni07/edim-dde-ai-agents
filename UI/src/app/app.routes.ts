@@ -11,6 +11,7 @@ export const routes: Routes = [
     children: [
       { path: '', redirectTo: 'workspaces', pathMatch: 'full' },
       { path: 'workspaces', loadComponent: () => import('./features/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
+      { path: 'workspaces/:workspaceId', loadComponent: () => import('./features/workspace-detail/workspace-detail.component').then(m => m.WorkspaceDetailComponent) },
       { path: 'jobs', loadComponent: () => import('./features/jobs/jobs-list.component').then(m => m.JobsListComponent) },
       { path: 'jobs/:workspaceId/:jobId', loadComponent: () => import('./features/job-detail/job-detail.component').then(m => m.JobDetailComponent) },
       { path: 'chat', loadComponent: () => import('./features/chat/chat.component').then(m => m.ChatComponent) },

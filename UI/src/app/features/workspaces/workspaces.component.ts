@@ -75,4 +75,10 @@ export class WorkspacesComponent implements OnInit {
       },
     });
   }
+
+  openWorkspaceSetup(w: Workspace): void {
+    this.router.navigate(['/app/workspaces', w.workspace_id], {
+      queryParams: { tab: 'connections' },
+    });
+  }
 }

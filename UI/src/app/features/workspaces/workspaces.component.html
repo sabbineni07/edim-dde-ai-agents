@@ -69,8 +69,9 @@
           <span *ngIf="w.first_seen_date">{{ w.first_seen_date }} – {{ w.last_seen_date }}</span>
           <span *ngIf="!w.first_seen_date">–</span>
         </td>
-        <td>
-          <button class="btn btn-primary btn-sm" (click)="openJobs(w)">View jobs</button>
+        <td class="text-nowrap">
+          <button class="btn btn-outline-secondary btn-sm me-1" (click)="openWorkspaceSetup(w)">Setup</button>
+          <button class="btn btn-primary btn-sm" (click)="openJobs(w)">Jobs</button>
         </td>
       </tr>
     </tbody>

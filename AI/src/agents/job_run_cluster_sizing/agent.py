@@ -457,7 +457,23 @@ class JobRunClusterSizingAgent:
                     request_log_request_id=request_log_request_id,
                     workspace_id=ingest.get("workspace_id"),
                     job_run_id=job_run_id or ingest.get("job_run_id"),
+                    comparison=comparison_payload,
+                    reason_codes=reason_codes,
                 )
+                try:
+                    from shared.services.recommendation_lifecycle_service import (
+                        RecommendationLifecycleService,
+                    )
+
+                    run_id = job_run_id or ingest.get("job_run_id")
+                    if run_id:
+                        RecommendationLifecycleService().supersede_prior_recommendations(
+                            job_id=job_id,
+                            job_run_id=str(run_id),
+                            except_request_id=request_id,
+                        )
+                except Exception as e:
+                    logger.warning("supersede_prior_recommendations_failed", error=str(e))
             except Exception as e:
                 logger.warning("recommendation_logging_failed", error=str(e))
 
@@ -468,6 +484,7 @@ class JobRunClusterSizingAgent:
                     "recommendation_id": str(request_id),
                     "job_id": job_id,
                     "job_run_id": job_run_id,
+                    "workspace_id": ingest.get("workspace_id"),
                     "workload_type": ingest.get("workload_type", "Unknown"),
                     "rationale": recommendation.get("rationale", ""),
                     "detailed_explanation": final_state.get("explanation", ""),

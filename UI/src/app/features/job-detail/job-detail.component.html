@@ -2,6 +2,8 @@
   <nav class="mb-2">
     <a routerLink="/app/workspaces" [queryParams]="{ start_date: startDate, end_date: endDate }" class="text-decoration-none small text-muted">Workspaces</a>
     <span class="mx-2 text-muted">/</span>
+    <a [routerLink]="['/app/workspaces', workspaceId()]" [queryParams]="{ tab: 'agents' }" class="text-decoration-none small text-muted">Setup</a>
+    <span class="mx-2 text-muted">/</span>
     <a
       [routerLink]="['/app/jobs']"
       [queryParams]="{ workspaceId: workspaceId(), start_date: startDate, end_date: endDate }"
@@ -10,23 +12,28 @@
     <span class="mx-2 text-muted">/</span>
     <span class="small">Job {{ jobId() }}</span>
   </nav>
-  <h2 class="mb-0">Job details</h2>
+  <h2 class="mb-0">Job run cluster sizing</h2>
   <p class="text-muted small mb-0 mt-1">Workspace: <code>{{ workspaceId() }}</code> · Job: <code>{{ jobId() }}</code></p>
 </div>
 
 <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
+<div class="alert alert-warning py-2 small" *ngIf="dateRangeWarning">{{ dateRangeWarning }}</div>
 
 <!-- Date range & actions -->
 <div class="card mb-4">
   <div class="card-body">
+    <p class="small text-muted mb-2" *ngIf="uiHints?.use_local_data">
+      Local sample data: {{ uiHints?.sample_data_start_date }} – {{ uiHints?.sample_data_end_date }}.
+      <button type="button" class="btn btn-link btn-sm p-0 align-baseline" (click)="applySampleDateRange()">Use sample dates</button>
+    </p>
     <div class="row g-2 align-items-end flex-wrap">
       <div class="col-auto">
         <label class="form-label small mb-0">Start date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="startDate" />
+        <input type="date" class="form-control form-control-sm" [(ngModel)]="startDate" (ngModelChange)="onDateRangeChange()" />
       </div>
       <div class="col-auto">
         <label class="form-label small mb-0">End date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="endDate" />
+        <input type="date" class="form-control form-control-sm" [(ngModel)]="endDate" (ngModelChange)="onDateRangeChange()" />
       </div>
       <div class="col-auto">
         <button class="btn btn-outline-primary btn-sm" (click)="refreshData()" [disabled]="loadingMetrics || loadingRuns">
@@ -40,11 +47,14 @@
         </select>
       </div>
       <div class="col-auto">
-        <label class="form-label small mb-0">Profile</label>
-        <select class="form-select form-select-sm" [(ngModel)]="selectedProfileId">
-          <option value="">Default settings</option>
-          <option *ngFor="let p of profiles" [value]="p.id">{{ p.name }}</option>
+        <label class="form-label small mb-0">Workspace agent</label>
+        <select class="form-select form-select-sm" [(ngModel)]="selectedWorkspaceAgentId">
+          <option value="">Platform default</option>
+          <option *ngFor="let wa of workspaceAgents" [value]="wa.id">{{ wa.name }}</option>
         </select>
+      </div>
+      <div class="col-auto d-flex align-items-end pb-1" *ngIf="workspaceAgents.length === 0">
+        <a class="small" [routerLink]="['/app/workspaces', workspaceId()]" [queryParams]="{ tab: 'agents' }">Add agent</a>
       </div>
       <div class="col-auto d-flex align-items-center pt-4">
         <div class="form-check mb-0">
@@ -71,7 +81,8 @@
   <div class="card-body p-0">
     <div *ngIf="loadingRuns" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingRuns && runs.length === 0" class="p-3 text-muted small">
-      No runs in this date range. {{ sampleDataHint }}
+      No runs in this date range.
+      <span *ngIf="uiHints?.use_local_data"> Try <button type="button" class="btn btn-link btn-sm p-0" (click)="applySampleDateRange()">sample dates</button>.</span>
     </div>
     <div class="table-responsive" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
@@ -127,7 +138,8 @@
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">
-      No aggregated metrics for this job in the selected range. {{ sampleDataHint }}
+      No aggregated metrics for this job in the selected range (404).
+      <span *ngIf="uiHints?.use_local_data"> Try <button type="button" class="btn btn-link btn-sm p-0" (click)="applySampleDateRange()">sample dates</button>.</span>
     </div>
   </div>
 </div>
@@ -332,9 +344,26 @@
                   </table>
                 </details>
               </div>
+              <div class="mb-2" *ngIf="rec.reason_codes?.length">
+                <strong>Reason codes:</strong>
+                <span class="badge bg-info text-dark me-1" *ngFor="let code of rec.reason_codes">{{ code }}</span>
+              </div>
+              <div class="row g-2 mb-2" *ngIf="historyComparisonCurrent(rec) || historyComparisonRecommended(rec)">
+                <div class="col-md-6" *ngIf="historyComparisonCurrent(rec)">
+                  <strong class="small">Current</strong>
+                  <pre class="small bg-light p-2 rounded mb-0">{{ historyComparisonCurrent(rec) | json }}</pre>
+                </div>
+                <div class="col-md-6" *ngIf="historyComparisonRecommended(rec)">
+                  <strong class="small">Recommended</strong>
+                  <pre class="small bg-light p-2 rounded mb-0">{{ historyComparisonRecommended(rec) | json }}</pre>
+                </div>
+              </div>
+              <div class="mb-2" *ngIf="rec.cost_usage_summary">
+                <strong>LLM cost:</strong> {{ formatCost(rec.cost_usage_summary) }}
+              </div>
               <div class="mb-2" *ngIf="rec.recommendation">
-                <strong>Recommendation:</strong>
-                <pre class="bg-light p-2 rounded mt-1 mb-0">{{ rec.recommendation | json }}</pre>
+                <strong>Applied recommendation:</strong>
+                <pre class="bg-light p-2 rounded mt-1 mb-0 small">{{ rec.recommendation | json }}</pre>
               </div>
               <div class="mb-2" *ngIf="rec.explanation"><strong>Explanation:</strong><p class="mb-0 mt-1">{{ rec.explanation }}</p></div>
               <div class="mb-2" *ngIf="rec.pattern_analysis"><strong>Pattern analysis:</strong><pre class="mt-1 mb-0 bg-light p-2 rounded small">{{ rec.pattern_analysis }}</pre></div>

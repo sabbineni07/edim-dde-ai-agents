@@ -238,6 +238,8 @@ class RecommendationHistoryResponse(BaseModel):
         default=None,
         description="API call status for POST /recommendations/generate (e.g. success)",
     )
+    comparison: Optional[Dict[str, Any]] = None
+    reason_codes: List[str] = Field(default_factory=list)
     recommendation: Dict[str, Any]
     explanation: Optional[str] = None
     pattern_analysis: Optional[str] = None
@@ -375,6 +377,8 @@ def list_job_recommendations(
                     allowed_next_statuses=allowed_next_statuses(lifecycle_status),
                     lifecycle_events=lifecycle_events,
                     api_request_status=req_log.status if req_log else None,
+                    comparison=rec.comparison if isinstance(rec.comparison, dict) else None,
+                    reason_codes=list(rec.reason_codes or []),
                     recommendation=rec.recommendation or {},
                     explanation=rec.explanation,
                     pattern_analysis=rec.pattern_analysis,

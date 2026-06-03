@@ -14,7 +14,10 @@ from API.src.routes import (
     cost_analytics,
     health,
     jobs,
+    platform,
     recommendations,
+    workspace_agents,
+    workspace_connections,
 )
 from shared.config.settings import settings
 from shared.guardrails.exceptions import (
@@ -105,6 +108,11 @@ app.include_router(recommendations.router, prefix="/api/recommendations", tags=[
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(cost_analytics.router, prefix="/api/cost", tags=["cost-analytics"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])
+app.include_router(
+    workspace_connections.router, prefix="/api/workspaces", tags=["workspace-connections"]
+)
+app.include_router(workspace_agents.router, prefix="/api/workspaces", tags=["workspace-agents"])
+app.include_router(platform.router, prefix="/api/platform", tags=["platform"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 
 

@@ -8,22 +8,12 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from shared.config.profile_field_meta import PROFILE_ALLOWED_FIELDS
 from shared.config.profile_overrides import validate_profile_overrides
 from shared.services.agent_profile_service import AgentProfileService
 
 router = APIRouter()
 svc = AgentProfileService()
-
-# Keep this allowlist small and expand intentionally as the UI matures.
-PROFILE_ALLOWED_FIELDS = [
-    "azure_openai_deployment_name",
-    "default_model_name",
-    "vector_retrieval_backend",
-    "recommendation_auto_termination_minutes",
-    "recommendation_cost_retry_enabled",
-    "default_confidence_score",
-    "guardrail_max_date_range_days",
-]
 
 
 class AgentProfileCreateRequest(BaseModel):

@@ -18,8 +18,8 @@ export class ShellComponent implements OnInit {
   menuItems: MenuItem[] = [
     { label: 'Workspaces', route: '/app/workspaces', icon: 'building' },
     { label: 'Jobs', route: '/app/jobs', icon: 'list-task' },
-    { label: 'Chat', route: '/app/chat', icon: 'chat-dots' },
     { label: 'Agents', route: '/app/agents', icon: 'robot' },
+    { label: 'Chat', route: '/app/chat', icon: 'chat-dots' },
   ];
   activeMenuItem: MenuItem = this.menuItems[0];
 

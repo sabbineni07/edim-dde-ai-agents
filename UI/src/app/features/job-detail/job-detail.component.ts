@@ -3,15 +3,22 @@ import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import {
-  AgentProfile,
   ApiService,
+  GenerateRecommendationRequest,
   GenerateRecommendationResponse,
   JobMetricsResponse,
   JobRunSummary,
   RecommendationHistoryEntry,
+  WorkspaceAgent,
 } from '../../services/api.service';
-import { last30DaysDateStrings } from '../../core/date-range.util';
+import {
+  daysBetween,
+  last30DaysDateStrings,
+  sampleDataDateStrings,
+} from '../../core/date-range.util';
+import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
+import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
@@ -32,8 +39,8 @@ export class JobDetailComponent implements OnInit {
 
   agentIds: string[] = ['job_run_cluster_sizing'];
   selectedAgentId = 'job_run_cluster_sizing';
-  profiles: AgentProfile[] = [];
-  selectedProfileId = '';
+  workspaceAgents: WorkspaceAgent[] = [];
+  selectedWorkspaceAgentId = '';
 
   loadingMetrics = true;
   loadingRuns = true;
@@ -50,8 +57,8 @@ export class JobDetailComponent implements OnInit {
   updatingLifecycle: Record<string, boolean> = {};
   lifecycleFeedback: Record<string, { type: 'success' | 'error'; message: string }> = {};
 
-  readonly sampleDataHint =
-    'Sample CSV uses 2024-01-15 through 2024-01-20. Adjust the date range if no runs appear.';
+  uiHints: UiHints | null = null;
+  dateRangeWarning = '';
 
   constructor(
     private api: ApiService,
@@ -72,14 +79,51 @@ export class JobDetailComponent implements OnInit {
     if (qs && qe) {
       this.startDate = qs;
       this.endDate = qe;
-    } else {
-      const r = last30DaysDateStrings();
-      this.startDate = r.startDate;
-      this.endDate = r.endDate;
     }
+    this.api.getUiHints().subscribe({
+      next: (hints) => {
+        this.uiHints = hints;
+        if (!qs || !qe) {
+          if (hints.use_local_data) {
+            const s = sampleDataDateStrings();
+            this.startDate = s.startDate;
+            this.endDate = s.endDate;
+          } else {
+            const r = last30DaysDateStrings();
+            this.startDate = r.startDate;
+            this.endDate = r.endDate;
+          }
+        }
+        this.updateDateRangeWarning();
+      },
+    });
     this.loadLifecycleMeta();
     this.loadAgents();
+    if (qs && qe) {
+      this.refreshData();
+    }
+  }
+
+  applySampleDateRange(): void {
+    const s = sampleDataDateStrings();
+    this.startDate = s.startDate;
+    this.endDate = s.endDate;
+    this.updateDateRangeWarning();
     this.refreshData();
+  }
+
+  updateDateRangeWarning(): void {
+    const max = this.uiHints?.guardrail_max_date_range_days ?? 30;
+    const span = daysBetween(this.startDate, this.endDate);
+    if (span > max) {
+      this.dateRangeWarning = `Date range is ${span} days; API allows at most ${max} days per recommendation request.`;
+    } else {
+      this.dateRangeWarning = '';
+    }
+  }
+
+  onDateRangeChange(): void {
+    this.updateDateRangeWarning();
   }
 
   loadLifecycleMeta(): void {
@@ -174,27 +218,34 @@ export class JobDetailComponent implements OnInit {
   loadAgents(): void {
     this.api.getAgents().subscribe({
       next: (res) => {
-        const ids = (res.agent_ids || []).filter(
-          (id) => id === 'job_run_cluster_sizing' || id !== 'cluster_config'
-        );
-        this.agentIds = ids.length ? ids : ['job_run_cluster_sizing'];
+        this.agentIds = (res.agents || []).map((a) => a.agent_id);
         if (!this.agentIds.includes(this.selectedAgentId)) {
-          this.selectedAgentId = this.agentIds[0];
+          this.selectedAgentId =
+            this.uiHints?.default_agent_id || this.agentIds[0] || 'job_run_cluster_sizing';
         }
-        this.loadProfiles();
+        this.loadWorkspaceAgents();
       },
     });
   }
 
   onAgentChange(): void {
-    this.selectedProfileId = '';
-    this.loadProfiles();
+    this.selectedWorkspaceAgentId = '';
+    this.loadWorkspaceAgents();
   }
 
-  loadProfiles(): void {
-    this.api.getAgentProfiles(this.selectedAgentId).subscribe({
+  loadWorkspaceAgents(): void {
+    const ws = this.workspaceId();
+    this.api.getWorkspaceAgents(ws, this.selectedAgentId).subscribe({
       next: (list) => {
-        this.profiles = list;
+        this.workspaceAgents = list;
+        if (list.length && !this.selectedWorkspaceAgentId) {
+          this.selectedWorkspaceAgentId = list[0].id;
+        } else if (
+          this.selectedWorkspaceAgentId &&
+          !list.some((a) => a.id === this.selectedWorkspaceAgentId)
+        ) {
+          this.selectedWorkspaceAgentId = list[0]?.id || '';
+        }
       },
     });
   }
@@ -279,16 +330,18 @@ export class JobDetailComponent implements OnInit {
     this.runningRecommendation = true;
     this.error = '';
     this.lastResult = null;
-    this.api
-      .generateRecommendation({
-        agent_id: this.selectedAgentId,
-        profile_id: this.selectedProfileId || null,
-        job_id: j,
-        job_run_id: this.selectedRunId,
-        start_date: this.startDate || this.metricsData?.start_date || '',
-        end_date: this.endDate || this.metricsData?.end_date || '',
-        include_explanation: this.includeExplanation,
-      })
+    const body: GenerateRecommendationRequest = {
+      agent_id: this.selectedAgentId,
+      job_id: j,
+      job_run_id: this.selectedRunId,
+      start_date: this.startDate || this.metricsData?.start_date || '',
+      end_date: this.endDate || this.metricsData?.end_date || '',
+      include_explanation: this.includeExplanation,
+    };
+    if (this.selectedWorkspaceAgentId) {
+      body.workspace_agent_id = this.selectedWorkspaceAgentId;
+    }
+    this.api.generateRecommendation(body)
       .subscribe({
         next: (res) => {
           this.runningRecommendation = false;
@@ -297,16 +350,29 @@ export class JobDetailComponent implements OnInit {
         },
         error: (err) => {
           this.runningRecommendation = false;
-          const detail = err?.error?.detail;
-          if (typeof detail === 'string') {
-            this.error = detail;
-          } else if (Array.isArray(detail)) {
-            this.error = detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join('; ');
-          } else {
-            this.error = err?.message || 'Recommendation failed';
-          }
+          this.error = parseApiError(err, 'Recommendation failed');
         },
       });
+  }
+
+  historyComparisonCurrent(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const block = this.historyComparisonBlock(rec);
+    return (block?.['current_configuration'] as Record<string, unknown>) ?? null;
+  }
+
+  historyComparisonRecommended(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const block = this.historyComparisonBlock(rec);
+    return (block?.['recommended_configuration'] as Record<string, unknown>) ?? null;
+  }
+
+  private historyComparisonBlock(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const comp = rec.comparison;
+    if (!comp) return null;
+    if (comp['comparison'] && typeof comp['comparison'] === 'object') {
+      return comp['comparison'] as Record<string, unknown>;
+    }
+    if (comp['current_configuration']) return comp;
+    return null;
   }
 
   comparisonCurrent(): Record<string, unknown> | null {
