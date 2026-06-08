@@ -135,7 +135,7 @@ class DatabricksCollector:
             logger.error("databricks_collection_error", error=str(e), table=table)
             raise
 
-    def list_workspaces(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+    def list_workspaces(self) -> List[Dict[str, Any]]:
         """List distinct workspaces using SQL aggregation (COUNT DISTINCT job_id)."""
         if not self._metrics_table:
             logger.warning(
@@ -153,12 +153,10 @@ class DatabricksCollector:
           CAST(MIN(job_date) AS STRING) AS first_seen_date,
           CAST(MAX(job_date) AS STRING) AS last_seen_date
         FROM {table}
-        WHERE job_date >= ?
-          AND job_date <= ?
         GROUP BY workspace_id
         ORDER BY last_seen_date DESC, workspace_id
         """
-        params: List[Any] = [start_date, end_date]
+        params: List[Any] = []
 
         try:
             with sql.connect(**self.connection_params) as conn:

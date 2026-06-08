@@ -88,19 +88,6 @@ CREATE TABLE IF NOT EXISTS recommendation_lifecycle_events (
 CREATE INDEX IF NOT EXISTS idx_lifecycle_events_request_id ON recommendation_lifecycle_events(request_id);
 CREATE INDEX IF NOT EXISTS idx_lifecycle_events_changed_at ON recommendation_lifecycle_events(changed_at);
 
--- Agent profiles table (Phase 9)
-CREATE TABLE IF NOT EXISTS agent_profiles (
-    id UUID PRIMARY KEY,
-    agent_id VARCHAR(255) NOT NULL,
-    name VARCHAR(255) NOT NULL,
-    overrides JSONB NOT NULL DEFAULT '{}',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE INDEX IF NOT EXISTS idx_agent_profiles_agent_id ON agent_profiles(agent_id);
-CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
-
 -- Workspace connections & agents (Phase 10)
 CREATE TABLE IF NOT EXISTS workspace_connections (
     id UUID PRIMARY KEY,

@@ -1,14 +1,13 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { Router } from '@angular/router';
 import { ApiService, Workspace } from '../../services/api.service';
-import { last30DaysDateStrings } from '../../core/date-range.util';
+import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 
 @Component({
   selector: 'app-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule],
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.css'],
 })
@@ -16,45 +15,21 @@ export class WorkspacesComponent implements OnInit {
   workspaces: Workspace[] = [];
   loading = true;
   error = '';
-  /** YYYY-MM-DD — passed as `start_date` / `end_date` query params on API and navigation */
-  startDate = '';
-  endDate = '';
 
   constructor(
     private api: ApiService,
     private router: Router,
-    private route: ActivatedRoute
+    private workspaceSelection: WorkspaceSelectionService
   ) {}
 
   ngOnInit(): void {
-    this.route.queryParamMap.subscribe((qp) => {
-      const start = qp.get('start_date')?.trim();
-      const end = qp.get('end_date')?.trim();
-      if (start && end) {
-        this.startDate = start;
-        this.endDate = end;
-      } else {
-        const r = last30DaysDateStrings();
-        this.startDate = r.startDate;
-        this.endDate = r.endDate;
-      }
-      this.load();
-    });
-  }
-
-  /** Writes `start_date` / `end_date` to the URL (bookmarkable) and reloads via query subscription. */
-  applyDateRangeToUrl(): void {
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { start_date: this.startDate, end_date: this.endDate },
-      replaceUrl: true,
-    });
+    this.load();
   }
 
   load(): void {
     this.loading = true;
     this.error = '';
-    this.api.getWorkspaces(this.startDate, this.endDate).subscribe({
+    this.api.getWorkspaces().subscribe({
       next: (list) => {
         this.workspaces = list;
         this.loading = false;
@@ -67,12 +42,9 @@ export class WorkspacesComponent implements OnInit {
   }
 
   openJobs(w: Workspace): void {
+    this.workspaceSelection.setLastWorkspaceId(w.workspace_id);
     this.router.navigate(['/app/jobs'], {
-      queryParams: {
-        workspaceId: w.workspace_id,
-        start_date: this.startDate,
-        end_date: this.endDate,
-      },
+      queryParams: { workspaceId: w.workspace_id },
     });
   }
 

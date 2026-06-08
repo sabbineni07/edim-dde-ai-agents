@@ -226,9 +226,9 @@ class LocalDataCollector:
             logger.error("local_resource_utilization_error", error=str(e))
             return []
 
-    def list_workspaces(self, start_date: str, end_date: str) -> List[Dict]:
+    def list_workspaces(self) -> List[Dict]:
         """List distinct workspaces with summary details from local CSV data."""
-        logger.info("listing_workspaces_from_csv", start_date=start_date, end_date=end_date)
+        logger.info("listing_workspaces_from_csv")
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
             if "workspace_id" not in df.columns or "date" not in df.columns:
@@ -241,19 +241,16 @@ class LocalDataCollector:
                 df["workspace_name"] = df["workspace_id"]
 
             df["date"] = pd.to_datetime(df["date"])
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-            df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)].copy()
-            if df_filtered.empty:
+            if df.empty:
                 return []
 
-            if "job_id" in df_filtered.columns:
-                df_filtered["job_id"] = df_filtered["job_id"].astype(str)
+            if "job_id" in df.columns:
+                df["job_id"] = df["job_id"].astype(str)
             else:
-                df_filtered["job_id"] = None
+                df["job_id"] = None
 
             grouped = (
-                df_filtered.groupby("workspace_id", dropna=False)
+                df.groupby("workspace_id", dropna=False)
                 .agg(
                     workspace_name=("workspace_name", "max"),
                     job_count=("job_id", lambda s: s.dropna().nunique()),

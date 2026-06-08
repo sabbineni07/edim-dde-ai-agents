@@ -19,7 +19,6 @@ from shared.recommendation_lifecycle import (
     lifecycle_display_label,
     normalize_lifecycle_status,
 )
-from shared.services.agent_profile_service import AgentProfileService
 from shared.services.recommendation_lifecycle_service import RecommendationLifecycleService
 from shared.services.workspace_agent_service import WorkspaceAgentService
 from shared.utils.logging import get_logger
@@ -37,13 +36,9 @@ class GenerateRecommendationRequest(BaseModel):
         default="job_run_cluster_sizing",
         description="Which agent to run (default: job_run_cluster_sizing).",
     )
-    profile_id: Optional[str] = Field(
-        default=None,
-        description="Optional agent profile id (UUID) to apply as settings overrides (legacy).",
-    )
     workspace_agent_id: Optional[str] = Field(
         default=None,
-        description="Workspace agent install id (UUID); resolves connection bindings (preferred).",
+        description="Workspace agent install id (UUID); resolves connection bindings.",
     )
     job_id: str = Field(..., min_length=1, description="Databricks job ID")
     job_run_id: str = Field(..., min_length=1, description="Databricks job run ID")
@@ -213,17 +208,10 @@ async def generate_recommendation(
             job_run_id=request.job_run_id,
         )
 
-        profile_svc = AgentProfileService()
         workspace_agent_svc = WorkspaceAgentService()
         agent_id = request.agent_id
         settings_override = None
         settings_secrets = None
-
-        if request.workspace_agent_id and request.profile_id:
-            raise HTTPException(
-                status_code=400,
-                detail="Use either workspace_agent_id or profile_id, not both",
-            )
 
         if request.workspace_agent_id:
             from uuid import UUID
@@ -239,18 +227,6 @@ async def generate_recommendation(
                     status_code=400,
                     detail="workspace_agent_id does not match agent_id",
                 )
-        elif request.profile_id:
-            from uuid import UUID
-
-            prof = profile_svc.get_profile(UUID(request.profile_id))
-            if not prof:
-                raise HTTPException(status_code=404, detail="Agent profile not found")
-            if prof.agent_id != agent_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="profile_id does not match agent_id",
-                )
-            settings_override = prof.overrides
 
         effective_settings = get_agent_settings(
             agent_id,

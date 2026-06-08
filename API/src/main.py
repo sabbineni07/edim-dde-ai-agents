@@ -8,7 +8,6 @@ from fastapi.responses import JSONResponse
 
 from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.routes import (
-    agent_profiles,
     agents,
     chat,
     cost_analytics,
@@ -103,7 +102,6 @@ app.add_middleware(
 
 # Include routers
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
-app.include_router(agent_profiles.router, prefix="/api/agent-profiles", tags=["agent-profiles"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(cost_analytics.router, prefix="/api/cost", tags=["cost-analytics"])

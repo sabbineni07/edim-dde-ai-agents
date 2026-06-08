@@ -1,4 +1,4 @@
-"""UI metadata and allowlist for agent profile override fields."""
+"""UI metadata and allowlist for workspace agent_settings fields."""
 
 from __future__ import annotations
 

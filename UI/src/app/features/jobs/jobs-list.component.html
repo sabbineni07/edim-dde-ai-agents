@@ -1,32 +1,75 @@
 <div class="page-header mb-4">
-  <nav class="mb-2">
-    <a routerLink="/app/workspaces" [queryParams]="{ start_date: startDate, end_date: endDate }" class="text-decoration-none small text-muted">Workspaces</a>
-    <span class="mx-2 text-muted">/</span>
-    <span class="small" *ngIf="workspaceId">Jobs</span>
-  </nav>
-  <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
-  <p class="text-muted small mb-0 mt-1" *ngIf="workspaceId">
-    Workspace: <code>{{ workspaceId }}</code>
-    · <a [routerLink]="['/app/workspaces', workspaceId]" [queryParams]="{ tab: 'agents' }">Setup</a>
-    · Range: <code>{{ startDate }}</code> – <code>{{ endDate }}</code>
-  </p>
-</div>
-
-<div class="alert alert-info" *ngIf="!workspaceId">
-  Select a workspace from <a routerLink="/app/workspaces">Workspaces</a> to see jobs.
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <nav class="mb-0">
+      <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
+      <span class="mx-2 text-muted">/</span>
+      <span class="small">Jobs</span>
+    </nav>
+    <div class="d-flex align-items-center flex-wrap gap-3 jobs-list-actions">
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsWorkspaceSelect">Workspace</label>
+        <select
+          id="jobsWorkspaceSelect"
+          class="form-select form-select-sm"
+          [ngModel]="workspaceId"
+          (ngModelChange)="onWorkspaceChange($event)"
+          [disabled]="workspacesLoading || !workspaces.length">
+          <option *ngIf="workspacesLoading" [ngValue]="null">Loading workspaces…</option>
+          <option *ngIf="!workspacesLoading && !workspaces.length" [ngValue]="null">No workspaces</option>
+          <option *ngFor="let w of workspaces" [ngValue]="w.workspace_id">
+            {{ w.workspace_name || w.workspace_id }}
+          </option>
+        </select>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsStartDate">Start date</label>
+        <input
+          id="jobsStartDate"
+          type="date"
+          class="form-control form-control-sm"
+          [(ngModel)]="startDate"
+          [disabled]="!workspaceId" />
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsEndDate">End date</label>
+        <input
+          id="jobsEndDate"
+          type="date"
+          class="form-control form-control-sm"
+          [(ngModel)]="endDate"
+          [disabled]="!workspaceId" />
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        (click)="applyDateRangeToUrl()"
+        [disabled]="loading || !workspaceId">
+        Apply
+      </button>
+    </div>
+  </div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
+    <input
+      *ngIf="workspaceId"
+      type="text"
+      class="form-control form-control-sm jobs-list-search"
+      placeholder="Filter by job id, name, workload..."
+      [(ngModel)]="filterText" />
+  </div>
 </div>
 
 <div class="alert alert-warning" *ngIf="error">{{ error }}</div>
 
-<div class="mb-3" *ngIf="workspaceId">
-  <input type="text" class="form-control form-control-sm" style="max-width: 300px;" placeholder="Filter by job id, name, workload..." [(ngModel)]="filterText" />
-</div>
-
-<div class="card" *ngIf="loading && workspaceId">
+<div class="card" *ngIf="(loading || workspacesLoading) && workspaceId">
   <div class="card-body text-center py-5">
     <div class="spinner-border text-primary"></div>
     <p class="mt-2 mb-0 text-muted">Loading jobs...</p>
   </div>
+</div>
+
+<div class="card" *ngIf="!workspacesLoading && !workspaces.length && !error">
+  <div class="card-body text-center py-5 text-muted">No workspaces found. Ensure the data source has job metrics.</div>
 </div>
 
 <div class="card" *ngIf="!loading && workspaceId && !jobs.length && !error">

@@ -40,28 +40,15 @@ def _default_date_range(start_date: Optional[date], end_date: Optional[date]) ->
 
 
 @router.get("/workspaces")
-def list_workspaces(
-    start_date: Optional[date] = Query(
-        None,
-        description="Start date (YYYY-MM-DD). Defaults to 30 days ago.",
-    ),
-    end_date: Optional[date] = Query(
-        None,
-        description="End date (YYYY-MM-DD). Defaults to today.",
-    ),
-) -> List[Dict[str, Any]]:
-    """List workspaces discovered from job metrics.
+def list_workspaces() -> List[Dict[str, Any]]:
+    """List all distinct workspaces discovered from job metrics.
 
-    Uses the configured data collector (local CSV or Databricks Delta table) to scan
-    recent job cluster metrics and return unique workspaces with basic summary.
+    Uses the configured data collector (local CSV or Databricks Delta table) to return
+    unique workspaces with job counts and overall first/last seen dates (no date filter).
     """
-    dr = _default_date_range(start_date, end_date)
     collector = get_data_collector()
     try:
-        return collector.list_workspaces(
-            start_date=dr["start_date"],
-            end_date=dr["end_date"],
-        )
+        return collector.list_workspaces()
     except Exception as e:
         logger.error("list_workspaces_error", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to load workspaces") from e

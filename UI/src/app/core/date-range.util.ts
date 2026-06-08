@@ -11,7 +11,7 @@ export function last30DaysDateStrings(): { startDate: string; endDate: string } 
 
 /** Sample CSV date range for local development. */
 export function sampleDataDateStrings(): { startDate: string; endDate: string } {
-  return { startDate: '2024-01-15', endDate: '2024-01-20' };
+  return { startDate: '2026-06-01', endDate: '2026-06-03' };
 }
 
 export function daysBetween(start: string, end: string): number {

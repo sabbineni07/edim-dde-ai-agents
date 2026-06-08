@@ -30,7 +30,7 @@ def test_collect_job_cluster_metrics():
     collector = LocalDataCollector()
 
     metrics = collector.collect_job_cluster_metrics(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(metrics, list)
@@ -50,7 +50,7 @@ def test_collect_job_cluster_metrics_multiple_jobs():
     collector = LocalDataCollector()
 
     metrics = collector.collect_job_cluster_metrics(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001", "job-002"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001", "job-002"]
     )
 
     assert isinstance(metrics, list)
@@ -66,7 +66,7 @@ def test_collect_resource_utilization():
     collector = LocalDataCollector()
 
     utilization = collector.collect_resource_utilization(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(utilization, list)
@@ -79,7 +79,7 @@ def test_collect_cost_data():
     collector = LocalDataCollector()
 
     cost_data = collector.collect_cost_data(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(cost_data, list)
@@ -91,7 +91,7 @@ def test_list_workspaces():
     """Test listing distinct workspaces with summary fields."""
     collector = LocalDataCollector()
 
-    workspaces = collector.list_workspaces(start_date="2024-01-15", end_date="2024-01-20")
+    workspaces = collector.list_workspaces()
 
     assert isinstance(workspaces, list)
     assert len(workspaces) > 0
@@ -111,8 +111,8 @@ def test_list_jobs_for_workspace():
 
     jobs = collector.list_jobs_for_workspace(
         workspace_id="1234567890123456",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
 
     assert isinstance(jobs, list)
@@ -134,8 +134,8 @@ def test_list_job_runs():
     runs = collector.list_job_runs(
         workspace_id="1234567890123456",
         job_id="job-001",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
     assert isinstance(runs, list)
     assert len(runs) > 0
@@ -152,8 +152,8 @@ def test_get_job_metrics():
     metrics = collector.get_job_metrics(
         workspace_id="1234567890123456",
         job_id="job-001",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
     assert isinstance(metrics, dict)
     assert metrics is not None

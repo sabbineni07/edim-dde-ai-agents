@@ -80,8 +80,8 @@ async def test_generate_recommendation_with_local_data():
     result = await agent.generate_recommendation(
         job_id="job-001",
         job_run_id="run-001-001",
-        start_date="2024-01-15",
-        end_date="2024-01-18",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
         include_explanation=True,
     )
 
@@ -121,8 +121,8 @@ async def test_agent_with_rag_disabled():
     result = await agent.generate_recommendation(
         job_id="job-001",
         job_run_id="run-001-001",
-        start_date="2024-01-15",
-        end_date="2024-01-18",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
 
     assert result is not None
@@ -138,8 +138,8 @@ async def test_token_usage_tracking():
     result = await agent.generate_recommendation(
         job_id="job-001",
         job_run_id="run-001-001",
-        start_date="2024-01-15",
-        end_date="2024-01-18",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
 
     # Verify token usage analysis

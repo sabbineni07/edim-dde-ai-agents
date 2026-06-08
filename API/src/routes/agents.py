@@ -95,7 +95,7 @@ async def get_connection_manifest(agent_id: str):
 
 @router.get("/{agent_id}/editable-settings", response_model=EditableSettingsResponse)
 async def get_editable_settings(agent_id: str):
-    """Allowlisted profile override fields for the agent profile editor."""
+    """Allowlisted agent_settings fields for workspace agent configuration."""
     if agent_id not in get_registered_agent_ids():
         raise HTTPException(status_code=404, detail="Agent not found")
     fields: List[EditableSettingsField] = []

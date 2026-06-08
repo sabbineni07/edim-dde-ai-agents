@@ -12,6 +12,7 @@ import {
   WorkspaceConnection,
 } from '../../services/api.service';
 import { parseApiError } from '../../core/api-error.util';
+import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 
 @Component({
   selector: 'app-workspace-detail',
@@ -54,7 +55,8 @@ export class WorkspaceDetailComponent implements OnInit {
   constructor(
     private api: ApiService,
     private route: ActivatedRoute,
-    private router: Router
+    private router: Router,
+    private workspaceSelection: WorkspaceSelectionService
   ) {}
 
   ngOnInit(): void {
@@ -370,6 +372,7 @@ export class WorkspaceDetailComponent implements OnInit {
   }
 
   openJobs(): void {
+    this.workspaceSelection.setLastWorkspaceId(this.workspaceId());
     void this.router.navigate(['/app/jobs'], {
       queryParams: { workspaceId: this.workspaceId() },
     });

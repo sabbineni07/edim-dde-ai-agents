@@ -35,18 +35,20 @@ export class ShellComponent implements OnInit {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
-        const url = e.urlAfterRedirects;
-        const active = this.menuItems.find(
-          (item) => url === item.route || url.startsWith(item.route + '/')
-        );
+        const active = this.resolveActiveMenuItem(e.urlAfterRedirects);
         if (active) this.activeMenuItem = active;
       });
 
-    const current = this.router.url;
-    const initial = this.menuItems.find(
-      (item) => current === item.route || current.startsWith(item.route + '/')
+    const active = this.resolveActiveMenuItem(this.router.url);
+    if (active) this.activeMenuItem = active;
+  }
+
+  /** Match sidebar highlight using path only (ignore ?query and #hash). */
+  private resolveActiveMenuItem(url: string): MenuItem | undefined {
+    const path = url.split('?')[0].split('#')[0];
+    return this.menuItems.find(
+      (item) => path === item.route || path.startsWith(item.route + '/')
     );
-    if (initial) this.activeMenuItem = initial;
   }
 
   onMenuItemClick(item: MenuItem): void {

@@ -29,6 +29,6 @@ async def get_ui_hints():
     return UiHintsResponse(
         guardrail_max_date_range_days=settings.guardrail_max_date_range_days,
         use_local_data=settings.use_local_data,
-        sample_data_start_date="2024-01-15",
-        sample_data_end_date="2024-01-20",
+        sample_data_start_date="2026-06-01",
+        sample_data_end_date="2026-06-03",
     )

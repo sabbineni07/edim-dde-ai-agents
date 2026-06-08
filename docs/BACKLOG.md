@@ -27,7 +27,7 @@ Captured from product and engineering discussions. Not committed to priority or 
 Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 - [x] **Phase 5.0–5.1** — Run-centric UI, structured recommend response
-- [x] **Phase 5.2** — Agents screen + profile CRUD
+- [x] **Phase 5.2** — Agents catalog + workspace agent install
 - [x] **Phase 5.3** — History with comparison, cost, lifecycle
 - [x] **Phase 5.4** — Adoption lifecycle
 - [x] **Phase 5.5 (backend)** — RAG index includes `job_run_id`

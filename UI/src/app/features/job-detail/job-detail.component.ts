@@ -37,8 +37,6 @@ export class JobDetailComponent implements OnInit {
   recommendations: RecommendationHistoryEntry[] = [];
   lastResult: GenerateRecommendationResponse | null = null;
 
-  agentIds: string[] = ['job_run_cluster_sizing'];
-  selectedAgentId = 'job_run_cluster_sizing';
   workspaceAgents: WorkspaceAgent[] = [];
   selectedWorkspaceAgentId = '';
 
@@ -49,7 +47,7 @@ export class JobDetailComponent implements OnInit {
   error = '';
   startDate = '';
   endDate = '';
-  includeExplanation = false;
+  includeExplanation = true;
 
   lifecycleLabels: Record<string, string> = {};
   lifecycleNotes: Record<string, string> = {};
@@ -73,43 +71,41 @@ export class JobDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const qp = this.route.snapshot.queryParamMap;
-    const qs = qp.get('start_date')?.trim();
-    const qe = qp.get('end_date')?.trim();
-    if (qs && qe) {
-      this.startDate = qs;
-      this.endDate = qe;
-    }
+    this.loadLifecycleMeta();
+    this.loadWorkspaceAgents();
+
     this.api.getUiHints().subscribe({
       next: (hints) => {
         this.uiHints = hints;
-        if (!qs || !qe) {
-          if (hints.use_local_data) {
-            const s = sampleDataDateStrings();
-            this.startDate = s.startDate;
-            this.endDate = s.endDate;
-          } else {
-            const r = last30DaysDateStrings();
-            this.startDate = r.startDate;
-            this.endDate = r.endDate;
-          }
-        }
-        this.updateDateRangeWarning();
+        this.syncDatesAndLoad();
       },
     });
-    this.loadLifecycleMeta();
-    this.loadAgents();
-    if (qs && qe) {
-      this.refreshData();
-    }
+
+    this.route.queryParamMap.subscribe(() => this.syncDatesAndLoad());
   }
 
-  applySampleDateRange(): void {
-    const s = sampleDataDateStrings();
-    this.startDate = s.startDate;
-    this.endDate = s.endDate;
+  private syncDatesAndLoad(): void {
+    const qp = this.route.snapshot.queryParamMap;
+    const qs = qp.get('start_date')?.trim();
+    const qe = qp.get('end_date')?.trim();
+
+    if (qs && qe) {
+      this.startDate = qs;
+      this.endDate = qe;
+    } else if (this.uiHints) {
+      const fallback = this.uiHints.use_local_data
+        ? sampleDataDateStrings()
+        : last30DaysDateStrings();
+      this.startDate = fallback.startDate;
+      this.endDate = fallback.endDate;
+    } else {
+      return;
+    }
+
     this.updateDateRangeWarning();
-    this.refreshData();
+    this.loadMetrics();
+    this.loadRuns();
+    this.loadRecommendations();
   }
 
   updateDateRangeWarning(): void {
@@ -120,10 +116,6 @@ export class JobDetailComponent implements OnInit {
     } else {
       this.dateRangeWarning = '';
     }
-  }
-
-  onDateRangeChange(): void {
-    this.updateDateRangeWarning();
   }
 
   loadLifecycleMeta(): void {
@@ -215,27 +207,9 @@ export class JobDetailComponent implements OnInit {
       });
   }
 
-  loadAgents(): void {
-    this.api.getAgents().subscribe({
-      next: (res) => {
-        this.agentIds = (res.agents || []).map((a) => a.agent_id);
-        if (!this.agentIds.includes(this.selectedAgentId)) {
-          this.selectedAgentId =
-            this.uiHints?.default_agent_id || this.agentIds[0] || 'job_run_cluster_sizing';
-        }
-        this.loadWorkspaceAgents();
-      },
-    });
-  }
-
-  onAgentChange(): void {
-    this.selectedWorkspaceAgentId = '';
-    this.loadWorkspaceAgents();
-  }
-
   loadWorkspaceAgents(): void {
     const ws = this.workspaceId();
-    this.api.getWorkspaceAgents(ws, this.selectedAgentId).subscribe({
+    this.api.getWorkspaceAgents(ws).subscribe({
       next: (list) => {
         this.workspaceAgents = list;
         if (list.length && !this.selectedWorkspaceAgentId) {
@@ -250,10 +224,13 @@ export class JobDetailComponent implements OnInit {
     });
   }
 
-  refreshData(): void {
-    this.loadMetrics();
-    this.loadRuns();
-    this.loadRecommendations();
+  /** Agent type for the recommend API — from workspace agent install, or platform default. */
+  private resolveAgentId(): string {
+    if (this.selectedWorkspaceAgentId) {
+      const wa = this.workspaceAgents.find((a) => a.id === this.selectedWorkspaceAgentId);
+      if (wa?.agent_id) return wa.agent_id;
+    }
+    return this.uiHints?.default_agent_id || 'job_run_cluster_sizing';
   }
 
   loadMetrics(): void {
@@ -331,7 +308,7 @@ export class JobDetailComponent implements OnInit {
     this.error = '';
     this.lastResult = null;
     const body: GenerateRecommendationRequest = {
-      agent_id: this.selectedAgentId,
+      agent_id: this.resolveAgentId(),
       job_id: j,
       job_run_id: this.selectedRunId,
       start_date: this.startDate || this.metricsData?.start_date || '',

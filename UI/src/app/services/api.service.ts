@@ -103,15 +103,6 @@ export interface EditableSettingsField {
   step?: number;
 }
 
-export interface AgentProfile {
-  id: string;
-  agent_id: string;
-  name: string;
-  overrides: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface UiHints {
   guardrail_max_date_range_days: number;
   use_local_data: boolean;
@@ -170,7 +161,6 @@ export interface AgentConnectionManifest {
 
 export interface GenerateRecommendationRequest {
   agent_id?: string;
-  profile_id?: string | null;
   workspace_agent_id?: string | null;
   job_id: string;
   job_run_id: string;
@@ -233,19 +223,16 @@ export class ApiService {
         of({
           guardrail_max_date_range_days: 30,
           use_local_data: true,
-          sample_data_start_date: '2024-01-15',
-          sample_data_end_date: '2024-01-20',
+          sample_data_start_date: '2026-06-01',
+          sample_data_end_date: '2026-06-03',
           default_agent_id: 'job_run_cluster_sizing',
         })
       )
     );
   }
 
-  getWorkspaces(start_date?: string, end_date?: string): Observable<Workspace[]> {
-    let params = new HttpParams();
-    if (start_date) params = params.set('start_date', start_date);
-    if (end_date) params = params.set('end_date', end_date);
-    return this.http.get<Workspace[]>(`${API_BASE}/workspaces`, { params }).pipe(
+  getWorkspaces(): Observable<Workspace[]> {
+    return this.http.get<Workspace[]>(`${API_BASE}/workspaces`).pipe(
       catchError((err) => {
         console.error('getWorkspaces error', err);
         return of([]);
@@ -475,36 +462,6 @@ export class ApiService {
     return this.http.delete<{ deleted: boolean }>(
       `${API_BASE}/workspaces/${workspaceId}/agents/${workspaceAgentId}`
     );
-  }
-
-  getAgentProfiles(agentId?: string): Observable<AgentProfile[]> {
-    let params = new HttpParams();
-    if (agentId) params = params.set('agent_id', agentId);
-    return this.http.get<AgentProfile[]>(`${API_BASE}/agent-profiles/`, { params }).pipe(
-      catchError((err) => {
-        console.error('getAgentProfiles error', err);
-        return of([]);
-      })
-    );
-  }
-
-  createAgentProfile(body: {
-    agent_id: string;
-    name: string;
-    overrides: Record<string, unknown>;
-  }): Observable<AgentProfile> {
-    return this.http.post<AgentProfile>(`${API_BASE}/agent-profiles/`, body);
-  }
-
-  updateAgentProfile(
-    profileId: string,
-    body: { name?: string; overrides?: Record<string, unknown> }
-  ): Observable<AgentProfile> {
-    return this.http.put<AgentProfile>(`${API_BASE}/agent-profiles/${profileId}`, body);
-  }
-
-  deleteAgentProfile(profileId: string): Observable<{ deleted: boolean }> {
-    return this.http.delete<{ deleted: boolean }>(`${API_BASE}/agent-profiles/${profileId}`);
   }
 
   generateRecommendation(

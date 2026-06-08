@@ -14,7 +14,7 @@ async def test_list_job_runs():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         resp = await ac.get(
             "/api/workspaces/1234567890123456/jobs/job-001/runs",
-            params={"start_date": "2024-01-15", "end_date": "2024-01-20"},
+            params={"start_date": "2026-06-01", "end_date": "2026-06-03"},
         )
         assert resp.status_code == 200, resp.text
         runs = resp.json()

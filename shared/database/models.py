@@ -110,19 +110,6 @@ class RecommendationLifecycleEvent(Base):
     created_at = Column(DateTime(timezone=True), default=func.now())
 
 
-class AgentProfile(Base):
-    """Persisted agent settings profile (JSONB overrides, no secrets)."""
-
-    __tablename__ = "agent_profiles"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
-    agent_id = Column(String(255), nullable=False, index=True)
-    name = Column(String(255), nullable=False, index=True)
-    overrides = Column(JSONB, nullable=False, default=dict)
-    created_at = Column(DateTime(timezone=True), default=func.now())
-    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
-
-
 class WorkspaceConnection(Base):
     """Workspace-scoped integration (non-secret config in JSONB)."""
 
