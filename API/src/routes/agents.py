@@ -14,14 +14,9 @@ from shared.config.profile_overrides import validate_profile_overrides
 router = APIRouter()
 
 AGENT_DISPLAY: Dict[str, Dict[str, str]] = {
-    "job_run_cluster_sizing": {
-        "name": "Job run cluster sizing",
+    "dbx_cluster_tuning_agent": {
+        "name": "DBX Cluster Tuning Agent",
         "description": "Per-run utilization right-sizing (Databricks cluster config).",
-        "get_started_route": "/app/workspaces",
-    },
-    "cluster_config": {
-        "name": "Job run cluster sizing (legacy id)",
-        "description": "Deprecated alias; use job_run_cluster_sizing.",
         "get_started_route": "/app/workspaces",
     },
 }
@@ -44,6 +39,7 @@ class EditableSettingsField(BaseModel):
     type: str
     options: List[str] | None = None
     placeholder: str | None = None
+    help: str | None = None
     min: float | None = None
     max: float | None = None
     step: float | None = None
@@ -68,8 +64,6 @@ async def list_agents():
     """List registered agents with display metadata for the UI."""
     agents: List[AgentInfo] = []
     for agent_id in get_registered_agent_ids():
-        if agent_id == "cluster_config":
-            continue
         meta = AGENT_DISPLAY.get(
             agent_id,
             {

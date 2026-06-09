@@ -32,9 +32,6 @@ SIZING_RECOMMENDATION_KEYS = (
 # Full single-call LLM response (pattern + recommendation)
 SIZING_LLM_RESPONSE_KEYS = SIZING_RECOMMENDATION_KEYS + (PATTERN_ANALYSIS_KEY,)
 
-# Backward-compatible alias
-COST_RECOMMENDATION_KEYS = SIZING_RECOMMENDATION_KEYS
-
 
 def _extract_json_from_response(text: str) -> Optional[str]:
     """Extract a single JSON object from LLM response (handles markdown code blocks)."""
@@ -172,11 +169,7 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
         if not self.use_rag or not self.rag_provider:
             return ""
         try:
-            if hasattr(self.rag_provider, "sizing_chain_historical_context"):
-                return self.rag_provider.sizing_chain_historical_context(job_run_ingest)
-            if hasattr(self.rag_provider, "pattern_chain_historical_context"):
-                return self.rag_provider.pattern_chain_historical_context(job_run_ingest)
-            return self.rag_provider.cost_chain_historical_context("", job_run_ingest)
+            return self.rag_provider.sizing_chain_historical_context(job_run_ingest)
         except Exception as e:
             logger.warning("rag_search_failed", error=str(e))
             return ""
@@ -186,11 +179,9 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
         current_config: dict,
         job_run_ingest: dict,
         sizing_hints: dict,
-        pattern_analysis: str = "",  # deprecated: ignored (4.1 merged call)
         guardrail_feedback: Optional[dict] = None,
     ) -> dict:
         """Run merged pattern + sizing LLM; returns full response including pattern_analysis."""
-        del pattern_analysis  # unused after 4.1 collapse
         from shared.models.job_run_ingest import format_job_run_ingest_for_llm
 
         raw = ""
@@ -246,7 +237,3 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
         except Exception as e:
             logger.error("cluster_sizing_error", error=str(e))
             raise
-
-
-# Deprecated alias (pre-rename)
-CostOptimizationChain = ClusterSizingChain

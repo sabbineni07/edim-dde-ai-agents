@@ -51,7 +51,7 @@ def test_agent_override_wins_over_platform():
 
 
 def test_agent_settings_merged():
-    s = get_agent_settings("job_run_cluster_sizing")
+    s = get_agent_settings("dbx_cluster_tuning_agent")
     assert s.recommendation_auto_termination_minutes == 0
     assert s.guardrail_supported_intent == "cluster_recommendation"
 
@@ -69,7 +69,7 @@ def test_config_dir_from_env(tmp_path, monkeypatch):
         "platform:\n  app_env: test-env\n",
         encoding="utf-8",
     )
-    (cfg / "agents" / "job_run_cluster_sizing.yaml").write_text(
+    (cfg / "agents" / "dbx_cluster_tuning_agent.yaml").write_text(
         "sizing:\n  cost_retry_enabled: true\n",
         encoding="utf-8",
     )
@@ -77,5 +77,5 @@ def test_config_dir_from_env(tmp_path, monkeypatch):
     reset_settings_cache()
     plat = get_platform_settings()
     assert plat.app_env == "test-env"
-    agent = get_agent_settings("job_run_cluster_sizing")
+    agent = get_agent_settings("dbx_cluster_tuning_agent")
     assert agent.recommendation_cost_retry_enabled is True

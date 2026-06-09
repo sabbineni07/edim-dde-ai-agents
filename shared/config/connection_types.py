@@ -12,102 +12,103 @@ CONNECTION_TYPES = (
     "faiss",
 )
 
+_AUTH_MI = (
+    "Authentication uses your Azure identity (az login or Managed Identity). "
+    "No passwords or tokens are stored in this app — the API obtains them at runtime."
+)
+
 CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
     "databricks": {
         "label": "Databricks",
-        "description": "Metrics and job runs from Databricks SQL.",
+        "description": "Read job metrics from a Databricks SQL warehouse.",
         "fields": [
             {
                 "key": "databricks_server_hostname",
                 "label": "Server hostname",
                 "type": "string",
                 "required": True,
+                "placeholder": "adb-1234567890123456.7.azuredatabricks.net",
+                "help": "Workspace URL host from Databricks → SQL warehouses.",
             },
             {
                 "key": "databricks_http_path",
-                "label": "HTTP path (SQL warehouse)",
+                "label": "SQL warehouse HTTP path",
                 "type": "string",
                 "required": True,
+                "placeholder": "/sql/1.0/warehouses/xxxxxxxxxxxx",
+                "help": "Connection details → HTTP path for your SQL warehouse.",
             },
             {
                 "key": "databricks_job_cluster_metrics_table",
-                "label": "Job cluster metrics table",
+                "label": "Metrics table",
                 "type": "string",
                 "required": True,
-            },
-            {
-                "key": "credential_env_prefix",
-                "label": "Credential env prefix (optional)",
-                "type": "string",
-                "placeholder": "CONN_<id>_",
-                "required": False,
+                "placeholder": "catalog.schema.job_cluster_metrics",
+                "help": "Fully qualified table with pre-aggregated job run metrics.",
             },
         ],
-        "credential_hints": [
-            "{prefix}DATABRICKS_TOKEN — if unset, Managed Identity is used",
-        ],
+        "auth_note": _AUTH_MI,
     },
     "local_dataset": {
         "label": "Local dataset",
-        "description": "CSV or local metrics file for development.",
+        "description": "Sample CSV metrics for local development (no Azure required).",
         "fields": [
             {
                 "key": "local_data_path",
-                "label": "Local data path",
+                "label": "CSV file path",
                 "type": "string",
                 "required": True,
+                "placeholder": "/app/data/sample_job_metrics.csv",
+                "help": "Path inside the API container or on the host when running locally.",
             },
         ],
-        "credential_hints": [],
+        "auth_note": "",
     },
     "ai_foundry": {
-        "label": "AI Foundry / Azure OpenAI",
-        "description": "LLM and embedding deployments.",
+        "label": "Azure OpenAI / AI Foundry",
+        "description": "Chat and embedding models for agent recommendations.",
         "fields": [
             {
                 "key": "azure_openai_endpoint",
-                "label": "Endpoint",
+                "label": "Endpoint URL",
                 "type": "string",
                 "required": True,
+                "placeholder": "https://my-openai.openai.azure.com/",
             },
             {
                 "key": "azure_openai_deployment_name",
                 "label": "Chat deployment",
                 "type": "string",
                 "required": True,
+                "placeholder": "gpt-4o",
             },
             {
                 "key": "azure_openai_embedding_deployment",
                 "label": "Embedding deployment",
                 "type": "string",
                 "required": False,
+                "placeholder": "text-embedding-3-small",
             },
             {
                 "key": "azure_openai_api_version",
                 "label": "API version",
                 "type": "string",
                 "required": False,
-            },
-            {
-                "key": "credential_env_prefix",
-                "label": "Credential env prefix (optional)",
-                "type": "string",
-                "required": False,
+                "placeholder": "2024-05-01-preview",
             },
         ],
-        "credential_hints": [
-            "{prefix}AZURE_OPENAI_API_KEY or {prefix}AZURE_OPENAI_ACCESS_TOKEN — else Managed Identity",
-        ],
+        "auth_note": _AUTH_MI,
     },
     "ai_search": {
         "label": "Azure AI Search",
-        "description": "Vector retrieval for RAG.",
+        "description": "Vector index for retrieval-augmented recommendations.",
         "fields": [
             {
                 "key": "azure_search_endpoint",
                 "label": "Search endpoint",
                 "type": "string",
                 "required": True,
+                "placeholder": "https://my-search.search.windows.net",
             },
             {
                 "key": "azure_search_index_name",
@@ -115,22 +116,22 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
                 "type": "string",
                 "required": True,
             },
-            {
-                "key": "credential_env_prefix",
-                "label": "Credential env prefix (optional)",
-                "type": "string",
-                "required": False,
-            },
         ],
-        "credential_hints": ["{prefix}AZURE_SEARCH_API_KEY — else Managed Identity"],
+        "auth_note": _AUTH_MI,
     },
     "faiss": {
         "label": "FAISS (local index)",
-        "description": "On-disk vector index for RAG.",
+        "description": "On-disk vector index for RAG (no cloud service).",
         "fields": [
-            {"key": "faiss_index_path", "label": "Index path", "type": "string", "required": True},
+            {
+                "key": "faiss_index_path",
+                "label": "Index path",
+                "type": "string",
+                "required": True,
+                "placeholder": "/app/data/faiss_index",
+            },
         ],
-        "credential_hints": [],
+        "auth_note": "",
     },
 }
 
@@ -145,7 +146,7 @@ def list_connection_types() -> List[Dict[str, Any]]:
                 "label": meta.get("label", t),
                 "description": meta.get("description", ""),
                 "fields": meta.get("fields", []),
-                "credential_hints": meta.get("credential_hints", []),
+                "auth_note": meta.get("auth_note", ""),
             }
         )
     return out
@@ -163,7 +164,4 @@ def validate_connection_config(connection_type: str, config: Dict[str, Any]) -> 
             raise ValueError(f"Missing required field: {key}")
         if val is not None and str(val).strip() != "":
             clean[key] = val
-    # Allow optional credential_env_prefix even if not in fields for type without it in required set
-    if "credential_env_prefix" in config and config["credential_env_prefix"]:
-        clean["credential_env_prefix"] = str(config["credential_env_prefix"]).strip()
     return clean

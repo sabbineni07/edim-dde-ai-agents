@@ -16,8 +16,14 @@ async def test_workspace_connections_and_agents_crud():
         # connection types catalog
         resp = await ac.get("/api/platform/connection-types")
         assert resp.status_code == 200
-        types = {t["connection_type"] for t in resp.json()["connection_types"]}
+        payload = resp.json()["connection_types"]
+        types = {t["connection_type"] for t in payload}
         assert "databricks" in types
+        dbx = next(t for t in payload if t["connection_type"] == "databricks")
+        field_keys = {f["key"] for f in dbx["fields"]}
+        assert "credential_env_prefix" not in field_keys
+        assert dbx.get("auth_note")
+        assert "credential_hints" not in dbx
 
         # create local_dataset connection
         resp = await ac.post(
@@ -35,7 +41,7 @@ async def test_workspace_connections_and_agents_crud():
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
-                "agent_id": "job_run_cluster_sizing",
+                "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Sizing default",
                 "bindings": {"metrics": metrics_conn_id},
             },
@@ -44,7 +50,7 @@ async def test_workspace_connections_and_agents_crud():
         wa_id = resp.json()["id"]
 
         # manifest endpoint
-        resp = await ac.get("/api/agents/job_run_cluster_sizing/connection-manifest")
+        resp = await ac.get("/api/agents/dbx_cluster_tuning_agent/connection-manifest")
         assert resp.status_code == 200
         assert "metrics" in resp.json()["roles"]
 
@@ -81,7 +87,7 @@ async def test_databricks_connection_exclusive_per_workspace_agent():
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
-                "agent_id": "job_run_cluster_sizing",
+                "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Agent 1",
                 "bindings": {"metrics": dbx_id},
             },
@@ -92,7 +98,7 @@ async def test_databricks_connection_exclusive_per_workspace_agent():
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
-                "agent_id": "job_run_cluster_sizing",
+                "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Agent 2",
                 "bindings": {"metrics": dbx_id},
             },

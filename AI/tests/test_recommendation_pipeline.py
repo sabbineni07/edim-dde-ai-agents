@@ -1,6 +1,6 @@
 """Tests for recommendation pipeline (hints, guardrails, retry policy, merged sizing)."""
 
-from AI.src.agents.job_run_cluster_sizing.chains.sizing import (
+from AI.src.agents.dbx_cluster_tuning_agent.chains.sizing import (
     SIZING_LLM_RESPONSE_KEYS,
     split_sizing_llm_response,
 )

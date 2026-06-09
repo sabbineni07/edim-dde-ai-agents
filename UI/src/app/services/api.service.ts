@@ -98,6 +98,7 @@ export interface EditableSettingsField {
   type: string;
   options?: string[];
   placeholder?: string;
+  help?: string;
   min?: number;
   max?: number;
   step?: number;
@@ -117,6 +118,7 @@ export interface ConnectionTypeField {
   type: string;
   required?: boolean;
   placeholder?: string;
+  help?: string;
   options?: string[];
 }
 
@@ -125,7 +127,12 @@ export interface ConnectionTypeMeta {
   label: string;
   description: string;
   fields: ConnectionTypeField[];
-  credential_hints: string[];
+  auth_note?: string;
+}
+
+export interface AgentRoleUi {
+  label: string;
+  help: string;
 }
 
 export interface WorkspaceConnection {
@@ -154,9 +161,11 @@ export interface WorkspaceAgent {
 export interface AgentConnectionManifest {
   agent_id: string;
   roles: Record<string, string[]>;
+  role_ui?: Record<string, AgentRoleUi>;
   required_roles: string[];
   optional_roles: string[];
   agent_settings_keys: string[];
+  auth_note?: string;
 }
 
 export interface GenerateRecommendationRequest {
@@ -225,7 +234,7 @@ export class ApiService {
           use_local_data: true,
           sample_data_start_date: '2026-06-01',
           sample_data_end_date: '2026-06-03',
-          default_agent_id: 'job_run_cluster_sizing',
+          default_agent_id: 'dbx_cluster_tuning_agent',
         })
       )
     );
@@ -318,8 +327,8 @@ export class ApiService {
         return of({
           agents: [
             {
-              agent_id: 'job_run_cluster_sizing',
-              name: 'Job run cluster sizing',
+              agent_id: 'dbx_cluster_tuning_agent',
+              name: 'DBX Cluster Tuning Agent',
               description: 'Per-run cluster right-sizing.',
               get_started_route: '/app/workspaces',
             },

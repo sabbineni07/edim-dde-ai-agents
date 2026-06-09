@@ -7,9 +7,6 @@ from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Scope for Azure OpenAI / Cognitive Services when using Azure AD
-_AZURE_OPENAI_SCOPE = "https://cognitiveservices.azure.com/.default"
-
 
 def _normalize_azure_endpoint(endpoint: str) -> str:
     """Strip /api/projects/xxx from Foundry URLs - SDK expects base resource URL."""
@@ -20,23 +17,17 @@ def _normalize_azure_endpoint(endpoint: str) -> str:
     return endpoint.rstrip("/")
 
 
-def _build_azure_ad_token_provider():
-    """Build a callable that returns an Azure AD token (for Managed Identity / az login)."""
-    from azure.identity import DefaultAzureCredential
+def _build_settings_cached_token_provider():
+    """Build a callable that returns an Azure AD token, caching in settings when fetched."""
 
-    credential = DefaultAzureCredential()
+    def token_provider() -> str:
+        token = (settings.azure_openai_access_token or "").strip()
+        if not token:
+            from shared.auth.azure_tokens import AZURE_OPENAI_AAD_SCOPE, get_azure_access_token
 
-    def token_provider():
-        token = credential.get_token(_AZURE_OPENAI_SCOPE)
-        return token.token
-
-    return token_provider
-
-
-def _build_env_token_provider(token: str):
-    """Build a callable that returns the given token (e.g. from AZURE_OPENAI_ACCESS_TOKEN). No refresh."""
-
-    def token_provider():
+            token = get_azure_access_token(AZURE_OPENAI_AAD_SCOPE)
+            settings.azure_openai_access_token = token
+            logger.debug("azure_openai_token_from_azure_identity", cached=True)
         return token
 
     return token_provider
@@ -48,8 +39,9 @@ class AzureOpenAINotConfiguredError(Exception):
 
 class AzureOpenAIService:
     """Service for Azure OpenAI integration.
-    Auth order: (1) API key, (2) token from env AZURE_OPENAI_ACCESS_TOKEN, (3) DefaultAzureCredential.
-    Requires AZURE_OPENAI_ENDPOINT and either API key or access token to be configured.
+
+    Auth order: (1) API key, (2) cached access token (env or Azure identity), (3) fetch via
+    DefaultAzureCredential on first use and store in settings.azure_openai_access_token.
     """
 
     def __init__(self):
@@ -60,16 +52,13 @@ class AzureOpenAIService:
         """
         if not settings.azure_openai_endpoint or not settings.azure_openai_endpoint.strip():
             msg = (
-                "Azure OpenAI is not configured. Set AZURE_OPENAI_ENDPOINT and either "
-                "AZURE_OPENAI_API_KEY or AZURE_OPENAI_ACCESS_TOKEN in .env"
+                "Azure OpenAI is not configured. Set AZURE_OPENAI_ENDPOINT and use "
+                "AZURE_OPENAI_API_KEY, or Azure identity (az login / Managed Identity)."
             )
             logger.error("azure_openai_not_configured", message=msg)
             raise AzureOpenAINotConfiguredError(msg)
 
         use_api_key = settings.azure_openai_api_key and settings.azure_openai_api_key.strip()
-        use_token_env = (
-            settings.azure_openai_access_token and settings.azure_openai_access_token.strip()
-        )
         endpoint = _normalize_azure_endpoint(settings.azure_openai_endpoint)
         api_version = settings.azure_openai_api_version or "2024-05-01-preview"
         deployment = settings.azure_openai_deployment_name or "gpt-4o"
@@ -93,24 +82,8 @@ class AzureOpenAIService:
                     azure_deployment=embedding_deployment,
                 )
                 logger.info("azure_openai_service_initialized", auth="api_key")
-            elif use_token_env:
-                token_provider = _build_env_token_provider(settings.azure_openai_access_token)
-                self.llm = AzureChatOpenAI(
-                    azure_endpoint=endpoint,
-                    api_version=api_version,
-                    azure_deployment=deployment,
-                    azure_ad_token_provider=token_provider,
-                    temperature=0.7,
-                )
-                self.embeddings = AzureOpenAIEmbeddings(
-                    azure_endpoint=endpoint,
-                    api_version=api_version,
-                    azure_deployment=embedding_deployment,
-                    azure_ad_token_provider=token_provider,
-                )
-                logger.info("azure_openai_service_initialized", auth="access_token_env")
             else:
-                token_provider = _build_azure_ad_token_provider()
+                token_provider = _build_settings_cached_token_provider()
                 self.llm = AzureChatOpenAI(
                     azure_endpoint=endpoint,
                     api_version=api_version,
@@ -124,7 +97,12 @@ class AzureOpenAIService:
                     azure_deployment=embedding_deployment,
                     azure_ad_token_provider=token_provider,
                 )
-                logger.info("azure_openai_service_initialized", auth="azure_ad")
+                auth = (
+                    "access_token_env"
+                    if (settings.azure_openai_access_token or "").strip()
+                    else "azure_ad"
+                )
+                logger.info("azure_openai_service_initialized", auth=auth)
         except Exception as e:
             logger.error("azure_openai_init_failed", error=str(e))
             raise AzureOpenAINotConfiguredError(

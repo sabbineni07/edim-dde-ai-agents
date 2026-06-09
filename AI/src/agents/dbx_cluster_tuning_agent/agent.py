@@ -1,31 +1,32 @@
-"""Per job-run Databricks cluster utilization right-sizing agent."""
+"""DBX cluster tuning agent — per job-run Databricks cluster utilization right-sizing."""
 
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, TypedDict
 from uuid import UUID, uuid4
 
 from langgraph.graph import END, StateGraph
 
-from AI.src.agents.job_run_cluster_sizing.chains.explanation import RecommendationExplanationChain
-from AI.src.agents.job_run_cluster_sizing.chains.sizing import (
+from AI.src.agents.dbx_cluster_tuning_agent.chains.explanation import RecommendationExplanationChain
+from AI.src.agents.dbx_cluster_tuning_agent.chains.sizing import (
     SIZING_RECOMMENDATION_KEYS,
     ClusterSizingChain,
     split_sizing_llm_response,
 )
-from AI.src.agents.job_run_cluster_sizing.tools.cost_calculator_tools import (
+from AI.src.agents.dbx_cluster_tuning_agent.tools.cost_calculator_tools import (
     calculate_cluster_cost,
     calculate_cost_savings,
 )
-from AI.src.agents.job_run_cluster_sizing.tools.databricks_tools import (
+from AI.src.agents.dbx_cluster_tuning_agent.tools.databricks_tools import (
     get_cost_analysis,
     get_job_cluster_metrics,
 )
-from AI.src.agents.job_run_cluster_sizing.tools.validation_tools import (
+from AI.src.agents.dbx_cluster_tuning_agent.tools.validation_tools import (
     assess_risks,
     parse_vcpus_from_node_type,
     validate_performance,
 )
 from AI.src.core.registry import register_agent
 from AI.src.core.utils.token_usage import TokenUsageTracker
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.loader import get_agent_settings
 from shared.config.settings import Settings
 from shared.guardrails import (
@@ -45,8 +46,7 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-AGENT_ID = "job_run_cluster_sizing"
-DEPRECATED_AGENT_ID = "cluster_config"
+AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 
 
 class RecommendationState(TypedDict, total=False):
@@ -75,18 +75,17 @@ class RecommendationState(TypedDict, total=False):
     token_tracker: Any
 
 
-def _register_job_run_cluster_sizing_agent(cls):
-    from AI.src.agents.job_run_cluster_sizing.deps import get_job_run_cluster_sizing_deps
+def _register_dbx_cluster_tuning_agent(cls):
+    from AI.src.agents.dbx_cluster_tuning_agent.deps import get_dbx_cluster_tuning_agent_deps
 
     return register_agent(
         AGENT_ID,
-        deps_factory=get_job_run_cluster_sizing_deps,
-        aliases=[DEPRECATED_AGENT_ID],
+        deps_factory=get_dbx_cluster_tuning_agent_deps,
     )(cls)
 
 
-@_register_job_run_cluster_sizing_agent
-class JobRunClusterSizingAgent:
+@_register_dbx_cluster_tuning_agent
+class DbxClusterTuningAgent:
     """Recommend cluster right-sizing for a single Databricks job run."""
 
     agent_id = AGENT_ID
@@ -98,20 +97,16 @@ class JobRunClusterSizingAgent:
         settings: Optional[Settings] = None,
         cost_logger: Optional["CostLogger"] = None,
         search_service: Optional["SearchService"] = None,
-        cost_chain: Optional[ClusterSizingChain] = None,
-        pattern_chain: Optional[Any] = None,
     ):
-        self.sizing_chain = sizing_chain or cost_chain
-        if self.sizing_chain is None:
+        if sizing_chain is None:
             raise TypeError("sizing_chain is required")
-        if pattern_chain is not None:
-            logger.warning("pattern_chain_removed", detail="Use merged ClusterSizingChain only")
+        self.sizing_chain = sizing_chain
         self.explanation_chain = explanation_chain
         self.cost_logger = cost_logger
         self.search_service = search_service
         self.settings: Settings = settings or get_agent_settings(AGENT_ID)
         self.graph = self._create_recommendation_graph()
-        logger.info("job_run_cluster_sizing_agent_initialized")
+        logger.info("dbx_cluster_tuning_agent_initialized")
 
     def _ingest_from_state(self, state: RecommendationState) -> Dict:
         return state.get("job_run_ingest") or state.get("job_cluster_metrics") or {}
@@ -514,7 +509,3 @@ class JobRunClusterSizingAgent:
             "comparison": comparison_payload,
             "token_usage_analysis": token_usage_summary,
         }
-
-
-# Backward-compatible names
-ClusterConfigAgent = JobRunClusterSizingAgent

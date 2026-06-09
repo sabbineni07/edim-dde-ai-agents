@@ -3,7 +3,7 @@
 from typing import Any, Dict, List
 
 
-def format_recommendation_hits_for_cost_chain(recommendations: List[Dict[str, Any]]) -> str:
+def format_recommendation_hits(recommendations: List[Dict[str, Any]]) -> str:
     """Build historical_context from similar recommendation documents."""
     if not recommendations:
         return ""
@@ -27,7 +27,7 @@ Use these as guidance, but optimize based on current job's actual needs.
 """
 
 
-def format_job_pattern_hits_for_cost_chain(jobs: List[Dict[str, Any]]) -> str:
+def format_job_utilization_summary(jobs: List[Dict[str, Any]]) -> str:
     """Build historical_context from job_cluster_metrics-style hits (utilization only)."""
     if not jobs:
         return ""
@@ -61,8 +61,8 @@ utilization needs, not by copying historical configs.
 """
 
 
-def format_job_patterns_for_pattern_chain(jobs: List[Dict[str, Any]]) -> str:
-    """Build historical_context for pattern analysis from similar jobs."""
+def format_job_patterns_for_sizing(jobs: List[Dict[str, Any]]) -> str:
+    """Build historical_context for sizing from similar jobs."""
     if not jobs:
         return ""
     patterns = []

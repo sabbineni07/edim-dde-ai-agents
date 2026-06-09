@@ -1,13 +1,14 @@
-"""UI metadata and allowlist for workspace agent_settings fields."""
+"""UI metadata and allowlist for workspace agent_settings fields.
+
+Connection bindings supply LLM (AI Foundry) and RAG (Search/FAISS) config.
+Advanced settings here are agent-behavior knobs only — no duplicate deployment/model fields.
+"""
 
 from __future__ import annotations
 
 from typing import Any, Dict, List
 
 PROFILE_ALLOWED_FIELDS = [
-    "azure_openai_deployment_name",
-    "default_model_name",
-    "vector_retrieval_backend",
     "recommendation_auto_termination_minutes",
     "recommendation_cost_retry_enabled",
     "default_confidence_score",
@@ -15,29 +16,16 @@ PROFILE_ALLOWED_FIELDS = [
 ]
 
 PROFILE_FIELD_UI: Dict[str, Dict[str, Any]] = {
-    "azure_openai_deployment_name": {
-        "label": "Azure OpenAI deployment",
-        "type": "string",
-        "placeholder": "gpt-4o",
-    },
-    "default_model_name": {
-        "label": "Default model name",
-        "type": "string",
-        "placeholder": "gpt-4o",
-    },
-    "vector_retrieval_backend": {
-        "label": "Vector retrieval backend",
-        "type": "select",
-        "options": ["azure", "none"],
-    },
     "recommendation_auto_termination_minutes": {
         "label": "Auto-termination (minutes)",
         "type": "number",
         "min": 0,
+        "help": "Suggested cluster auto-shutdown after job completion (0 = no suggestion).",
     },
     "recommendation_cost_retry_enabled": {
         "label": "Cost retry when guardrails adjust",
         "type": "boolean",
+        "help": "Re-run cost estimate if guardrails change the recommendation.",
     },
     "default_confidence_score": {
         "label": "Default confidence score",
@@ -45,12 +33,14 @@ PROFILE_FIELD_UI: Dict[str, Dict[str, Any]] = {
         "min": 0,
         "max": 1,
         "step": 0.05,
+        "help": "Baseline confidence shown on recommendations from this install.",
     },
     "guardrail_max_date_range_days": {
         "label": "Max date range (days)",
         "type": "number",
         "min": 1,
         "max": 365,
+        "help": "Maximum lookback window for job metrics on this workspace agent.",
     },
 }
 

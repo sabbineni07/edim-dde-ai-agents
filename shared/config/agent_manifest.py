@@ -4,18 +4,24 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional, Set
 
+ROLE_UI: Dict[str, Dict[str, str]] = {
+    "metrics": {
+        "label": "Job metrics",
+        "help": "Required. Databricks SQL warehouse or local CSV where job run data lives.",
+    },
+    "llm": {
+        "label": "Language model",
+        "help": "Optional. Azure OpenAI endpoint for recommendations and explanations.",
+    },
+    "rag": {
+        "label": "Knowledge search",
+        "help": "Optional. Azure AI Search or local FAISS index for extra context.",
+    },
+}
+
 # role -> allowed connection types
 AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
-    "job_run_cluster_sizing": {
-        "roles": {
-            "metrics": ["databricks", "local_dataset"],
-            "llm": ["ai_foundry"],
-            "rag": ["ai_search", "faiss"],
-        },
-        "required_roles": ["metrics"],
-        "optional_roles": ["llm", "rag"],
-    },
-    "cluster_config": {
+    "dbx_cluster_tuning_agent": {
         "roles": {
             "metrics": ["databricks", "local_dataset"],
             "llm": ["ai_foundry"],
@@ -27,9 +33,6 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
 }
 
 WORKSPACE_AGENT_SETTINGS_KEYS = [
-    "azure_openai_deployment_name",
-    "default_model_name",
-    "vector_retrieval_backend",
     "recommendation_auto_termination_minutes",
     "recommendation_cost_retry_enabled",
     "default_confidence_score",
@@ -93,10 +96,20 @@ def manifest_for_api(agent_id: str) -> Optional[Dict[str, Any]]:
     m = get_agent_manifest(agent_id)
     if not m:
         return None
+    roles = m.get("roles", {})
+    role_ui = {
+        role: ROLE_UI.get(role, {"label": role, "help": ""})
+        for role in set(m.get("required_roles", [])) | set(m.get("optional_roles", []))
+    }
     return {
         "agent_id": agent_id,
-        "roles": m.get("roles", {}),
+        "roles": roles,
+        "role_ui": role_ui,
         "required_roles": m.get("required_roles", []),
         "optional_roles": m.get("optional_roles", []),
         "agent_settings_keys": WORKSPACE_AGENT_SETTINGS_KEYS,
+        "auth_note": (
+            "Uses your Azure identity (az login or Managed Identity). "
+            "Link connections below — no tokens or API keys are entered here."
+        ),
     }

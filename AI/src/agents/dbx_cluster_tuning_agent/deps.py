@@ -1,16 +1,17 @@
-"""Dependency wiring for the job-run cluster sizing agent."""
+"""Dependency wiring for the DBX cluster tuning agent."""
 
-from AI.src.agents.job_run_cluster_sizing.chains.explanation import RecommendationExplanationChain
-from AI.src.agents.job_run_cluster_sizing.chains.sizing import ClusterSizingChain
+from AI.src.agents.dbx_cluster_tuning_agent.chains.explanation import RecommendationExplanationChain
+from AI.src.agents.dbx_cluster_tuning_agent.chains.sizing import ClusterSizingChain
 from AI.src.core.platform import (
     get_cost_logger,
     get_llm_provider,
     get_rag_context_provider,
     get_search_service,
 )
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.loader import get_agent_settings
 
-AGENT_ID = "job_run_cluster_sizing"
+AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 
 
 def get_sizing_chain(
@@ -37,8 +38,8 @@ def get_explanation_chain(llm_provider=None) -> RecommendationExplanationChain:
     return RecommendationExplanationChain(llm_provider=llm)
 
 
-def get_job_run_cluster_sizing_deps(agent_id: str = AGENT_ID) -> dict:
-    """Kwargs for JobRunClusterSizingAgent.__init__."""
+def get_dbx_cluster_tuning_agent_deps(agent_id: str = AGENT_ID) -> dict:
+    """Kwargs for DbxClusterTuningAgent.__init__."""
     return {
         "sizing_chain": get_sizing_chain(agent_id=agent_id),
         "explanation_chain": get_explanation_chain(),

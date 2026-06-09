@@ -1,4 +1,4 @@
-"""Tests for cluster config agent with local data and mock services."""
+"""Tests for DBX cluster tuning agent with local data and mock services."""
 
 import os
 import sys
@@ -19,11 +19,11 @@ if str(project_root) not in sys.path:
 
 # Import after path setup
 try:
-    from AI.src.agents.job_run_cluster_sizing import JobRunClusterSizingAgent
+    from AI.src.agents.dbx_cluster_tuning_agent import DbxClusterTuningAgent
     from AI.src.core.llm.mock_llm_service import MockLLMService
 except ImportError as e:
     # If import fails, skip tests (for environments without full setup)
-    pytest.skip(f"Could not import ClusterConfigAgent: {e}", allow_module_level=True)
+    pytest.skip(f"Could not import DbxClusterTuningAgent: {e}", allow_module_level=True)
 
 
 def _make_mock_llm_provider():
@@ -36,15 +36,15 @@ def _make_mock_llm_provider():
 
 def _create_agent_with_mock_llm():
     """Create agent with mock LLM (no Azure required)."""
-    from AI.src.agents.job_run_cluster_sizing.chains.explanation import (
+    from AI.src.agents.dbx_cluster_tuning_agent.chains.explanation import (
         RecommendationExplanationChain,
     )
-    from AI.src.agents.job_run_cluster_sizing.chains.sizing import ClusterSizingChain
+    from AI.src.agents.dbx_cluster_tuning_agent.chains.sizing import ClusterSizingChain
 
     mock_llm = _make_mock_llm_provider()
     sizing_chain = ClusterSizingChain(llm_provider=mock_llm, rag_provider=None, use_rag=False)
     explanation_chain = RecommendationExplanationChain(llm_provider=mock_llm)
-    return JobRunClusterSizingAgent(
+    return DbxClusterTuningAgent(
         sizing_chain=sizing_chain,
         explanation_chain=explanation_chain,
         cost_logger=None,

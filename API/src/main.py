@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
+from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.routes import (
     agents,
     chat,

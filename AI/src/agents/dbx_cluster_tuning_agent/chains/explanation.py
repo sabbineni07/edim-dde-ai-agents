@@ -99,6 +99,3 @@ Using only the four inputs above, write the structured explanation with the six 
         except Exception as e:
             logger.error("explanation_error", error=str(e))
             raise
-
-
-ExplanationChain = RecommendationExplanationChain

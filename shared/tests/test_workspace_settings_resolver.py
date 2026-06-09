@@ -6,7 +6,7 @@ from shared.config.workspace_settings_resolver import resolve_workspace_agent_se
 def test_resolve_local_dataset_metrics():
     cid = str(uuid4())
     flat, secrets = resolve_workspace_agent_settings(
-        agent_id="job_run_cluster_sizing",
+        agent_id="dbx_cluster_tuning_agent",
         bindings={"metrics": cid},
         agent_settings={},
         connections=[
@@ -26,7 +26,7 @@ def test_resolve_ai_search_rag():
     metrics_id = str(uuid4())
     rag_id = str(uuid4())
     flat, _ = resolve_workspace_agent_settings(
-        agent_id="job_run_cluster_sizing",
+        agent_id="dbx_cluster_tuning_agent",
         bindings={"metrics": metrics_id, "rag": rag_id},
         agent_settings={},
         connections=[

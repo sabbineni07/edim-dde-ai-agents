@@ -230,7 +230,7 @@ export class JobDetailComponent implements OnInit {
       const wa = this.workspaceAgents.find((a) => a.id === this.selectedWorkspaceAgentId);
       if (wa?.agent_id) return wa.agent_id;
     }
-    return this.uiHints?.default_agent_id || 'job_run_cluster_sizing';
+    return this.uiHints?.default_agent_id || 'dbx_cluster_tuning_agent';
   }
 
   loadMetrics(): void {

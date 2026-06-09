@@ -81,11 +81,13 @@ class Settings(BaseSettings):
     )
 
 
-DEFAULT_AGENT_ID = "job_run_cluster_sizing"
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
+
+DEFAULT_AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 
 
 class _SettingsProxy:
-    """Backward-compatible module-level `settings` (default agent merge)."""
+    """Module-level `settings` proxy (default agent merged config)."""
 
     def __getattr__(self, name: str):
         from shared.config.loader import get_agent_settings

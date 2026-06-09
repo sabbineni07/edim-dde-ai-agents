@@ -13,7 +13,7 @@ if str(project_root) not in sys.path:
 
 # Import after path setup
 try:
-    from AI.src.agents.job_run_cluster_sizing.chains.sizing import ClusterSizingChain
+    from AI.src.agents.dbx_cluster_tuning_agent.chains.sizing import ClusterSizingChain
     from AI.src.core.llm.azure_search_service import AzureSearchService
     from AI.src.core.llm.mock_llm_service import MockLLMService
     from shared.models.job_cluster_metrics import JobClusterMetrics

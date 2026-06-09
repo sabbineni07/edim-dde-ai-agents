@@ -8,7 +8,7 @@
     <div>
       <h2 class="mb-0">Workspace setup</h2>
       <p class="text-muted small mb-0 mt-1">
-        <code>{{ workspaceId() }}</code> — connections and agents for this environment
+        <code>{{ workspaceId() }}</code> — configure data sources and agents for this environment
       </p>
     </div>
     <div class="d-flex gap-2">
@@ -18,18 +18,29 @@
   </div>
 </div>
 
+<div class="alert alert-info small mb-3">
+  <strong>How setup works</strong>
+  <ol class="mb-0 ps-3 mt-1">
+    <li><strong>Connections</strong> — where the app reads data and which Azure services to call (hostnames and table names only).</li>
+    <li><strong>Agents</strong> — which AI agent runs on this workspace and which connections it uses.</li>
+  </ol>
+  <span class="d-block mt-2 text-muted">
+    Authentication uses your Azure identity (<code>az login</code> or Managed Identity). No tokens or API keys are stored in this UI.
+  </span>
+</div>
+
 <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
 <div class="alert alert-success" *ngIf="message">{{ message }}</div>
 
 <ul class="nav nav-tabs mb-3">
   <li class="nav-item">
     <button type="button" class="nav-link" [class.active]="activeTab === 'connections'" (click)="setTab('connections')">
-      Connections
+      1. Connections
     </button>
   </li>
   <li class="nav-item">
     <button type="button" class="nav-link" [class.active]="activeTab === 'agents'" (click)="setTab('agents')">
-      Agents
+      2. Agents
     </button>
   </li>
 </ul>
@@ -38,7 +49,10 @@
 <div *ngIf="activeTab === 'connections'">
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Connections</strong>
+      <div>
+        <strong>Connections</strong>
+        <p class="small text-muted mb-0 mt-1">Integration endpoints for this workspace — secrets are handled by Azure identity.</p>
+      </div>
       <button type="button" class="btn btn-primary btn-sm" (click)="startCreateConnection()" [disabled]="showConnectionForm">
         Add connection
       </button>
@@ -46,26 +60,22 @@
     <div class="card-body p-0">
       <div *ngIf="loadingConnections" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>
       <div *ngIf="!loadingConnections && connections.length === 0" class="p-3 text-muted small">
-        No connections yet. Add Databricks, local dataset, AI Foundry, Search, or FAISS integrations.
+        No connections yet. Add a Databricks warehouse for production data, or a local dataset for development.
       </div>
       <table class="table table-sm mb-0" *ngIf="!loadingConnections && connections.length > 0">
         <thead>
           <tr>
             <th>Name</th>
             <th>Type</th>
-            <th>Config</th>
+            <th>Details</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let c of connections">
             <td>{{ c.name }}</td>
-            <td><span class="badge text-bg-secondary">{{ c.connection_type }}</span></td>
-            <td class="small text-muted">
-              <span *ngFor="let kv of c.config | keyvalue; let last = last">
-                {{ kv.key }}: {{ kv.value }}<span *ngIf="!last">; </span>
-              </span>
-            </td>
+            <td><span class="badge text-bg-secondary">{{ connectionTypeLabel(c.connection_type) }}</span></td>
+            <td class="small text-muted">{{ connectionSummary(c) }}</td>
             <td class="text-end text-nowrap">
               <button type="button" class="btn btn-outline-secondary btn-sm me-1" (click)="startEditConnection(c)">Edit</button>
               <button type="button" class="btn btn-outline-danger btn-sm" (click)="deleteConnection(c)">Delete</button>
@@ -81,7 +91,12 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label small">Type</label>
+          <label class="form-label small">Connection name</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="connName" placeholder="Enter name" />
+          <p class="small text-muted mt-1 mb-0">A label you will recognize when installing agents.</p>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Connection type</label>
           <select
             class="form-select form-select-sm"
             [(ngModel)]="connType"
@@ -90,10 +105,6 @@
             <option *ngFor="let t of connectionTypes" [value]="t.connection_type">{{ t.label }}</option>
           </select>
           <p class="small text-muted mt-1 mb-0">{{ connectionTypeMeta(connType)?.description }}</p>
-        </div>
-        <div class="col-md-4">
-          <label class="form-label small">Name</label>
-          <input type="text" class="form-control form-control-sm" [(ngModel)]="connName" placeholder="My Databricks" />
         </div>
       </div>
       <div class="row g-2 mt-2" *ngIf="connectionTypeMeta(connType) as meta">
@@ -104,13 +115,11 @@
             class="form-control form-control-sm"
             [(ngModel)]="connConfig[f.key]"
             [placeholder]="f.placeholder || ''" />
+          <p class="small text-muted mb-0" *ngIf="f.help">{{ f.help }}</p>
         </div>
       </div>
-      <div class="alert alert-light border small mt-3 mb-0" *ngIf="connectionTypeMeta(connType)?.credential_hints?.length">
-        <strong>Credentials</strong> (not stored in UI — use <code>.env</code> or Managed Identity):
-        <ul class="mb-0 ps-3">
-          <li *ngFor="let h of connectionTypeMeta(connType)!.credential_hints">{{ h }}</li>
-        </ul>
+      <div class="alert alert-light border small mt-3 mb-0" *ngIf="connectionTypeMeta(connType)?.auth_note">
+        <strong>Authentication</strong> — {{ connectionTypeMeta(connType)!.auth_note }}
       </div>
       <div class="mt-3">
         <button type="button" class="btn btn-primary btn-sm me-2" (click)="saveConnection()" [disabled]="saving">Save</button>
@@ -124,29 +133,35 @@
 <div *ngIf="activeTab === 'agents'">
   <div class="card mb-3">
     <div class="card-header d-flex justify-content-between align-items-center">
-      <strong>Installed agents</strong>
-      <button type="button" class="btn btn-primary btn-sm" (click)="startAddAgent()" [disabled]="showAgentWizard">
+      <div>
+        <strong>Installed agents</strong>
+        <p class="small text-muted mb-0 mt-1">Agents that run recommendations on this workspace using the connections above.</p>
+      </div>
+      <button type="button" class="btn btn-primary btn-sm" (click)="startAddAgent()" [disabled]="showAgentWizard || connections.length === 0">
         Add agent
       </button>
     </div>
     <div class="card-body p-0">
       <div *ngIf="loadingAgents" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>
-      <div *ngIf="!loadingAgents && workspaceAgents.length === 0" class="p-3 text-muted small">
-        No agents on this workspace. Add an agent and bind connections (metrics required).
+      <div *ngIf="!loadingAgents && connections.length === 0" class="p-3 text-muted small">
+        Add at least one connection on the <button type="button" class="btn btn-link btn-sm p-0 align-baseline" (click)="setTab('connections')">Connections</button> tab first.
+      </div>
+      <div *ngIf="!loadingAgents && connections.length > 0 && workspaceAgents.length === 0" class="p-3 text-muted small">
+        No agents installed yet. Add an agent and link it to your metrics connection.
       </div>
       <table class="table table-sm mb-0" *ngIf="!loadingAgents && workspaceAgents.length > 0">
         <thead>
           <tr>
             <th>Name</th>
             <th>Agent</th>
-            <th>Bindings</th>
+            <th>Linked connections</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
           <tr *ngFor="let wa of workspaceAgents">
             <td>{{ wa.name }}</td>
-            <td class="small"><code>{{ wa.agent_id }}</code></td>
+            <td class="small">{{ agentCatalogName(wa.agent_id) }}</td>
             <td class="small text-muted">{{ bindingSummary(wa) }}</td>
             <td class="text-end">
               <button type="button" class="btn btn-outline-danger btn-sm" (click)="deleteWorkspaceAgent(wa)">Remove</button>
@@ -158,24 +173,26 @@
   </div>
 
   <div class="card" *ngIf="showAgentWizard">
-    <div class="card-header"><strong>Install agent on workspace</strong></div>
+    <div class="card-header"><strong>Install agent</strong></div>
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label small">Catalog agent</label>
+          <label class="form-label small">Agent name</label>
+          <input type="text" class="form-control form-control-sm" [(ngModel)]="wizardName" placeholder="Enter name" />
+          <p class="small text-muted mt-1 mb-0">Shown when selecting which agent to run on job details.</p>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small">Agent type</label>
           <select class="form-select form-select-sm" [(ngModel)]="wizardAgentId" (ngModelChange)="onWizardAgentChange()">
             <option *ngFor="let a of agentsCatalog" [value]="a.agent_id">{{ a.name }}</option>
           </select>
         </div>
-        <div class="col-md-4">
-          <label class="form-label small">Install name</label>
-          <input type="text" class="form-control form-control-sm" [(ngModel)]="wizardName" placeholder="Production sizing" />
-        </div>
       </div>
 
       <div class="mt-3" *ngIf="wizardManifest">
-        <p class="small fw-semibold mb-2">Bind connections</p>
-        <p class="small text-muted">Each Databricks connection can only be used by one workspace agent.</p>
+        <p class="small fw-semibold mb-1">Link connections</p>
+        <p class="small text-muted mb-2" *ngIf="wizardManifest.auth_note">{{ wizardManifest.auth_note }}</p>
+        <p class="small text-muted mb-2">Each Databricks metrics connection can only be linked to one agent.</p>
         <div class="row g-2" *ngFor="let role of wizardRoles()">
           <div class="col-md-6">
             <label class="form-label small mb-0">
@@ -183,24 +200,29 @@
               <span *ngIf="isRoleRequired(role)" class="text-danger">*</span>
               <span *ngIf="!isRoleRequired(role)" class="text-muted">(optional)</span>
             </label>
+            <p class="small text-muted mb-1" *ngIf="roleHelp(role)">{{ roleHelp(role) }}</p>
             <select class="form-select form-select-sm" [(ngModel)]="wizardBindings[role]">
-              <option value="">{{ isRoleRequired(role) ? 'Select…' : 'None' }}</option>
+              <option value="">{{ isRoleRequired(role) ? 'Select a connection…' : 'None' }}</option>
               <option *ngFor="let c of connectionsForTypes(allowedTypesForRole(role))" [value]="c.id">
-                {{ c.name }} ({{ c.connection_type }})
+                {{ c.name }} ({{ connectionTypeLabel(c.connection_type) }})
               </option>
             </select>
             <p class="small text-danger mb-0" *ngIf="isRoleRequired(role) && connectionsForTypes(allowedTypesForRole(role)).length === 0">
-              Create a {{ allowedTypesForRole(role).join(' or ') }} connection first.
+              Add a {{ allowedTypesLabel(role) }} connection first.
             </p>
           </div>
         </div>
       </div>
 
       <details class="mt-3" *ngIf="wizardEditableFields.length">
-        <summary class="small fw-semibold">Optional agent settings</summary>
-        <div class="row g-2 mt-2">
+        <summary class="small fw-semibold">Advanced settings (optional)</summary>
+        <p class="small text-muted mt-2 mb-2">
+          Recommendation behavior for this install only. Language model and knowledge search settings come from the connections linked above.
+        </p>
+        <div class="row g-2 mt-1">
           <div class="col-md-4" *ngFor="let f of wizardEditableFields">
             <label class="form-label small mb-0">{{ f.label }}</label>
+            <p class="small text-muted mb-1" *ngIf="f.help">{{ f.help }}</p>
             <select
               *ngIf="f.type === 'select'"
               class="form-select form-select-sm"

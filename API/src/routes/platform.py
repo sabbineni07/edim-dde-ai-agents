@@ -14,7 +14,7 @@ class UiHintsResponse(BaseModel):
     use_local_data: bool
     sample_data_start_date: str
     sample_data_end_date: str
-    default_agent_id: str = "job_run_cluster_sizing"
+    default_agent_id: str = "dbx_cluster_tuning_agent"
 
 
 @router.get("/connection-types")

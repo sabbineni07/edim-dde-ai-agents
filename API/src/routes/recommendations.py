@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
-from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
+from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.deps import get_agent, get_cost_logger
 from shared.config.loader import get_agent_settings
 from shared.guardrails import NoJobMetricsError, validate_intent, validate_recommendation_request
@@ -33,8 +33,8 @@ class GenerateRecommendationRequest(BaseModel):
     """Request model for per-job-run cluster recommendations."""
 
     agent_id: str = Field(
-        default="job_run_cluster_sizing",
-        description="Which agent to run (default: job_run_cluster_sizing).",
+        default="dbx_cluster_tuning_agent",
+        description="Which agent to run (default: dbx_cluster_tuning_agent).",
     )
     workspace_agent_id: Optional[str] = Field(
         default=None,

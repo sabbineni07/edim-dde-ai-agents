@@ -45,7 +45,7 @@ export class WorkspaceDetailComponent implements OnInit {
   connConfig: Record<string, string> = {};
 
   showAgentWizard = false;
-  wizardAgentId = 'job_run_cluster_sizing';
+  wizardAgentId = 'dbx_cluster_tuning_agent';
   wizardName = '';
   wizardBindings: Record<string, string> = {};
   wizardManifest: AgentConnectionManifest | null = null;
@@ -229,7 +229,7 @@ export class WorkspaceDetailComponent implements OnInit {
 
   startAddAgent(): void {
     this.showAgentWizard = true;
-    this.wizardAgentId = 'job_run_cluster_sizing';
+    this.wizardAgentId = 'dbx_cluster_tuning_agent';
     this.wizardName = '';
     this.wizardBindings = {};
     this.wizardSettings = {};
@@ -284,13 +284,53 @@ export class WorkspaceDetailComponent implements OnInit {
     return this.wizardManifest?.roles[role] || [];
   }
 
+  connectionTypeLabel(type: string): string {
+    return this.connectionTypeMeta(type)?.label || type;
+  }
+
+  connectionSummary(c: WorkspaceConnection): string {
+    const cfg = c.config || {};
+    const type = c.connection_type;
+    if (type === 'databricks') {
+      const host = cfg['databricks_server_hostname'];
+      const table = cfg['databricks_job_cluster_metrics_table'];
+      return [host, table].filter(Boolean).join(' · ') || '—';
+    }
+    if (type === 'local_dataset') {
+      return String(cfg['local_data_path'] || '—');
+    }
+    if (type === 'ai_foundry') {
+      return String(cfg['azure_openai_endpoint'] || '—');
+    }
+    if (type === 'ai_search') {
+      const ep = cfg['azure_search_endpoint'];
+      const idx = cfg['azure_search_index_name'];
+      return [ep, idx].filter(Boolean).join(' / ') || '—';
+    }
+    if (type === 'faiss') {
+      return String(cfg['faiss_index_path'] || '—');
+    }
+    return Object.entries(cfg)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('; ') || '—';
+  }
+
+  agentCatalogName(agentId: string): string {
+    return this.agentsCatalog.find((a) => a.agent_id === agentId)?.name || agentId;
+  }
+
   roleLabel(role: string): string {
-    const labels: Record<string, string> = {
-      metrics: 'Metrics source',
-      llm: 'LLM (AI Foundry)',
-      rag: 'RAG / vector search',
-    };
-    return labels[role] || role;
+    return this.wizardManifest?.role_ui?.[role]?.label || role;
+  }
+
+  roleHelp(role: string): string {
+    return this.wizardManifest?.role_ui?.[role]?.help || '';
+  }
+
+  allowedTypesLabel(role: string): string {
+    return this.allowedTypesForRole(role)
+      .map((t) => this.connectionTypeLabel(t))
+      .join(' or ');
   }
 
   buildWizardSettings(): Record<string, unknown> {
@@ -307,7 +347,7 @@ export class WorkspaceDetailComponent implements OnInit {
 
   saveWorkspaceAgent(): void {
     if (!this.wizardName.trim()) {
-      this.error = 'Install name is required.';
+      this.error = 'Agent name is required.';
       return;
     }
     if (!this.wizardManifest) {
@@ -363,10 +403,15 @@ export class WorkspaceDetailComponent implements OnInit {
   }
 
   bindingSummary(wa: WorkspaceAgent): string {
+    const roleLabels: Record<string, string> = {
+      metrics: 'Job metrics',
+      llm: 'Language model',
+      rag: 'Knowledge search',
+    };
     const parts: string[] = [];
     for (const [role, cid] of Object.entries(wa.bindings || {})) {
       const conn = this.connections.find((c) => c.id === cid);
-      parts.push(`${role}: ${conn?.name || cid}`);
+      parts.push(`${roleLabels[role] || role}: ${conn?.name || cid}`);
     }
     return parts.length ? parts.join(' · ') : '—';
   }

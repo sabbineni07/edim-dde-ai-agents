@@ -1,5 +1,5 @@
 # Per-agent overrides (win over config/platform.yaml). Secrets stay in env.
-agent_id: job_run_cluster_sizing
+agent_id: dbx_cluster_tuning_agent
 
 llm:
   deployment: ${env:AZURE_OPENAI_DEPLOYMENT_NAME}

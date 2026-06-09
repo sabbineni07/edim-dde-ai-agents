@@ -26,5 +26,4 @@ async def test_list_agents():
     data = response.json()
     assert "agents" in data
     ids = [a["agent_id"] for a in data["agents"]]
-    assert "job_run_cluster_sizing" in ids
-    assert "cluster_config" not in ids
+    assert ids == ["dbx_cluster_tuning_agent"]

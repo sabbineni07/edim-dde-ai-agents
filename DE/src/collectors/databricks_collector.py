@@ -15,12 +15,29 @@ class DatabricksCollector:
     """Collects job metrics from a pre-aggregated centralized Delta table only."""
 
     def __init__(self):
-        self.connection_params = {
+        self._metrics_table = (settings.databricks_job_cluster_metrics_table or "").strip() or None
+
+    def _connection_params(self) -> Dict[str, Any]:
+        """Build SQL connector params; token from env override or Azure identity at runtime."""
+        token = (settings.databricks_token or "").strip() or None
+        if not token:
+            try:
+                from shared.auth.azure_tokens import DATABRICKS_AAD_SCOPE, get_azure_access_token
+
+                token = get_azure_access_token(DATABRICKS_AAD_SCOPE)
+                settings.databricks_token = token
+                logger.debug("databricks_token_from_azure_identity", cached=True)
+            except Exception as e:
+                logger.warning(
+                    "databricks_token_unavailable",
+                    error=str(e),
+                    hint="Run az login or assign Managed Identity with Databricks access.",
+                )
+        return {
             "server_hostname": settings.databricks_server_hostname,
             "http_path": settings.databricks_http_path,
-            "access_token": settings.databricks_token,
+            "access_token": token,
         }
-        self._metrics_table = (settings.databricks_job_cluster_metrics_table or "").strip() or None
 
     def collect_job_cluster_metrics(
         self,
@@ -115,7 +132,7 @@ class DatabricksCollector:
         """
 
         try:
-            with sql.connect(**self.connection_params) as conn:
+            with sql.connect(**self._connection_params()) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
@@ -159,7 +176,7 @@ class DatabricksCollector:
         params: List[Any] = []
 
         try:
-            with sql.connect(**self.connection_params) as conn:
+            with sql.connect(**self._connection_params()) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
@@ -206,7 +223,7 @@ class DatabricksCollector:
         params: List[Any] = [workspace_id, start_date, end_date]
 
         try:
-            with sql.connect(**self.connection_params) as conn:
+            with sql.connect(**self._connection_params()) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
@@ -269,7 +286,7 @@ class DatabricksCollector:
         """
         params: List[Any] = [workspace_id, job_id, start_date, end_date]
         try:
-            with sql.connect(**self.connection_params) as conn:
+            with sql.connect(**self._connection_params()) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
@@ -336,7 +353,7 @@ class DatabricksCollector:
         """
         params: List[Any] = [workspace_id, job_id, start_date, end_date]
         try:
-            with sql.connect(**self.connection_params) as conn:
+            with sql.connect(**self._connection_params()) as conn:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     row = cursor.fetchone()

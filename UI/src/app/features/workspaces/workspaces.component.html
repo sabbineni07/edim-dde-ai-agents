@@ -36,9 +36,11 @@
         <td>{{ w.workspace_name || w.workspace_id }}</td>
         <td><code class="small">{{ w.workspace_id }}</code></td>
         <td>{{ w.job_count }}</td>
-        <td class="text-nowrap">
-          <button class="btn btn-outline-secondary btn-sm me-1" (click)="openWorkspaceSetup(w)">Setup</button>
-          <button class="btn btn-primary btn-sm" (click)="openJobs(w)">Jobs</button>
+        <td class="text-nowrap text-end">
+          <button class="btn btn-primary btn-sm me-1" (click)="openJobs(w)">Jobs</button>
+          <button class="btn btn-outline-secondary btn-sm" (click)="openWorkspaceSetup(w)" title="Workspace settings">
+            <i class="bi bi-gear"></i><span class="ms-1">Settings</span>
+          </button>
         </td>
       </tr>
     </tbody>
