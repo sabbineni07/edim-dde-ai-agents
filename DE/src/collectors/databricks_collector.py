@@ -41,8 +41,8 @@ class DatabricksCollector:
 
     def collect_job_cluster_metrics(
         self,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
@@ -66,17 +66,23 @@ class DatabricksCollector:
 
     def _collect_from_delta_table(
         self,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
-        """Fetch records from centralized Delta table by job_id and date range."""
+        """Fetch records from centralized Delta table by job_id and optional date range."""
         table = self._metrics_table
-        # Parameterized: job_date >= start_date AND job_date <= end_date [AND job_id IN (...)] [AND workspace_id = ?]
-        conditions = ["job_date >= ?", "job_date <= ?"]
-        params: List[Any] = [start_date, end_date]
+        run_only = bool(job_run_id and str(job_run_id).strip()) and not (start_date and end_date)
+        conditions: List[str] = []
+        params: List[Any] = []
+        if not run_only:
+            if not start_date or not end_date:
+                logger.warning("databricks_missing_date_range")
+                return []
+            conditions.extend(["job_date >= ?", "job_date <= ?"])
+            params.extend([start_date, end_date])
         if job_ids:
             placeholders = ", ".join(["?" for _ in job_ids])
             conditions.append(f"job_id IN ({placeholders})")
@@ -87,6 +93,9 @@ class DatabricksCollector:
         if job_run_id:
             conditions.append("CAST(COALESCE(cluster_id, job_run_id) AS STRING) = ?")
             params.append(str(job_run_id))
+        if not conditions:
+            logger.warning("databricks_collect_metrics_no_filters")
+            return []
         where = " AND ".join(conditions)
         query = f"""
         SELECT

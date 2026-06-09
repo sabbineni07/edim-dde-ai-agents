@@ -10,7 +10,7 @@ router = APIRouter()
 
 
 class UiHintsResponse(BaseModel):
-    guardrail_max_date_range_days: int
+    guardrail_max_date_range_days: int  # Max browse window on Jobs list (not per-run recommend)
     use_local_data: bool
     sample_data_start_date: str
     sample_data_end_date: str

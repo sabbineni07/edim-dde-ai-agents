@@ -37,8 +37,8 @@ class LocalDataCollector:
 
     def collect_job_cluster_metrics(
         self,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
@@ -46,8 +46,8 @@ class LocalDataCollector:
         """Collect job cluster metrics from CSV file.
 
         Args:
-            start_date: Start date in YYYY-MM-DD format
-            end_date: End date in YYYY-MM-DD format
+            start_date: Start date in YYYY-MM-DD format (optional when job_run_id is set)
+            end_date: End date in YYYY-MM-DD format (optional when job_run_id is set)
             job_ids: Optional list of job IDs to filter
             workspace_id: Optional workspace ID to filter
             job_run_id: Optional run ID filter (per-run recommendations)
@@ -55,11 +55,14 @@ class LocalDataCollector:
         Returns:
             List of JobClusterMetrics objects
         """
+        run_only = bool(job_run_id and str(job_run_id).strip()) and not (start_date and end_date)
         logger.info(
             "collecting_job_cluster_metrics_from_csv",
             start_date=start_date,
             end_date=end_date,
             job_count=len(job_ids) if job_ids else None,
+            job_run_id=job_run_id,
+            run_only_lookup=run_only,
             csv_path=str(self.csv_path),
         )
 
@@ -76,13 +79,21 @@ class LocalDataCollector:
 
             # Convert date column to datetime for filtering
             df["date"] = pd.to_datetime(df["date"])
-            start_dt = pd.to_datetime(start_date)
-            end_dt = pd.to_datetime(end_date)
-
-            # Filter by date range (end_date inclusive — matches list_workspaces / list_jobs)
-            df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
+            if run_only:
+                df_filtered = df
+            else:
+                if not start_date or not end_date:
+                    logger.warning("local_csv_missing_date_range")
+                    return []
+                start_dt = pd.to_datetime(start_date)
+                end_dt = pd.to_datetime(end_date)
+                df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
             logger.info(
-                "local_csv_after_date_filter", rows=len(df_filtered), start=start_date, end=end_date
+                "local_csv_after_date_filter",
+                rows=len(df_filtered),
+                start=start_date,
+                end=end_date,
+                run_only_lookup=run_only,
             )
 
             # Filter by job_ids if provided

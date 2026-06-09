@@ -15,17 +15,17 @@ logger = get_logger(__name__)
 @tool
 def get_job_cluster_metrics(
     job_id: str,
-    start_date: str,
-    end_date: str,
     job_run_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
 ) -> Dict:
     """Get job cluster metrics for one job run (not job-wide aggregate).
 
     Args:
         job_id: The Databricks job ID
-        start_date: Start date in YYYY-MM-DD format
-        end_date: End date in YYYY-MM-DD format
         job_run_id: Required for recommendations — specific run ID
+        start_date: Optional YYYY-MM-DD browse window (omit for run-only lookup)
+        end_date: Optional YYYY-MM-DD browse window (omit for run-only lookup)
 
     Returns:
         Dictionary containing metrics for the single run (internal + LLM ingest fields)
@@ -74,7 +74,11 @@ def get_job_cluster_metrics(
 
 
 @tool
-def get_cost_analysis(job_id: str, start_date: str, end_date: str) -> Dict:
+def get_cost_analysis(
+    job_id: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> Dict:
     """Get cost analysis for a job (observability only; not used for LLM sizing).
 
     Args:
@@ -86,6 +90,8 @@ def get_cost_analysis(job_id: str, start_date: str, end_date: str) -> Dict:
         Dictionary containing cost analysis for the job in the date window
     """
     try:
+        if not start_date or not end_date:
+            return {}
         collector = get_data_collector()
         cost_data = collector.collect_cost_data(
             start_date=start_date, end_date=end_date, job_ids=[job_id]

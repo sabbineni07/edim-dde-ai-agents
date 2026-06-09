@@ -11,7 +11,7 @@ rag:
 
 sizing:
   recommendation_auto_termination_minutes: 0
-  cost_retry_enabled: false
+  cost_retry_enabled: true
   default_confidence_score: 0.85
   default_monthly_budget: 500.0
 

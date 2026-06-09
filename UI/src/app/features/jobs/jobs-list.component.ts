@@ -3,7 +3,11 @@ import { CommonModule } from '@angular/common';
 import { Router, ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { ApiService, JobSummary, UiHints, Workspace } from '../../services/api.service';
-import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
+import {
+  daysBetween,
+  last30DaysDateStrings,
+  sampleDataDateStrings,
+} from '../../core/date-range.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 
 @Component({
@@ -22,6 +26,7 @@ export class JobsListComponent implements OnInit {
   jobs: JobSummary[] = [];
   loading = true;
   error = '';
+  dateRangeWarning = '';
   filterText = '';
   uiHints: UiHints | null = null;
 
@@ -126,7 +131,18 @@ export class JobsListComponent implements OnInit {
 
     this.startDate = s;
     this.endDate = e;
+    this.updateDateRangeWarning();
     this.load();
+  }
+
+  private updateDateRangeWarning(): void {
+    const max = this.uiHints?.guardrail_max_date_range_days ?? 30;
+    const span = daysBetween(this.startDate, this.endDate);
+    if (span > max) {
+      this.dateRangeWarning = `Date range is ${span} days; maximum allowed is ${max} days. Narrow the range to load jobs.`;
+    } else {
+      this.dateRangeWarning = '';
+    }
   }
 
   private resolveDefaultWorkspaceId(): string {
@@ -161,6 +177,8 @@ export class JobsListComponent implements OnInit {
 
   applyDateRangeToUrl(): void {
     if (!this.workspaceId) return;
+    this.updateDateRangeWarning();
+    if (this.dateRangeWarning) return;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {

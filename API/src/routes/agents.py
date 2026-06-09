@@ -114,8 +114,6 @@ async def preview_effective_settings(agent_id: str, body: EffectiveSettingsPrevi
         "vector_retrieval_backend",
         "recommendation_auto_termination_minutes",
         "recommendation_cost_retry_enabled",
-        "default_confidence_score",
-        "guardrail_max_date_range_days",
         "use_local_data",
     ]
     effective = {k: getattr(settings, k) for k in safe_keys if hasattr(settings, k)}

@@ -11,11 +11,7 @@ import {
   RecommendationHistoryEntry,
   WorkspaceAgent,
 } from '../../services/api.service';
-import {
-  daysBetween,
-  last30DaysDateStrings,
-  sampleDataDateStrings,
-} from '../../core/date-range.util';
+import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
 import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
 import { UiHints } from '../../services/api.service';
@@ -56,7 +52,6 @@ export class JobDetailComponent implements OnInit {
   lifecycleFeedback: Record<string, { type: 'success' | 'error'; message: string }> = {};
 
   uiHints: UiHints | null = null;
-  dateRangeWarning = '';
 
   constructor(
     private api: ApiService,
@@ -102,20 +97,9 @@ export class JobDetailComponent implements OnInit {
       return;
     }
 
-    this.updateDateRangeWarning();
     this.loadMetrics();
     this.loadRuns();
     this.loadRecommendations();
-  }
-
-  updateDateRangeWarning(): void {
-    const max = this.uiHints?.guardrail_max_date_range_days ?? 30;
-    const span = daysBetween(this.startDate, this.endDate);
-    if (span > max) {
-      this.dateRangeWarning = `Date range is ${span} days; API allows at most ${max} days per recommendation request.`;
-    } else {
-      this.dateRangeWarning = '';
-    }
   }
 
   loadLifecycleMeta(): void {
@@ -311,8 +295,6 @@ export class JobDetailComponent implements OnInit {
       agent_id: this.resolveAgentId(),
       job_id: j,
       job_run_id: this.selectedRunId,
-      start_date: this.startDate || this.metricsData?.start_date || '',
-      end_date: this.endDate || this.metricsData?.end_date || '',
       include_explanation: this.includeExplanation,
     };
     if (this.selectedWorkspaceAgentId) {

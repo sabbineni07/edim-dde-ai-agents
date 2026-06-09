@@ -113,6 +113,22 @@ async def test_generate_recommendation_with_local_data():
 
 
 @pytest.mark.asyncio
+async def test_generate_recommendation_run_only_lookup():
+    """Metrics lookup by job_run_id without browse date window."""
+    os.environ["USE_LOCAL_DATA"] = "true"
+
+    agent = _create_agent_with_mock_llm()
+    result = await agent.generate_recommendation(
+        job_id="job-001",
+        job_run_id="run-001-001",
+    )
+
+    assert result is not None
+    assert result.get("job_run_id") == "run-001-001"
+    assert result["job_run_ingest"]["workflow_task_count"] == 150
+
+
+@pytest.mark.asyncio
 async def test_agent_with_rag_disabled():
     """Test agent works when RAG is disabled (Azure AI Search not available)."""
     os.environ["USE_LOCAL_DATA"] = "true"

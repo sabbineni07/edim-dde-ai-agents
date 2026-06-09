@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field
 from shared.database.connection import get_database_session
 from shared.database.models import CostUsageLog, RecommendationHistory, RequestLog
 from shared.factories.data_collector_factory import get_data_collector
+from shared.guardrails.date_range import validate_browse_date_range
+from shared.guardrails.exceptions import GuardrailValidationError
 from shared.recommendation_lifecycle import (
     allowed_next_statuses,
     lifecycle_display_label,
@@ -33,9 +35,15 @@ def _default_date_range(start_date: Optional[date], end_date: Optional[date]) ->
             status_code=400,
             detail="start_date must be on or before end_date",
         )
+    start_s = start_date.strftime("%Y-%m-%d")
+    end_s = end_date.strftime("%Y-%m-%d")
+    try:
+        validate_browse_date_range(start_s, end_s)
+    except GuardrailValidationError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     return {
-        "start_date": start_date.strftime("%Y-%m-%d"),
-        "end_date": end_date.strftime("%Y-%m-%d"),
+        "start_date": start_s,
+        "end_date": end_s,
     }
 
 

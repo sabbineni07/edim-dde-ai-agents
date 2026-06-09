@@ -59,12 +59,28 @@ async def test_generate_unknown_run_returns_404(api_client):
             json={
                 "job_id": "job-001",
                 "job_run_id": "nonexistent-run",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
             },
         )
     assert response.status_code == 404
     assert response.json().get("error_code") == "NO_JOB_METRICS"
+
+
+@pytest.mark.asyncio
+async def test_generate_success_per_run_without_dates(api_client):
+    """Run-centric recommend: metrics resolved by job_run_id only."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/recommendations/generate",
+            json={
+                "job_id": "job-001",
+                "job_run_id": "run-001-001",
+                "include_explanation": False,
+            },
+        )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["job_run_id"] == "run-001-001"
+    assert data["job_run_ingest"]["workflow_task_count"] == 150
 
 
 @pytest.mark.asyncio
@@ -75,8 +91,8 @@ async def test_generate_success_per_run(api_client):
             json={
                 "job_id": "job-001",
                 "job_run_id": "run-001-001",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-03",
                 "include_explanation": False,
             },
         )
@@ -144,8 +160,6 @@ async def test_generate_with_explanation(api_client):
             json={
                 "job_id": "job-001",
                 "job_run_id": "run-001-002",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
                 "include_explanation": True,
             },
         )

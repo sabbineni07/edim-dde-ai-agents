@@ -60,6 +60,7 @@
 </div>
 
 <div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+<div class="alert alert-warning py-2 small" *ngIf="dateRangeWarning">{{ dateRangeWarning }}</div>
 
 <div class="card" *ngIf="(loading || workspacesLoading) && workspaceId">
   <div class="card-body text-center py-5">

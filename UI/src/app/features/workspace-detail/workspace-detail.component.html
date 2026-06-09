@@ -91,17 +91,30 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label small">Connection name</label>
-          <input type="text" class="form-control form-control-sm" [(ngModel)]="connName" placeholder="Enter name" />
+          <label class="form-label small" for="connName">
+            Connection name <span class="text-danger">*</span>
+          </label>
+          <input
+            id="connName"
+            type="text"
+            class="form-control form-control-sm"
+            [(ngModel)]="connName"
+            placeholder="Enter name"
+            required />
           <p class="small text-muted mt-1 mb-0">A label you will recognize when installing agents.</p>
         </div>
         <div class="col-md-4">
-          <label class="form-label small">Connection type</label>
+          <label class="form-label small" for="connType">
+            Connection type <span class="text-danger">*</span>
+          </label>
           <select
+            id="connType"
             class="form-select form-select-sm"
             [(ngModel)]="connType"
             (ngModelChange)="onConnectionTypeChange()"
-            [disabled]="!!editingConnectionId">
+            [disabled]="!!editingConnectionId"
+            required>
+            <option value="" disabled *ngIf="!editingConnectionId">Select connection type…</option>
             <option *ngFor="let t of connectionTypes" [value]="t.connection_type">{{ t.label }}</option>
           </select>
           <p class="small text-muted mt-1 mb-0">{{ connectionTypeMeta(connType)?.description }}</p>
@@ -122,7 +135,13 @@
         <strong>Authentication</strong> — {{ connectionTypeMeta(connType)!.auth_note }}
       </div>
       <div class="mt-3">
-        <button type="button" class="btn btn-primary btn-sm me-2" (click)="saveConnection()" [disabled]="saving">Save</button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm me-2"
+          (click)="saveConnection()"
+          [disabled]="saving || !canSaveConnection()">
+          Save
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelConnectionForm()">Cancel</button>
       </div>
     </div>
@@ -147,7 +166,7 @@
         Add at least one connection on the <button type="button" class="btn btn-link btn-sm p-0 align-baseline" (click)="setTab('connections')">Connections</button> tab first.
       </div>
       <div *ngIf="!loadingAgents && connections.length > 0 && workspaceAgents.length === 0" class="p-3 text-muted small">
-        No agents installed yet. Add an agent and link it to your metrics connection.
+        No agents installed yet. Add an agent and link job metrics and language model connections.
       </div>
       <table class="table table-sm mb-0" *ngIf="!loadingAgents && workspaceAgents.length > 0">
         <thead>
@@ -177,13 +196,29 @@
     <div class="card-body">
       <div class="row g-3">
         <div class="col-md-4">
-          <label class="form-label small">Agent name</label>
-          <input type="text" class="form-control form-control-sm" [(ngModel)]="wizardName" placeholder="Enter name" />
+          <label class="form-label small" for="wizardAgentName">
+            Agent name <span class="text-danger">*</span>
+          </label>
+          <input
+            id="wizardAgentName"
+            type="text"
+            class="form-control form-control-sm"
+            [(ngModel)]="wizardName"
+            placeholder="Enter name"
+            required />
           <p class="small text-muted mt-1 mb-0">Shown when selecting which agent to run on job details.</p>
         </div>
         <div class="col-md-4">
-          <label class="form-label small">Agent type</label>
-          <select class="form-select form-select-sm" [(ngModel)]="wizardAgentId" (ngModelChange)="onWizardAgentChange()">
+          <label class="form-label small" for="wizardAgentType">
+            Agent type <span class="text-danger">*</span>
+          </label>
+          <select
+            id="wizardAgentType"
+            class="form-select form-select-sm"
+            [(ngModel)]="wizardAgentId"
+            (ngModelChange)="onWizardAgentChange()"
+            required>
+            <option value="" disabled>Select agent type…</option>
             <option *ngFor="let a of agentsCatalog" [value]="a.agent_id">{{ a.name }}</option>
           </select>
         </div>
@@ -230,11 +265,14 @@
               <option value="">Default</option>
               <option *ngFor="let o of f.options" [value]="o">{{ o }}</option>
             </select>
-            <input
-              *ngIf="f.type === 'boolean'"
-              type="checkbox"
-              class="form-check-input"
-              [(ngModel)]="wizardSettings[f.key]" />
+            <div *ngIf="f.type === 'boolean'" class="form-check form-switch mt-1">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                [id]="'wizard-setting-' + f.key"
+                [(ngModel)]="wizardSettings[f.key]" />
+            </div>
             <input
               *ngIf="f.type === 'number'"
               type="number"
@@ -254,7 +292,13 @@
       </details>
 
       <div class="mt-3">
-        <button type="button" class="btn btn-primary btn-sm me-2" (click)="saveWorkspaceAgent()" [disabled]="saving">Install</button>
+        <button
+          type="button"
+          class="btn btn-primary btn-sm me-2"
+          (click)="saveWorkspaceAgent()"
+          [disabled]="saving || !canInstallAgent()">
+          Install
+        </button>
         <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelAgentWizard()">Cancel</button>
       </div>
     </div>

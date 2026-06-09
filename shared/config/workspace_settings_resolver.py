@@ -76,7 +76,7 @@ def resolve_workspace_agent_settings(
 
     if agent_settings:
         allowed = set(PROFILE_ALLOWED_FIELDS)
-        flat_agent = flatten_overrides(agent_settings)
+        flat_agent = {k: v for k, v in flatten_overrides(agent_settings).items() if k in allowed}
         flat.update(validate_profile_overrides(flat_agent, allowed_fields=allowed))
 
     # Explicit rag disable when optional role omitted

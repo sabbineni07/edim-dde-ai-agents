@@ -40,12 +40,12 @@ export class WorkspaceDetailComponent implements OnInit {
 
   showConnectionForm = false;
   editingConnectionId: string | null = null;
-  connType = 'local_dataset';
+  connType = '';
   connName = '';
   connConfig: Record<string, string> = {};
 
   showAgentWizard = false;
-  wizardAgentId = 'dbx_cluster_tuning_agent';
+  wizardAgentId = '';
   wizardName = '';
   wizardBindings: Record<string, string> = {};
   wizardManifest: AgentConnectionManifest | null = null;
@@ -69,14 +69,13 @@ export class WorkspaceDetailComponent implements OnInit {
     this.api.getConnectionTypes().subscribe({
       next: (res) => {
         this.connectionTypes = res.connection_types || [];
-        if (this.connectionTypes.length && !this.connectionTypes.some((t) => t.connection_type === this.connType)) {
-          this.connType = this.connectionTypes[0].connection_type;
-        }
+        this.applyDefaultConnectionType();
       },
     });
     this.api.getAgents().subscribe({
       next: (res) => {
         this.agentsCatalog = res.agents || [];
+        this.applyDefaultWizardAgentId();
       },
     });
     this.refresh();
@@ -137,9 +136,23 @@ export class WorkspaceDetailComponent implements OnInit {
     this.editingConnectionId = null;
     this.connName = '';
     this.connConfig = {};
-    this.connType = this.connectionTypes[0]?.connection_type || 'local_dataset';
+    this.connType = '';
     this.message = '';
     this.error = '';
+    this.applyDefaultConnectionType();
+  }
+
+  private applyDefaultConnectionType(): void {
+    if (!this.showConnectionForm || this.editingConnectionId || this.connType) return;
+    if (this.connectionTypes.length === 1) {
+      this.connType = this.connectionTypes[0].connection_type;
+    }
+  }
+
+  canSaveConnection(): boolean {
+    const nameOk = !!this.connName.trim();
+    const typeOk = this.connectionTypes.some((t) => t.connection_type === this.connType);
+    return nameOk && typeOk;
   }
 
   startEditConnection(c: WorkspaceConnection): void {
@@ -181,6 +194,10 @@ export class WorkspaceDetailComponent implements OnInit {
   saveConnection(): void {
     if (!this.connName.trim()) {
       this.error = 'Connection name is required.';
+      return;
+    }
+    if (!this.connType || !this.connectionTypes.some((t) => t.connection_type === this.connType)) {
+      this.error = 'Connection type is required.';
       return;
     }
     this.saving = true;
@@ -229,14 +246,36 @@ export class WorkspaceDetailComponent implements OnInit {
 
   startAddAgent(): void {
     this.showAgentWizard = true;
-    this.wizardAgentId = 'dbx_cluster_tuning_agent';
+    this.wizardAgentId = '';
     this.wizardName = '';
     this.wizardBindings = {};
     this.wizardSettings = {};
+    this.wizardManifest = null;
+    this.wizardEditableFields = [];
     this.error = '';
     this.message = '';
-    this.loadWizardManifest();
-    this.loadWizardEditableFields();
+    this.applyDefaultWizardAgentId();
+  }
+
+  private applyDefaultWizardAgentId(): void {
+    if (!this.showAgentWizard || this.wizardAgentId) return;
+    if (this.agentsCatalog.length === 1) {
+      this.wizardAgentId = this.agentsCatalog[0].agent_id;
+      this.loadWizardManifest();
+      this.loadWizardEditableFields();
+    }
+  }
+
+  canInstallAgent(): boolean {
+    const nameOk = !!this.wizardName.trim();
+    const typeOk =
+      !!this.wizardAgentId &&
+      this.agentsCatalog.some((a) => a.agent_id === this.wizardAgentId);
+    if (!this.wizardManifest) return nameOk && typeOk;
+    const bindingsOk = this.wizardManifest.required_roles.every(
+      (role) => !!this.wizardBindings[role]
+    );
+    return nameOk && typeOk && bindingsOk;
   }
 
   cancelAgentWizard(): void {
@@ -245,11 +284,16 @@ export class WorkspaceDetailComponent implements OnInit {
 
   onWizardAgentChange(): void {
     this.wizardBindings = {};
+    this.wizardSettings = {};
     this.loadWizardManifest();
     this.loadWizardEditableFields();
   }
 
   loadWizardManifest(): void {
+    if (!this.wizardAgentId) {
+      this.wizardManifest = null;
+      return;
+    }
     this.api.getAgentConnectionManifest(this.wizardAgentId).subscribe({
       next: (m) => {
         this.wizardManifest = m;
@@ -261,11 +305,27 @@ export class WorkspaceDetailComponent implements OnInit {
   }
 
   loadWizardEditableFields(): void {
+    if (!this.wizardAgentId) {
+      this.wizardEditableFields = [];
+      return;
+    }
     this.api.getEditableSettings(this.wizardAgentId).subscribe({
       next: (res) => {
         this.wizardEditableFields = res.fields || [];
+        this.applyWizardSettingDefaults();
       },
     });
+  }
+
+  private applyWizardSettingDefaults(): void {
+    for (const f of this.wizardEditableFields) {
+      if (this.wizardSettings[f.key] !== undefined) continue;
+      if (f.key === 'recommendation_cost_retry_enabled') {
+        this.wizardSettings[f.key] = true;
+      } else if (f.key === 'recommendation_auto_termination_minutes') {
+        this.wizardSettings[f.key] = 0;
+      }
+    }
   }
 
   wizardRoles(): string[] {
@@ -348,6 +408,10 @@ export class WorkspaceDetailComponent implements OnInit {
   saveWorkspaceAgent(): void {
     if (!this.wizardName.trim()) {
       this.error = 'Agent name is required.';
+      return;
+    }
+    if (!this.wizardAgentId || !this.agentsCatalog.some((a) => a.agent_id === this.wizardAgentId)) {
+      this.error = 'Agent type is required.';
       return;
     }
     if (!this.wizardManifest) {

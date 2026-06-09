@@ -21,3 +21,14 @@ async def test_list_job_runs():
         assert isinstance(runs, list)
         assert len(runs) > 0
         assert runs[0]["job_run_id"].startswith("run-001-")
+
+
+@pytest.mark.asyncio
+async def test_list_job_runs_rejects_excessive_date_range():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(
+            "/api/workspaces/1234567890123456/jobs/job-001/runs",
+            params={"start_date": "2026-01-01", "end_date": "2026-06-03"},
+        )
+        assert resp.status_code == 400
+        assert "must not exceed" in resp.json()["detail"]

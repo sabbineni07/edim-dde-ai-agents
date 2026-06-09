@@ -173,8 +173,8 @@ export interface GenerateRecommendationRequest {
   workspace_agent_id?: string | null;
   job_id: string;
   job_run_id: string;
-  start_date: string;
-  end_date: string;
+  start_date?: string;
+  end_date?: string;
   include_explanation?: boolean;
 }
 

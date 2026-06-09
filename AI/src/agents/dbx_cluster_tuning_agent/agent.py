@@ -52,8 +52,8 @@ AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 class RecommendationState(TypedDict, total=False):
     job_id: str
     job_run_id: str
-    start_date: str
-    end_date: str
+    start_date: Optional[str]
+    end_date: Optional[str]
     include_explanation: bool
     job_run_ingest_override: Optional[Dict]
     job_cluster_metrics: Dict
@@ -131,20 +131,21 @@ class DbxClusterTuningAgent:
                     {
                         "job_id": state["job_id"],
                         "job_run_id": state["job_run_id"],
-                        "start_date": state["start_date"],
-                        "end_date": state["end_date"],
+                        "start_date": state.get("start_date") or None,
+                        "end_date": state.get("end_date") or None,
                     }
                 )
             jcm = state["job_cluster_metrics"]
             if not jcm or not isinstance(jcm, dict) or len(jcm) == 0:
                 raise NoJobMetricsError(
                     job_id=state["job_id"],
-                    start_date=state["start_date"],
-                    end_date=state["end_date"],
+                    start_date=state.get("start_date") or "",
+                    end_date=state.get("end_date") or "",
                     job_run_id=state.get("job_run_id"),
                 )
             ingest = jcm.get("job_run_ingest") or to_llm_ingest_dict(jcm)
             state["job_run_ingest"] = ingest
+            run_date = str(ingest.get("date") or ingest.get("job_date") or "").strip()
             policy = default_sizing_policy()
             state["sizing_hints"] = compute_sizing_hints(ingest, policy)
             state["resource_utilization"] = {
@@ -153,11 +154,13 @@ class DbxClusterTuningAgent:
                 "avg_worker_nodes_consumed": ingest.get("avg_worker_nodes_consumed", 0),
                 "workflow_task_count": ingest.get("workflow_task_count", 0),
             }
+            cost_start = state.get("start_date") or run_date
+            cost_end = state.get("end_date") or run_date
             state["cost_analysis"] = get_cost_analysis.invoke(
                 {
                     "job_id": state["job_id"],
-                    "start_date": state["start_date"],
-                    "end_date": state["end_date"],
+                    "start_date": cost_start,
+                    "end_date": cost_end,
                 }
             )
             return state
@@ -364,17 +367,15 @@ class DbxClusterTuningAgent:
         workflow.add_edge("generate_explanation", END)
         return workflow.compile()
 
-    async def run(self, job_id: str, start_date: str, end_date: str, **kwargs) -> Dict:
-        return await self.generate_recommendation(
-            job_id=job_id, start_date=start_date, end_date=end_date, **kwargs
-        )
+    async def run(self, job_id: str, job_run_id: str, **kwargs) -> Dict:
+        return await self.generate_recommendation(job_id=job_id, job_run_id=job_run_id, **kwargs)
 
     async def generate_recommendation(
         self,
         job_id: str,
-        start_date: str,
-        end_date: str,
-        job_run_id: Optional[str] = None,
+        job_run_id: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         include_explanation: bool = False,
         job_run_ingest: Optional[Dict] = None,
         request_log_request_id: Optional[UUID] = None,
@@ -384,7 +385,7 @@ class DbxClusterTuningAgent:
         request_id = uuid4()
         initial_state: RecommendationState = {
             "job_id": job_id,
-            "job_run_id": job_run_id or "",
+            "job_run_id": job_run_id,
             "start_date": start_date,
             "end_date": end_date,
             "include_explanation": include_explanation,

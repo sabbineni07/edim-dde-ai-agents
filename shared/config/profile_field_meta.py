@@ -11,8 +11,6 @@ from typing import Any, Dict, List
 PROFILE_ALLOWED_FIELDS = [
     "recommendation_auto_termination_minutes",
     "recommendation_cost_retry_enabled",
-    "default_confidence_score",
-    "guardrail_max_date_range_days",
 ]
 
 PROFILE_FIELD_UI: Dict[str, Dict[str, Any]] = {
@@ -26,21 +24,6 @@ PROFILE_FIELD_UI: Dict[str, Dict[str, Any]] = {
         "label": "Cost retry when guardrails adjust",
         "type": "boolean",
         "help": "Re-run cost estimate if guardrails change the recommendation.",
-    },
-    "default_confidence_score": {
-        "label": "Default confidence score",
-        "type": "number",
-        "min": 0,
-        "max": 1,
-        "step": 0.05,
-        "help": "Baseline confidence shown on recommendations from this install.",
-    },
-    "guardrail_max_date_range_days": {
-        "label": "Max date range (days)",
-        "type": "number",
-        "min": 1,
-        "max": 365,
-        "help": "Maximum lookback window for job metrics on this workspace agent.",
     },
 }
 

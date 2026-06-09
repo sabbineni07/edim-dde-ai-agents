@@ -11,7 +11,7 @@ ROLE_UI: Dict[str, Dict[str, str]] = {
     },
     "llm": {
         "label": "Language model",
-        "help": "Optional. Azure OpenAI endpoint for recommendations and explanations.",
+        "help": "Required. Azure OpenAI endpoint for recommendations and explanations.",
     },
     "rag": {
         "label": "Knowledge search",
@@ -27,16 +27,14 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
             "llm": ["ai_foundry"],
             "rag": ["ai_search", "faiss"],
         },
-        "required_roles": ["metrics"],
-        "optional_roles": ["llm", "rag"],
+        "required_roles": ["metrics", "llm"],
+        "optional_roles": ["rag"],
     },
 }
 
 WORKSPACE_AGENT_SETTINGS_KEYS = [
     "recommendation_auto_termination_minutes",
     "recommendation_cost_retry_enabled",
-    "default_confidence_score",
-    "guardrail_max_date_range_days",
 ]
 
 

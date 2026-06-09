@@ -56,8 +56,8 @@ class DataCollector(Protocol):
 
     def collect_job_cluster_metrics(
         self,
-        start_date: str,
-        end_date: str,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,

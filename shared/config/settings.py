@@ -67,7 +67,7 @@ class Settings(BaseSettings):
     default_model_name: str = "gpt-4o"
     default_confidence_score: float = 0.85
     recommendation_auto_termination_minutes: int = 0
-    recommendation_cost_retry_enabled: bool = False
+    recommendation_cost_retry_enabled: bool = True
 
     guardrail_max_job_id_length: int = 256
     guardrail_max_date_range_days: int = 30

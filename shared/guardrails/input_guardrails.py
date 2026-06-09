@@ -1,44 +1,32 @@
-"""Input guardrails: validate job_id, date range, and intent before calling LLMs."""
-
-import re
-from datetime import datetime
+"""Input guardrails: validate job_id, optional date range, and intent before calling LLMs."""
 
 from shared.config.settings import settings
+from shared.guardrails.date_range import validate_browse_date_range
 from shared.guardrails.exceptions import GuardrailValidationError, TopicNotSupportedError
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-# Configurable limits (from settings or defaults)
 def _max_job_id_length() -> int:
     return getattr(settings, "guardrail_max_job_id_length", 256)
-
-
-def _max_date_range_days() -> int:
-    return getattr(settings, "guardrail_max_date_range_days", 365)
 
 
 def _supported_intent() -> str:
     return getattr(settings, "guardrail_supported_intent", "cluster_recommendation")
 
 
-# Date format expected for start_date / end_date
-DATE_FMT = "%Y-%m-%d"
-DATE_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-
-
 def validate_recommendation_request(
     job_id: str,
-    start_date: str,
-    end_date: str,
     job_run_id: str | None = None,
+    start_date: str | None = None,
+    end_date: str | None = None,
 ) -> None:
-    """Validate recommendation request inputs. Raises GuardrailValidationError if invalid.
+    """Validate per-run recommendation inputs. Raises GuardrailValidationError if invalid.
 
-    - job_id: non-empty, within max length
-    - job_run_id: required for per-run recommendations, non-empty when provided
-    - start_date, end_date: YYYY-MM-DD format, end >= start, range <= max_date_range_days
+    Recommendations are run-centric: job_id and job_run_id are required.
+    start_date/end_date are optional (metrics are resolved by job_run_id when omitted).
+    When both dates are supplied, they are validated and capped by the browse guardrail.
     """
     if not job_id or not str(job_id).strip():
         raise GuardrailValidationError(
@@ -53,51 +41,32 @@ def validate_recommendation_request(
             error_code="INVALID_INPUT",
         )
 
-    if job_run_id is not None:
-        run_str = str(job_run_id).strip()
-        if not run_str:
-            raise GuardrailValidationError(
-                "job_run_id is required and cannot be empty.",
-                error_code="INVALID_INPUT",
-            )
-        if len(run_str) > max_len:
-            raise GuardrailValidationError(
-                f"job_run_id length exceeds maximum ({max_len} characters).",
-                error_code="INVALID_INPUT",
-            )
-
-    if not DATE_PATTERN.match(str(start_date).strip()):
+    if job_run_id is None:
         raise GuardrailValidationError(
-            f"start_date must be YYYY-MM-DD, got {start_date!r}.",
+            "job_run_id is required and cannot be empty.",
             error_code="INVALID_INPUT",
         )
-    if not DATE_PATTERN.match(str(end_date).strip()):
+    run_str = str(job_run_id).strip()
+    if not run_str:
         raise GuardrailValidationError(
-            f"end_date must be YYYY-MM-DD, got {end_date!r}.",
+            "job_run_id is required and cannot be empty.",
+            error_code="INVALID_INPUT",
+        )
+    if len(run_str) > max_len:
+        raise GuardrailValidationError(
+            f"job_run_id length exceeds maximum ({max_len} characters).",
             error_code="INVALID_INPUT",
         )
 
-    try:
-        start_d = datetime.strptime(str(start_date).strip(), DATE_FMT).date()
-        end_d = datetime.strptime(str(end_date).strip(), DATE_FMT).date()
-    except ValueError as e:
+    has_start = bool(start_date and str(start_date).strip())
+    has_end = bool(end_date and str(end_date).strip())
+    if has_start != has_end:
         raise GuardrailValidationError(
-            f"Invalid date format: {e}.",
-            error_code="INVALID_INPUT",
-        ) from e
-
-    if end_d < start_d:
-        raise GuardrailValidationError(
-            "end_date must be >= start_date.",
+            "start_date and end_date must both be provided or both omitted.",
             error_code="INVALID_INPUT",
         )
-
-    max_days = _max_date_range_days()
-    if (end_d - start_d).days > max_days:
-        raise GuardrailValidationError(
-            f"Date range must not exceed {max_days} days.",
-            error_code="INVALID_INPUT",
-        )
+    if has_start and has_end:
+        validate_browse_date_range(str(start_date).strip(), str(end_date).strip())
 
 
 def validate_intent(intent: str | None) -> None:

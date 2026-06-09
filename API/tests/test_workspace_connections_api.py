@@ -37,13 +37,27 @@ async def test_workspace_connections_and_agents_crud():
         assert resp.status_code == 200, resp.text
         metrics_conn_id = resp.json()["id"]
 
+        resp = await ac.post(
+            f"/api/workspaces/{WS}/connections",
+            json={
+                "connection_type": "ai_foundry",
+                "name": "Dev OpenAI",
+                "config": {
+                    "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                    "azure_openai_deployment_name": "gpt-4o",
+                },
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        llm_conn_id = resp.json()["id"]
+
         # create workspace agent
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
                 "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Sizing default",
-                "bindings": {"metrics": metrics_conn_id},
+                "bindings": {"metrics": metrics_conn_id, "llm": llm_conn_id},
             },
         )
         assert resp.status_code == 200, resp.text
@@ -52,7 +66,9 @@ async def test_workspace_connections_and_agents_crud():
         # manifest endpoint
         resp = await ac.get("/api/agents/dbx_cluster_tuning_agent/connection-manifest")
         assert resp.status_code == 200
-        assert "metrics" in resp.json()["roles"]
+        manifest = resp.json()
+        assert "metrics" in manifest["roles"]
+        assert "llm" in manifest["required_roles"]
 
         # list
         resp = await ac.get(f"/api/workspaces/{WS}/agents")
@@ -63,6 +79,8 @@ async def test_workspace_connections_and_agents_crud():
         resp = await ac.delete(f"/api/workspaces/{WS}/agents/{wa_id}")
         assert resp.status_code == 200
         resp = await ac.delete(f"/api/workspaces/{WS}/connections/{metrics_conn_id}")
+        assert resp.status_code == 200
+        resp = await ac.delete(f"/api/workspaces/{WS}/connections/{llm_conn_id}")
         assert resp.status_code == 200
 
 
@@ -85,11 +103,25 @@ async def test_databricks_connection_exclusive_per_workspace_agent():
         dbx_id = resp.json()["id"]
 
         resp = await ac.post(
+            f"/api/workspaces/{WS}/connections",
+            json={
+                "connection_type": "ai_foundry",
+                "name": "DBX LLM",
+                "config": {
+                    "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                    "azure_openai_deployment_name": "gpt-4o",
+                },
+            },
+        )
+        assert resp.status_code == 200, resp.text
+        llm_id = resp.json()["id"]
+
+        resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
                 "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Agent 1",
-                "bindings": {"metrics": dbx_id},
+                "bindings": {"metrics": dbx_id, "llm": llm_id},
             },
         )
         assert resp.status_code == 200, resp.text
@@ -100,10 +132,11 @@ async def test_databricks_connection_exclusive_per_workspace_agent():
             json={
                 "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Agent 2",
-                "bindings": {"metrics": dbx_id},
+                "bindings": {"metrics": dbx_id, "llm": llm_id},
             },
         )
         assert resp.status_code == 409, resp.text
 
         await ac.delete(f"/api/workspaces/{WS}/agents/{wa1}")
+        await ac.delete(f"/api/workspaces/{WS}/connections/{llm_id}")
         await ac.delete(f"/api/workspaces/{WS}/connections/{dbx_id}")

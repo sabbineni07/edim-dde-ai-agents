@@ -42,8 +42,14 @@ class GenerateRecommendationRequest(BaseModel):
     )
     job_id: str = Field(..., min_length=1, description="Databricks job ID")
     job_run_id: str = Field(..., min_length=1, description="Databricks job run ID")
-    start_date: str = Field(..., description="Start date YYYY-MM-DD")
-    end_date: str = Field(..., description="End date YYYY-MM-DD")
+    start_date: Optional[str] = Field(
+        default=None,
+        description="Optional browse window start (YYYY-MM-DD). Omitted = resolve metrics by job_run_id only.",
+    )
+    end_date: Optional[str] = Field(
+        default=None,
+        description="Optional browse window end (YYYY-MM-DD). Must be provided with start_date when set.",
+    )
     include_explanation: bool = Field(
         default=False,
         description="If true, run explanation LLM chain (slower). Default false for UI on-demand.",
@@ -187,9 +193,9 @@ async def generate_recommendation(
     validate_intent(request.intent)
     validate_recommendation_request(
         job_id=request.job_id,
+        job_run_id=request.job_run_id,
         start_date=request.start_date,
         end_date=request.end_date,
-        job_run_id=request.job_run_id,
     )
 
     request_id = uuid4()
@@ -238,8 +244,8 @@ async def generate_recommendation(
         result = await agent.generate_recommendation(
             job_id=request.job_id,
             job_run_id=request.job_run_id,
-            start_date=request.start_date,
-            end_date=request.end_date,
+            start_date=request.start_date or None,
+            end_date=request.end_date or None,
             include_explanation=request.include_explanation,
             job_run_ingest=request.job_run_ingest,
             request_log_request_id=request_id,
