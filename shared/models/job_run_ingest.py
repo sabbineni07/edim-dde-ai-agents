@@ -29,7 +29,7 @@ class JobRunIngest(BaseModel):
     workspace_id: Optional[str] = None
     workspace_name: Optional[str] = None
     job_id: str
-    job_run_id: str
+    job_run_id: Optional[str] = None
     cluster_id: str
     job_name: Optional[str] = None
     job_type: Optional[str] = None

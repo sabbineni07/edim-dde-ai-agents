@@ -91,7 +91,9 @@
                 (click)="$event.stopPropagation(); selectRun(run.cluster_id)" />
             </td>
             <td>
-              <code class="small job-run-id-text" [title]="run.job_run_id">{{ run.job_run_id }}</code>
+              <code class="small job-run-id-text" [title]="run.job_run_id || ''">
+                {{ run.job_run_id || '—' }}
+              </code>
             </td>
             <td>
               <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>

@@ -59,7 +59,7 @@ class JobClusterMetrics(BaseModel):
     workspace_id: str
     workspace_name: Optional[str] = None
     job_id: str
-    job_run_id: str
+    job_run_id: Optional[str] = None
     cluster_id: str
     job_type: Optional[str] = None
     job_name: Optional[str] = None

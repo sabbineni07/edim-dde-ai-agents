@@ -25,13 +25,12 @@ def _rows_to_dicts(columns: List[str], rows: List[Any]) -> List[Dict[str, Any]]:
     return [{col: _normalize_sql_value(val) for col, val in zip(columns, row)} for row in rows]
 
 
-_METRICS_SELECT = f"""
-SELECT
+_METRICS_SELECT_BODY = """
   CAST(job_run_date AS STRING) AS job_run_date,
   CAST(workspace_id AS STRING) AS workspace_id,
   workspace_name,
   CAST(job_id AS STRING) AS job_id,
-  CAST(job_run_id AS STRING) AS job_run_id,
+  {job_run_id_select},
   CAST(cluster_id AS STRING) AS cluster_id,
   job_type,
   job_name,
@@ -83,6 +82,59 @@ class DatabricksCollector:
         ).strip() or None
         self._server_hostname = server_hostname or settings.databricks_server_hostname
         self._http_path = http_path or settings.databricks_http_path
+        self._table_columns: Optional[set[str]] = None
+
+    def _fetch_table_columns(self) -> set[str]:
+        """Load and cache Delta table column names (lowercase)."""
+        if self._table_columns is not None:
+            return self._table_columns
+        table = self._metrics_table
+        if not table:
+            self._table_columns = set()
+            return self._table_columns
+        try:
+            with sql.connect(**self._connection_params()) as conn:
+                with conn.cursor() as cursor:
+                    cursor.execute(f"DESCRIBE TABLE {table}")
+                    rows = cursor.fetchall()
+                    self._table_columns = {
+                        str(row[0]).strip().lower()
+                        for row in rows
+                        if row and row[0] and not str(row[0]).startswith("#")
+                    }
+                    logger.debug(
+                        "databricks_table_columns_loaded",
+                        table=table,
+                        column_count=len(self._table_columns),
+                        has_job_run_id="job_run_id" in self._table_columns,
+                    )
+        except Exception as e:
+            logger.warning(
+                "databricks_describe_table_failed",
+                error=str(e),
+                table=table,
+                hint="Assuming job_run_id column is absent.",
+            )
+            self._table_columns = set()
+        return self._table_columns
+
+    def _has_job_run_id_column(self) -> bool:
+        return "job_run_id" in self._fetch_table_columns()
+
+    def _job_run_id_select(self, *, aggregate_max: bool = False) -> str:
+        if self._has_job_run_id_column():
+            source = "MAX(job_run_id)" if aggregate_max else "job_run_id"
+            return f"CAST({source} AS STRING) AS job_run_id"
+        if not aggregate_max:
+            logger.info(
+                "databricks_job_run_id_column_missing",
+                table=self._metrics_table,
+                message="Returning NULL job_run_id until Delta table is migrated.",
+            )
+        return "CAST(NULL AS STRING) AS job_run_id"
+
+    def _metrics_select(self) -> str:
+        return "SELECT\n" + _METRICS_SELECT_BODY.format(job_run_id_select=self._job_run_id_select())
 
     def _connection_params(self) -> Dict[str, Any]:
         """Build SQL connector params; token from env override or Azure identity at runtime."""
@@ -167,14 +219,22 @@ class DatabricksCollector:
             conditions.append("CAST(cluster_id AS STRING) = ?")
             params.append(str(cluster_id))
         elif job_run_id:
-            conditions.append("CAST(job_run_id AS STRING) = ?")
-            params.append(str(job_run_id))
+            if self._has_job_run_id_column():
+                conditions.append("CAST(job_run_id AS STRING) = ?")
+                params.append(str(job_run_id))
+            else:
+                logger.warning(
+                    "databricks_job_run_id_filter_unavailable",
+                    job_run_id=job_run_id,
+                    table=table,
+                )
+                return []
         if not conditions:
             logger.warning("databricks_collect_metrics_no_filters")
             return []
         where = " AND ".join(conditions)
         query = f"""
-        {_METRICS_SELECT}
+        {self._metrics_select()}
         FROM {table}
         WHERE {where}
         ORDER BY job_run_date DESC, job_run_start_time_utc DESC
@@ -309,10 +369,11 @@ class DatabricksCollector:
             return []
 
         table = self._metrics_table
+        job_run_id_select = self._job_run_id_select(aggregate_max=True)
         query = f"""
         SELECT
           CAST(cluster_id AS STRING) AS cluster_id,
-          CAST(MAX(job_run_id) AS STRING) AS job_run_id,
+          {job_run_id_select},
           CAST(MAX(job_run_date) AS STRING) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
           COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,
