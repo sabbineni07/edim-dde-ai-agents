@@ -18,8 +18,9 @@ def _sample_metrics() -> JobClusterMetrics:
     return JobClusterMetrics(
         job_run_date="2026-04-30",
         workspace_id="ws-1",
-        cluster_id="run-99",
         job_id="job-1",
+        job_run_id="jr-99",
+        cluster_id="run-99",
         job_run_duration_seconds=1540.0,
         avg_worker_cpu_utilization_pct=4.48,
         avg_worker_memory_utilization_pct=10.0,

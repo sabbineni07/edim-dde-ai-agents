@@ -30,8 +30,9 @@ SELECT
   CAST(job_run_date AS STRING) AS job_run_date,
   CAST(workspace_id AS STRING) AS workspace_id,
   workspace_name,
-  CAST(cluster_id AS STRING) AS cluster_id,
   CAST(job_id AS STRING) AS job_id,
+  CAST(job_run_id AS STRING) AS job_run_id,
+  CAST(cluster_id AS STRING) AS cluster_id,
   job_type,
   job_name,
   CAST(job_run_start_time_utc AS STRING) AS job_run_start_time_utc,
@@ -113,6 +114,7 @@ class DatabricksCollector:
         end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        cluster_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Collect job cluster metrics by job_id and date range from the centralized Delta table."""
@@ -129,7 +131,7 @@ class DatabricksCollector:
             )
             return []
         return self._collect_from_delta_table(
-            start_date, end_date, job_ids, workspace_id, job_run_id
+            start_date, end_date, job_ids, workspace_id, cluster_id, job_run_id
         )
 
     def _collect_from_delta_table(
@@ -138,11 +140,14 @@ class DatabricksCollector:
         end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        cluster_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Fetch records from centralized Delta table by job_id and optional date range."""
         table = self._metrics_table
-        run_only = bool(job_run_id and str(job_run_id).strip()) and not (start_date and end_date)
+        run_only = bool(
+            (cluster_id and str(cluster_id).strip()) or (job_run_id and str(job_run_id).strip())
+        ) and not (start_date and end_date)
         conditions: List[str] = []
         params: List[Any] = []
         if not run_only:
@@ -158,8 +163,11 @@ class DatabricksCollector:
         if workspace_id:
             conditions.append("workspace_id = ?")
             params.append(workspace_id)
-        if job_run_id:
+        if cluster_id:
             conditions.append("CAST(cluster_id AS STRING) = ?")
+            params.append(str(cluster_id))
+        elif job_run_id:
+            conditions.append("CAST(job_run_id AS STRING) = ?")
             params.append(str(job_run_id))
         if not conditions:
             logger.warning("databricks_collect_metrics_no_filters")
@@ -304,6 +312,7 @@ class DatabricksCollector:
         query = f"""
         SELECT
           CAST(cluster_id AS STRING) AS cluster_id,
+          CAST(MAX(job_run_id) AS STRING) AS job_run_id,
           CAST(MAX(job_run_date) AS STRING) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
           COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,

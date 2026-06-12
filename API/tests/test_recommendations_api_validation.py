@@ -38,7 +38,7 @@ def api_client():
 
 
 @pytest.mark.asyncio
-async def test_generate_requires_job_run_id(api_client):
+async def test_generate_requires_cluster_id(api_client):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/recommendations/generate",
@@ -80,6 +80,7 @@ async def test_generate_success_per_run_without_dates(api_client):
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["cluster_id"] == "run-001-001"
+    assert data["job_run_id"] == "jr-001-001"
     assert data["job_cluster_metrics"]["avg_worker_nodes_consumed"] == 4.2
 
 
@@ -100,6 +101,7 @@ async def test_generate_success_per_run(api_client):
     data = response.json()
 
     assert data["cluster_id"] == "run-001-001"
+    assert data["job_run_id"] == "jr-001-001"
     assert data["request_id"]
     assert data["recommendation"]["node_family"] in ("D", "E", "F", "L")
     assert "max_workers" in data["recommendation"]
@@ -128,12 +130,14 @@ async def test_generate_with_prebuilt_ingest(api_client):
     ingest = json.loads(_sample_ingest_path.read_text())
     ingest["job_id"] = "1234567890"
     ingest["job_run_id"] = "34567894"
+    ingest["cluster_id"] = "cluster-34567894"
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/recommendations/generate",
             json={
                 "job_id": ingest["job_id"],
+                "cluster_id": ingest["cluster_id"],
                 "job_run_id": ingest["job_run_id"],
                 "start_date": "2026-04-30",
                 "end_date": "2026-04-30",

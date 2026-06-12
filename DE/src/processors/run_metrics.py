@@ -11,17 +11,19 @@ logger = get_logger(__name__)
 def select_job_run_metrics(
     metrics: List[JobClusterMetrics],
     job_id: str,
-    job_run_id: str,
+    cluster_id: str,
 ) -> Optional[Dict[str, Any]]:
-    """Return one run's metrics dict; match Delta cluster_id to API cluster_id/job_run_id."""
+    """Return one run's metrics dict; match Delta cluster_id for cluster-scoped recommendations."""
     job_id_s = str(job_id)
-    run_id_s = str(job_run_id)
-    matches = [m for m in metrics if str(m.job_id) == job_id_s and str(m.cluster_id) == run_id_s]
+    cluster_id_s = str(cluster_id)
+    matches = [
+        m for m in metrics if str(m.job_id) == job_id_s and str(m.cluster_id) == cluster_id_s
+    ]
     if not matches:
         logger.warning(
             "job_run_not_found",
             job_id=job_id_s,
-            cluster_id=run_id_s,
+            cluster_id=cluster_id_s,
             available_runs=len(metrics),
         )
         return None

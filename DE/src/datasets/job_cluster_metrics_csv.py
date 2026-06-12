@@ -17,6 +17,7 @@ REQUIRED_COLUMNS: Set[str] = {
     "job_run_date",
     "workspace_id",
     "job_id",
+    "job_run_id",
     "cluster_id",
 }
 

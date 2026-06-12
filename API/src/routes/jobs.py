@@ -128,6 +128,7 @@ def list_jobs_for_workspace(
 class JobRunSummary(BaseModel):
     """Per-run metrics summary for the job run picker."""
 
+    job_run_id: str
     cluster_id: str
     job_run_date: Optional[str] = None
     job_run_duration_seconds: Optional[float] = None

@@ -12,7 +12,11 @@ from API.src.routes.jobs import JobRunSummary
 
 
 def test_job_run_summary_coerces_date_field():
-    summary = JobRunSummary(cluster_id="run-001-001", job_run_date=date(2026, 6, 2))
+    summary = JobRunSummary(
+        job_run_id="jr-001-001",
+        cluster_id="run-001-001",
+        job_run_date=date(2026, 6, 2),
+    )
     assert summary.job_run_date == "2026-06-02"
 
 
@@ -28,6 +32,8 @@ async def test_list_job_runs():
         assert isinstance(runs, list)
         assert len(runs) > 0
         assert runs[0]["cluster_id"].startswith("run-001-")
+        assert runs[0]["job_run_id"].startswith("jr-")
+        assert runs[0]["job_run_id"] != runs[0]["cluster_id"]
 
 
 @pytest.mark.asyncio

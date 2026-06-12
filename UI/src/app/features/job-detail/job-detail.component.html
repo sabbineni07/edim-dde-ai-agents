@@ -60,6 +60,7 @@
         <thead>
           <tr>
             <th rowspan="2"></th>
+            <th rowspan="2">Job run ID</th>
             <th rowspan="2">Cluster ID</th>
             <th rowspan="2">Run date</th>
             <th colspan="3" class="text-center border-start">Driver</th>
@@ -89,7 +90,12 @@
                 [checked]="run.cluster_id === selectedClusterId"
                 (click)="$event.stopPropagation(); selectRun(run.cluster_id)" />
             </td>
-            <td><code class="small">{{ run.cluster_id }}</code></td>
+            <td>
+              <code class="small job-run-id-text" [title]="run.job_run_id">{{ run.job_run_id }}</code>
+            </td>
+            <td>
+              <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>
+            </td>
             <td>{{ run.job_run_date ?? '–' }}</td>
             <td class="border-start">{{ run.avg_driver_cpu_utilization_pct != null ? (run.avg_driver_cpu_utilization_pct | number:'1.0-1') : '–' }}</td>
             <td>{{ run.avg_driver_memory_utilization_pct != null ? (run.avg_driver_memory_utilization_pct | number:'1.0-1') : '–' }}</td>

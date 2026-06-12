@@ -20,21 +20,22 @@ def get_job_cluster_metrics(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> Dict:
-    """Get job-run ingest metrics for one job run (for sizing recommendations).
+    """Get job-run ingest metrics for one cluster execution (for sizing recommendations).
 
     Args:
         job_id: The Databricks job ID
-        cluster_id: Cluster/run identifier for this job run
-        job_run_id: Deprecated alias for cluster_id
+        cluster_id: Cluster identifier for the job run's attached cluster
+        job_run_id: Optional workflow job run ID (used only when cluster_id is omitted)
         start_date: Optional YYYY-MM-DD browse window
         end_date: Optional YYYY-MM-DD browse window
 
     Returns:
-        Flat job-run ingest dict for the selected run
+        Flat job-run ingest dict for the selected cluster run
     """
     try:
-        run_id = (cluster_id or job_run_id or "").strip()
-        if not run_id:
+        cluster = (cluster_id or "").strip()
+        workflow_run = (job_run_id or "").strip()
+        if not cluster and not workflow_run:
             logger.warning("get_job_cluster_metrics_missing_cluster_id", job_id=job_id)
             return {}
 
@@ -43,20 +44,23 @@ def get_job_cluster_metrics(
             start_date=start_date,
             end_date=end_date,
             job_ids=[job_id],
-            job_run_id=run_id,
+            cluster_id=cluster or None,
+            job_run_id=None if cluster else workflow_run or None,
         )
 
         if not metrics:
             logger.warning(
                 "get_job_cluster_metrics_empty",
                 job_id=job_id,
-                cluster_id=run_id,
+                cluster_id=cluster or None,
+                job_run_id=workflow_run or None,
                 start_date=start_date,
                 end_date=end_date,
             )
             return {}
 
-        run_dict = select_job_run_metrics(metrics, job_id, run_id)
+        lookup_cluster = cluster or str(metrics[0].cluster_id)
+        run_dict = select_job_run_metrics(metrics, job_id, lookup_cluster)
         if not run_dict:
             return {}
 
@@ -64,7 +68,8 @@ def get_job_cluster_metrics(
         logger.info(
             "get_job_cluster_metrics_result",
             job_id=job_id,
-            cluster_id=run_id,
+            cluster_id=lookup_cluster,
+            job_run_id=out.get("job_run_id"),
             avg_worker_nodes_consumed=out.get("avg_worker_nodes_consumed"),
         )
         return out

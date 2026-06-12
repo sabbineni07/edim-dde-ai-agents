@@ -142,6 +142,8 @@ def test_list_job_runs():
     first = runs[0]
     assert "cluster_id" in first
     assert first["cluster_id"].startswith("run-001-")
+    assert first["job_run_id"].startswith("jr-")
+    assert first["job_run_id"] != first["cluster_id"]
     assert "job_run_date" in first
     assert "avg_worker_cpu_utilization_pct" in first
 

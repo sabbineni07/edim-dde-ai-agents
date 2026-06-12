@@ -60,6 +60,7 @@ class DataCollector(Protocol):
         end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        cluster_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
     ) -> List[Any]:
         """Collect job cluster metrics."""

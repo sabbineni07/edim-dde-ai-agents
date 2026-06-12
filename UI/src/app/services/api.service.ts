@@ -80,6 +80,7 @@ export interface JobSummary {
 }
 
 export interface JobRunSummary {
+  job_run_id: string;
   cluster_id: string;
   job_run_date?: string;
   job_run_duration_seconds?: number;
@@ -229,8 +230,8 @@ export interface GenerateRecommendationRequest {
   agent_id?: string;
   workspace_agent_id?: string | null;
   job_id: string;
+  job_run_id: string;
   cluster_id: string;
-  job_run_id?: string;
   start_date?: string;
   end_date?: string;
   include_explanation?: boolean;

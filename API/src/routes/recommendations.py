@@ -41,15 +41,15 @@ class GenerateRecommendationRequest(BaseModel):
         description="Workspace agent install id (UUID); resolves connection bindings.",
     )
     job_id: str = Field(..., min_length=1, description="Databricks job ID")
-    cluster_id: Optional[str] = Field(
-        default=None,
+    cluster_id: str = Field(
+        ...,
         min_length=1,
-        description="Cluster/run identifier for the job run to recommend on.",
+        description="Cluster identifier for the job run's attached cluster.",
     )
     job_run_id: Optional[str] = Field(
         default=None,
         min_length=1,
-        description="Deprecated alias for cluster_id.",
+        description="Workflow job run identifier (optional; resolved from metrics when omitted).",
     )
     start_date: Optional[str] = Field(
         default=None,
@@ -73,11 +73,7 @@ class GenerateRecommendationRequest(BaseModel):
     )
 
     @model_validator(mode="after")
-    def _resolve_cluster_id(self) -> "GenerateRecommendationRequest":
-        run_id = (self.cluster_id or self.job_run_id or "").strip()
-        if not run_id:
-            raise ValueError("cluster_id is required")
-        object.__setattr__(self, "cluster_id", run_id)
+    def _normalize_metrics_alias(self) -> "GenerateRecommendationRequest":
         metrics = self.job_cluster_metrics or self.job_run_ingest
         if metrics is not None:
             object.__setattr__(self, "job_cluster_metrics", metrics)
@@ -271,6 +267,7 @@ async def generate_recommendation(
         result = await agent.generate_recommendation(
             job_id=request.job_id,
             cluster_id=request.cluster_id,
+            job_run_id=request.job_run_id,
             start_date=request.start_date or None,
             end_date=request.end_date or None,
             include_explanation=request.include_explanation,
@@ -288,7 +285,7 @@ async def generate_recommendation(
         return RecommendationResponse(
             request_id=result.get("request_id"),
             cluster_id=result.get("cluster_id"),
-            job_run_id=result.get("cluster_id"),
+            job_run_id=result.get("job_run_id"),
             current_configuration=result.get("current_configuration"),
             recommendation=result["recommendation"],
             explanation=result.get("explanation") or "",

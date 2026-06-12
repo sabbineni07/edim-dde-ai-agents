@@ -41,26 +41,31 @@ class LocalDataCollector:
         end_date: Optional[str] = None,
         job_ids: Optional[List[str]] = None,
         workspace_id: Optional[str] = None,
+        cluster_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
     ) -> List[JobClusterMetrics]:
         """Collect job cluster metrics from CSV file.
 
         Args:
-            start_date: Start date in YYYY-MM-DD format (optional when job_run_id is set)
-            end_date: End date in YYYY-MM-DD format (optional when job_run_id is set)
+            start_date: Start date in YYYY-MM-DD format (optional when cluster_id is set)
+            end_date: End date in YYYY-MM-DD format (optional when cluster_id is set)
             job_ids: Optional list of job IDs to filter
             workspace_id: Optional workspace ID to filter
-            job_run_id: Optional run ID filter (per-run recommendations)
+            cluster_id: Optional cluster ID filter (per-cluster recommendations)
+            job_run_id: Optional workflow job run ID filter
 
         Returns:
             List of JobClusterMetrics objects
         """
-        run_only = bool(job_run_id and str(job_run_id).strip()) and not (start_date and end_date)
+        run_only = bool(
+            (cluster_id and str(cluster_id).strip()) or (job_run_id and str(job_run_id).strip())
+        ) and not (start_date and end_date)
         logger.info(
             "collecting_job_cluster_metrics_from_csv",
             start_date=start_date,
             end_date=end_date,
             job_count=len(job_ids) if job_ids else None,
+            cluster_id=cluster_id,
             job_run_id=job_run_id,
             run_only_lookup=run_only,
             csv_path=str(self.csv_path),
@@ -108,13 +113,10 @@ class LocalDataCollector:
             if workspace_id:
                 df_filtered = df_filtered[df_filtered["workspace_id"] == str(workspace_id)]
 
-            run_col = (
-                "cluster_id"
-                if "cluster_id" in df_filtered.columns
-                else ("job_run_id" if "job_run_id" in df_filtered.columns else None)
-            )
-            if job_run_id and run_col:
-                df_filtered = df_filtered[df_filtered[run_col].astype(str) == str(job_run_id)]
+            if cluster_id and "cluster_id" in df_filtered.columns:
+                df_filtered = df_filtered[df_filtered["cluster_id"].astype(str) == str(cluster_id)]
+            elif job_run_id and "job_run_id" in df_filtered.columns:
+                df_filtered = df_filtered[df_filtered["job_run_id"].astype(str) == str(job_run_id)]
 
             df_filtered = df_filtered.copy()
             df_filtered[date_col] = df_filtered[date_col].dt.strftime("%Y-%m-%d")
@@ -417,14 +419,15 @@ class LocalDataCollector:
         )
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
-            run_col = "cluster_id" if "cluster_id" in df.columns else "job_run_id"
             date_col = "job_run_date" if "job_run_date" in df.columns else "date"
-            if run_col not in df.columns:
+            if "cluster_id" not in df.columns:
                 return []
 
             df["workspace_id"] = df["workspace_id"].astype(str)
             df["job_id"] = df["job_id"].astype(str)
-            df[run_col] = df[run_col].astype(str)
+            df["cluster_id"] = df["cluster_id"].astype(str)
+            if "job_run_id" in df.columns:
+                df["job_run_id"] = df["job_run_id"].astype(str)
             df[date_col] = pd.to_datetime(df[date_col])
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
@@ -438,12 +441,14 @@ class LocalDataCollector:
                 return []
 
             runs: List[Dict[str, Any]] = []
-            for run_id, group in df_filtered.groupby(run_col, sort=False):
+            for cluster_id, group in df_filtered.groupby("cluster_id", sort=False):
                 first = group.iloc[0]
                 last_date = group[date_col].max()
+                job_run_id_val = first.get("job_run_id")
                 runs.append(
                     {
-                        "cluster_id": str(run_id),
+                        "cluster_id": str(cluster_id),
+                        "job_run_id": str(job_run_id_val) if job_run_id_val is not None else None,
                         "job_run_date": (
                             last_date.strftime("%Y-%m-%d") if pd.notna(last_date) else None
                         ),

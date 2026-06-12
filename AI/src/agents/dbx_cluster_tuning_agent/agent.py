@@ -117,7 +117,7 @@ class DbxClusterTuningAgent:
         model_name = self.settings.azure_openai_deployment_name or self.settings.default_model_name
 
         def collect_data(state: RecommendationState) -> RecommendationState:
-            cluster_id = state.get("cluster_id") or state.get("job_run_id")
+            cluster_id = (state.get("cluster_id") or "").strip()
             logger.info(
                 "collecting_job_data",
                 job_id=state["job_id"],
@@ -143,6 +143,8 @@ class DbxClusterTuningAgent:
                     end_date=state.get("end_date") or "",
                     job_run_id=cluster_id,
                 )
+            if not state.get("job_run_id"):
+                state["job_run_id"] = metrics.get("job_run_id") or ""
             run_date = str(metrics.get("job_run_date") or "").strip()
             policy = default_sizing_policy()
             state["sizing_hints"] = compute_sizing_hints(metrics, policy)
@@ -391,15 +393,17 @@ class DbxClusterTuningAgent:
         job_run_ingest: Optional[Dict] = None,
         request_log_request_id: Optional[UUID] = None,
     ) -> Dict:
-        run_id = (cluster_id or job_run_id or "").strip()
+        cluster = (cluster_id or "").strip()
+        if not cluster:
+            raise ValueError("cluster_id is required")
         metrics_override = job_cluster_metrics or job_run_ingest
-        logger.info("generating_recommendation", job_id=job_id, cluster_id=run_id)
+        logger.info("generating_recommendation", job_id=job_id, cluster_id=cluster)
         token_tracker = TokenUsageTracker()
         request_id = uuid4()
         initial_state: RecommendationState = {
             "job_id": job_id,
-            "cluster_id": run_id,
-            "job_run_id": run_id,
+            "cluster_id": cluster,
+            "job_run_id": (job_run_id or "").strip(),
             "start_date": start_date,
             "end_date": end_date,
             "include_explanation": include_explanation,
@@ -465,7 +469,9 @@ class DbxClusterTuningAgent:
                     token_usage_analysis=token_usage_summary,
                     request_log_request_id=request_log_request_id,
                     workspace_id=metrics.get("workspace_id"),
-                    job_run_id=run_id or metrics.get("cluster_id"),
+                    job_run_id=final_state.get("job_run_id")
+                    or metrics.get("job_run_id")
+                    or cluster,
                     comparison=comparison_payload,
                     reason_codes=reason_codes,
                 )
@@ -474,11 +480,13 @@ class DbxClusterTuningAgent:
                         RecommendationLifecycleService,
                     )
 
-                    run_id = run_id or metrics.get("cluster_id")
-                    if run_id:
+                    lifecycle_run_id = (
+                        final_state.get("job_run_id") or metrics.get("job_run_id") or cluster
+                    )
+                    if lifecycle_run_id:
                         RecommendationLifecycleService().supersede_prior_recommendations(
                             job_id=job_id,
-                            job_run_id=str(run_id),
+                            job_run_id=str(lifecycle_run_id),
                             except_request_id=request_id,
                         )
                 except Exception as e:
@@ -489,11 +497,14 @@ class DbxClusterTuningAgent:
         search_service = self.search_service
         if search_service:
             try:
+                resolved_job_run_id = (
+                    final_state.get("job_run_id") or metrics.get("job_run_id") or ""
+                )
                 recommendation_doc = {
                     "recommendation_id": str(request_id),
                     "job_id": job_id,
-                    "cluster_id": run_id,
-                    "job_run_id": run_id,
+                    "cluster_id": cluster,
+                    "job_run_id": resolved_job_run_id,
                     "workspace_id": metrics.get("workspace_id"),
                     "job_type": metrics.get("job_type", "Unknown"),
                     "rationale": recommendation.get("rationale", ""),
@@ -506,10 +517,11 @@ class DbxClusterTuningAgent:
                 logger.warning("recommendation_indexing_failed", error=str(e))
 
         current_configuration = comparison_payload["comparison"]["current_configuration"]
+        resolved_job_run_id = final_state.get("job_run_id") or metrics.get("job_run_id") or ""
         return {
             "request_id": str(request_id),
-            "cluster_id": run_id,
-            "job_run_id": run_id,
+            "cluster_id": cluster,
+            "job_run_id": resolved_job_run_id,
             "current_configuration": current_configuration,
             "recommendation": recommendation,
             "explanation": final_state.get("explanation", ""),

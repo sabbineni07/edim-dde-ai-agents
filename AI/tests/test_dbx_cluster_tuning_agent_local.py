@@ -79,7 +79,7 @@ async def test_generate_recommendation_with_local_data():
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
         job_id="job-001",
-        job_run_id="run-001-001",
+        cluster_id="run-001-001",
         start_date="2026-06-01",
         end_date="2026-06-03",
         include_explanation=True,
@@ -88,7 +88,8 @@ async def test_generate_recommendation_with_local_data():
     # Verify result structure
     assert result is not None
     assert "request_id" in result
-    assert result.get("job_run_id") == "run-001-001"
+    assert result.get("cluster_id") == "run-001-001"
+    assert result.get("job_run_id") == "jr-001-001"
     assert "recommendation" in result
     assert "explanation" in result
     assert "pattern_analysis" in result
@@ -120,12 +121,14 @@ async def test_generate_recommendation_run_only_lookup():
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
         job_id="job-001",
-        job_run_id="run-001-001",
+        cluster_id="run-001-001",
     )
 
     assert result is not None
-    assert result.get("job_run_id") == "run-001-001"
-    assert result["job_run_ingest"]["workflow_task_count"] == 150
+    assert result.get("cluster_id") == "run-001-001"
+    assert result.get("job_run_id") == "jr-001-001"
+    assert result["job_run_ingest"]["job_run_id"] == "jr-001-001"
+    assert result["job_run_ingest"]["cluster_id"] == "run-001-001"
 
 
 @pytest.mark.asyncio
@@ -136,7 +139,7 @@ async def test_agent_with_rag_disabled():
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
         job_id="job-001",
-        job_run_id="run-001-001",
+        cluster_id="run-001-001",
         start_date="2026-06-01",
         end_date="2026-06-03",
     )
@@ -153,7 +156,7 @@ async def test_token_usage_tracking():
     agent = _create_agent_with_mock_llm()
     result = await agent.generate_recommendation(
         job_id="job-001",
-        job_run_id="run-001-001",
+        cluster_id="run-001-001",
         start_date="2026-06-01",
         end_date="2026-06-03",
     )

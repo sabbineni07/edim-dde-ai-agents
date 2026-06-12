@@ -24,7 +24,7 @@ async def test_input_guardrail_empty_job_id_rejected():
             "/api/recommendations/generate",
             json={
                 "job_id": "",
-                "job_run_id": "run-1",
+                "cluster_id": "run-1",
                 "start_date": "2024-01-01",
                 "end_date": "2024-01-31",
             },
@@ -50,7 +50,7 @@ async def test_input_guardrail_invalid_date_range_returns_400():
             "/api/recommendations/generate",
             json={
                 "job_id": "job-1",
-                "job_run_id": "run-1",
+                "cluster_id": "run-1",
                 "start_date": "2024-02-01",
                 "end_date": "2024-01-01",
             },
@@ -69,7 +69,7 @@ async def test_stay_on_topic_unsupported_intent_returns_400():
             "/api/recommendations/generate",
             json={
                 "job_id": "job-1",
-                "job_run_id": "run-1",
+                "cluster_id": "run-1",
                 "start_date": "2024-01-01",
                 "end_date": "2024-01-31",
                 "intent": "weather_forecast",
@@ -93,7 +93,7 @@ async def test_valid_request_passes_guardrails():
             "/api/recommendations/generate",
             json={
                 "job_id": "job-1",
-                "job_run_id": "run-1",
+                "cluster_id": "run-1",
                 "start_date": "2024-01-01",
                 "end_date": "2024-01-31",
             },

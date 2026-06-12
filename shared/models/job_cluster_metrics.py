@@ -9,8 +9,9 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "job_run_date",
     "workspace_id",
     "workspace_name",
-    "cluster_id",
     "job_id",
+    "job_run_id",
+    "cluster_id",
     "job_type",
     "job_name",
     "job_run_start_time_utc",
@@ -57,8 +58,9 @@ class JobClusterMetrics(BaseModel):
     job_run_date: str
     workspace_id: str
     workspace_name: Optional[str] = None
-    cluster_id: str
     job_id: str
+    job_run_id: str
+    cluster_id: str
     job_type: Optional[str] = None
     job_name: Optional[str] = None
     job_run_start_time_utc: Optional[str] = None
@@ -92,11 +94,6 @@ class JobClusterMetrics(BaseModel):
     processed_bytes: Optional[int] = None
     processed_row_count: Optional[int] = None
 
-    @property
-    def job_run_id(self) -> str:
-        """Deprecated alias: Delta uses cluster_id as the per-run identifier."""
-        return self.cluster_id
-
     def to_agent_dict(self) -> Dict[str, Any]:
         return enrich_metrics_dict(self.model_dump())
 
@@ -110,8 +107,6 @@ def metrics_record_to_dict(metric: Union[JobClusterMetrics, Dict[str, Any]]) -> 
 def enrich_metrics_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
     """Normalize a metrics row for API/agent use (Delta columns + derived p95)."""
     out = dict(raw)
-    if out.get("cluster_id") is None and out.get("job_run_id"):
-        out["cluster_id"] = out["job_run_id"]
     if out.get("job_run_date") is None:
         out["job_run_date"] = out.get("job_date") or out.get("date")
     if (

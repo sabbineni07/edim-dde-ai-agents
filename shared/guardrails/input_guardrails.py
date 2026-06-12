@@ -25,8 +25,8 @@ def validate_recommendation_request(
 ) -> None:
     """Validate per-run recommendation inputs. Raises GuardrailValidationError if invalid.
 
-    Recommendations are run-centric: job_id and cluster_id are required.
-    job_run_id is accepted as a deprecated alias for cluster_id.
+    Recommendations are cluster-scoped: job_id and cluster_id are required.
+    job_run_id is optional metadata (workflow run identifier).
     start_date/end_date are optional (metrics are resolved by cluster_id when omitted).
     When both dates are supplied, they are validated and capped by the browse guardrail.
     """
@@ -43,21 +43,24 @@ def validate_recommendation_request(
             error_code="INVALID_INPUT",
         )
 
-    run_id = cluster_id if cluster_id is not None else job_run_id
-    if run_id is None:
+    if cluster_id is None or not str(cluster_id).strip():
         raise GuardrailValidationError(
             "cluster_id is required and cannot be empty.",
             error_code="INVALID_INPUT",
         )
-    run_str = str(run_id).strip()
-    if not run_str:
-        raise GuardrailValidationError(
-            "cluster_id is required and cannot be empty.",
-            error_code="INVALID_INPUT",
-        )
-    if len(run_str) > max_len:
+    cluster_str = str(cluster_id).strip()
+    if len(cluster_str) > max_len:
         raise GuardrailValidationError(
             f"cluster_id length exceeds maximum ({max_len} characters).",
+            error_code="INVALID_INPUT",
+        )
+    if (
+        job_run_id is not None
+        and str(job_run_id).strip()
+        and len(str(job_run_id).strip()) > max_len
+    ):
+        raise GuardrailValidationError(
+            f"job_run_id length exceeds maximum ({max_len} characters).",
             error_code="INVALID_INPUT",
         )
 
