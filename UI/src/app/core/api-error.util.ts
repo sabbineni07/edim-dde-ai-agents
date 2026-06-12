@@ -14,7 +14,9 @@ export function parseApiError(err: unknown, fallback = 'Request failed'): string
   const code = e?.error?.error_code;
 
   if (code === 'NO_JOB_METRICS') {
-    return 'No metrics found for this job run in the selected date range. Try sample dates or widen the range.';
+    return typeof detail === 'string'
+      ? detail
+      : 'No metrics found for the selected job run. Check cluster/run selection and metrics connection.';
   }
   if (code === 'AZURE_OPENAI_NOT_CONFIGURED') {
     return 'Azure OpenAI is not configured. Set AZURE_OPENAI_* in the API environment.';

@@ -9,7 +9,9 @@ from pydantic import BaseModel, Field, model_validator
 
 from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.deps import get_agent, get_cost_logger
+from DE.src.access.recommendation_metrics import fetch_job_run_metrics_for_recommendation
 from shared.config.loader import get_agent_settings
+from shared.factories.data_collector_context import reset_metrics_collector, set_metrics_collector
 from shared.guardrails import NoJobMetricsError, validate_intent, validate_recommendation_request
 from shared.recommendation_lifecycle import (
     ALLOWED_TRANSITIONS,
@@ -51,9 +53,17 @@ class GenerateRecommendationRequest(BaseModel):
         min_length=1,
         description="Workflow job run identifier (optional; resolved from metrics when omitted).",
     )
+    environment_id: Optional[str] = Field(
+        default=None,
+        description="Metrics environment id (same as job browse APIs).",
+    )
+    connection_id: Optional[str] = Field(
+        default=None,
+        description="Optional metrics connection override (UUID).",
+    )
     start_date: Optional[str] = Field(
         default=None,
-        description="Optional browse window start (YYYY-MM-DD). Omitted = resolve metrics by job_run_id only.",
+        description="Optional browse window start (YYYY-MM-DD). Omitted = resolve metrics by cluster_id/job_run_id only.",
     )
     end_date: Optional[str] = Field(
         default=None,
@@ -211,12 +221,15 @@ async def list_lifecycle_events(request_id: UUID):
 async def generate_recommendation(
     request: GenerateRecommendationRequest,
     cost_logger=Depends(get_cost_logger),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
 ):
     """Generate a utilization-based recommendation for a single job run."""
     validate_intent(request.intent)
     validate_recommendation_request(
         job_id=request.job_id,
         cluster_id=request.cluster_id,
+        job_run_id=request.job_run_id,
         start_date=request.start_date,
         end_date=request.end_date,
     )
@@ -230,12 +243,48 @@ async def generate_recommendation(
         status="processing",
         job_id=request.job_id,
     )
+    collector_token = None
     try:
         logger.info(
             "generating_recommendation",
             job_id=request.job_id,
             cluster_id=request.cluster_id,
+            job_run_id=request.job_run_id,
+            environment_id=request.environment_id,
         )
+
+        metrics_override = request.job_cluster_metrics
+        if not metrics_override:
+            if request.environment_id:
+                from DE.src.access.environment_job_metrics_collector import (
+                    get_collector as get_job_metrics_collector,
+                )
+
+                collector = get_job_metrics_collector(
+                    request.environment_id,
+                    (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
+                    connection_id=request.connection_id,
+                )
+                collector_token = set_metrics_collector(collector)
+
+            metrics_override = fetch_job_run_metrics_for_recommendation(
+                environment_id=request.environment_id,
+                user_id=x_user_id or x_user_name,
+                connection_id=request.connection_id,
+                job_id=request.job_id,
+                cluster_id=request.cluster_id,
+                job_run_id=request.job_run_id,
+                start_date=request.start_date,
+                end_date=request.end_date,
+            )
+            if not metrics_override:
+                raise NoJobMetricsError(
+                    job_id=request.job_id,
+                    start_date=request.start_date or "",
+                    end_date=request.end_date or "",
+                    cluster_id=request.cluster_id,
+                    job_run_id=request.job_run_id,
+                )
 
         workspace_agent_svc = WorkspaceAgentService()
         agent_id = request.agent_id
@@ -271,7 +320,7 @@ async def generate_recommendation(
             start_date=request.start_date or None,
             end_date=request.end_date or None,
             include_explanation=request.include_explanation,
-            job_cluster_metrics=request.job_cluster_metrics,
+            job_cluster_metrics=metrics_override,
             request_log_request_id=request_id,
         )
 
@@ -333,3 +382,6 @@ async def generate_recommendation(
         )
         logger.exception("recommendation_generation_error")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if collector_token is not None:
+            reset_metrics_collector(collector_token)

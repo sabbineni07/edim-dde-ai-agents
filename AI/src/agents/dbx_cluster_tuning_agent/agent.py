@@ -118,10 +118,12 @@ class DbxClusterTuningAgent:
 
         def collect_data(state: RecommendationState) -> RecommendationState:
             cluster_id = (state.get("cluster_id") or "").strip()
+            job_run_id = (state.get("job_run_id") or "").strip()
             logger.info(
                 "collecting_job_data",
                 job_id=state["job_id"],
                 cluster_id=cluster_id,
+                job_run_id=job_run_id or None,
             )
             override = state.get("job_cluster_metrics_override")
             if override:
@@ -131,6 +133,7 @@ class DbxClusterTuningAgent:
                     {
                         "job_id": state["job_id"],
                         "cluster_id": cluster_id,
+                        "job_run_id": job_run_id or None,
                         "start_date": state.get("start_date") or None,
                         "end_date": state.get("end_date") or None,
                     }
@@ -141,7 +144,8 @@ class DbxClusterTuningAgent:
                     job_id=state["job_id"],
                     start_date=state.get("start_date") or "",
                     end_date=state.get("end_date") or "",
-                    job_run_id=cluster_id,
+                    cluster_id=cluster_id or None,
+                    job_run_id=job_run_id or None,
                 )
             if not state.get("job_run_id"):
                 state["job_run_id"] = metrics.get("job_run_id") or ""

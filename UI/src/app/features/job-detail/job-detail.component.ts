@@ -334,6 +334,8 @@ export class JobDetailComponent implements OnInit {
       job_id: j,
       cluster_id: this.selectedClusterId,
       include_explanation: this.includeExplanation,
+      environment_id: this.environmentSelection.getSelectedId() || undefined,
+      connection_id: this.environmentSelection.getSelectedConnectionId() || undefined,
     };
     if (selectedRun?.job_run_id) {
       body.job_run_id = selectedRun.job_run_id;

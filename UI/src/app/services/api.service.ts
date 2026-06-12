@@ -232,6 +232,8 @@ export interface GenerateRecommendationRequest {
   job_id: string;
   cluster_id: string;
   job_run_id?: string;
+  environment_id?: string;
+  connection_id?: string;
   start_date?: string;
   end_date?: string;
   include_explanation?: boolean;

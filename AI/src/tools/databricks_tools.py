@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from langchain_core.tools import tool
 
 from DE.src.processors.run_metrics import select_job_run_metrics
+from shared.factories.data_collector_context import get_metrics_collector
 from shared.factories.data_collector_factory import get_data_collector
 from shared.models.job_run_ingest import to_llm_ingest_dict
 from shared.utils.logging import get_logger
@@ -39,7 +40,7 @@ def get_job_cluster_metrics(
             logger.warning("get_job_cluster_metrics_missing_cluster_id", job_id=job_id)
             return {}
 
-        collector = get_data_collector()
+        collector = get_metrics_collector() or get_data_collector()
         metrics = collector.collect_job_cluster_metrics(
             start_date=start_date,
             end_date=end_date,
