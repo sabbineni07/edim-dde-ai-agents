@@ -10,6 +10,7 @@ from shared.models.job_run_ingest import default_sizing_policy
 REASON_CODES = (
     "OVERPROVISIONED_AUTOSCALE",
     "PER_NODE_UNDERUTILIZED",
+    "DRIVER_UNDERUTILIZED",
     "VM_FAMILY_MISMATCH",
     "LOW_PARALLELISM",
     "SINGLE_NODE_ELIGIBLE",
@@ -56,12 +57,18 @@ def compute_sizing_hints(
     peak_mem = float(ingest.get("peak_worker_memory_utilization_pct") or 0)
     avg_cpu = float(ingest.get("avg_worker_cpu_utilization_pct") or 0)
     avg_mem = float(ingest.get("avg_worker_memory_utilization_pct") or 0)
+    peak_driver_cpu = float(ingest.get("peak_driver_cpu_utilization_pct") or 0)
+    avg_driver_cpu = float(ingest.get("avg_driver_cpu_utilization_pct") or 0)
+    avg_driver_mem = float(ingest.get("avg_driver_memory_utilization_pct") or 0)
 
-    cpu_headroom = peak_cpu / target if target > 0 else 0
-    mem_headroom = peak_mem / target if target > 0 else 0
+    cluster_peak_cpu = max(peak_cpu, peak_driver_cpu)
+    cluster_peak_mem = max(peak_mem, avg_driver_mem)
+    cpu_headroom = cluster_peak_cpu / target if target > 0 else 0
+    mem_headroom = cluster_peak_mem / target if target > 0 else 0
     limiting = "memory" if mem_headroom >= cpu_headroom else "cpu"
-    if peak_cpu < 1 and peak_mem < 1:
+    if cluster_peak_cpu < 1 and cluster_peak_mem < 1:
         limiting = "unknown"
+    driver_limiting = peak_driver_cpu >= peak_cpu and peak_driver_cpu >= 40
 
     alloc_vcpu = float(ingest.get("avg_worker_vcpus_consumed") or 0)
     util_vcpu = float(ingest.get("avg_worker_vcpus_utilized") or 0)
@@ -70,10 +77,12 @@ def compute_sizing_hints(
 
     vcpu_util_pct = (util_vcpu / alloc_vcpu * 100.0) if alloc_vcpu > 0 else avg_cpu
     mem_util_pct = (util_mem / alloc_mem * 100.0) if alloc_mem > 0 else avg_mem
+    driver_underutilized = avg_driver_cpu < 40 and avg_driver_mem < 40
+    worker_underutilized = vcpu_util_pct < 40 and mem_util_pct < 40
 
     suggested_family = "E"
-    if limiting == "cpu" and vcpu_util_pct > 60:
-        suggested_family = "F" if peak_cpu > 70 else "D"
+    if limiting == "cpu" and max(vcpu_util_pct, avg_driver_cpu) > 60:
+        suggested_family = "F" if cluster_peak_cpu > 70 else "D"
     elif limiting == "memory" or mem_util_pct > vcpu_util_pct:
         suggested_family = "E"
 
@@ -91,8 +100,13 @@ def compute_sizing_hints(
         "recommended_max_workers": max_w,
         "vcpu_utilization_pct_of_allocated": round(vcpu_util_pct, 2),
         "memory_utilization_pct_of_allocated": round(mem_util_pct, 2),
+        "avg_driver_cpu_utilization_pct": round(avg_driver_cpu, 2),
+        "avg_driver_memory_utilization_pct": round(avg_driver_mem, 2),
+        "peak_driver_cpu_utilization_pct": round(peak_driver_cpu, 2),
+        "driver_limiting": driver_limiting,
+        "driver_underutilized": driver_underutilized,
         "overprovisioned_autoscale": over_autoscale,
-        "per_node_underutilized": vcpu_util_pct < 40 and mem_util_pct < 40,
+        "per_node_underutilized": driver_underutilized and worker_underutilized,
     }
 
 
@@ -126,6 +140,8 @@ def infer_reason_codes(
 
     if hints.get("overprovisioned_autoscale"):
         codes.append("OVERPROVISIONED_AUTOSCALE")
+    if hints.get("driver_underutilized") and not hints.get("per_node_underutilized"):
+        codes.append("DRIVER_UNDERUTILIZED")
     if hints.get("per_node_underutilized"):
         codes.append("PER_NODE_UNDERUTILIZED")
 

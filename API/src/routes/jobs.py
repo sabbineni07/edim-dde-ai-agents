@@ -131,6 +131,11 @@ class JobRunSummary(BaseModel):
     cluster_id: str
     job_run_date: Optional[str] = None
     job_run_duration_seconds: Optional[float] = None
+    azure_driver_vm_size: Optional[str] = None
+    driver_node_count: Optional[int] = None
+    avg_driver_cpu_utilization_pct: Optional[float] = None
+    avg_driver_memory_utilization_pct: Optional[float] = None
+    peak_driver_cpu_utilization_pct: Optional[float] = None
     avg_worker_cpu_utilization_pct: Optional[float] = None
     avg_worker_memory_utilization_pct: Optional[float] = None
     avg_worker_nodes_consumed: Optional[float] = None

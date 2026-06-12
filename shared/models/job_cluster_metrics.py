@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 # Canonical Delta table column names (Unity Catalog: *.dde_metrics.job_cluster_metrics)
 DELTA_TABLE_COLUMNS: List[str] = [
@@ -37,7 +37,7 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "avg_worker_memory_utilization_pct",
     "peak_worker_cpu_utilization_pct",
     "peak_worker_memory_utilization_pct",
-    "worker_node_provisioning_efficency_pct",
+    "worker_node_provisioning_efficiency_pct",
     "worker_cpu_utilization_efficiency_pct",
     "worker_memory_utilization_efficency_pct",
     "delta_tables_ingested",
@@ -52,6 +52,13 @@ DELTA_MEMORY_EFFICIENCY_SQL_EXPR = (
     "COALESCE("
     "CAST(worker_memory_utilization_efficency_pct AS DOUBLE), "
     "CAST(`worker_memory_utilization-efficency_pct` AS DOUBLE)"
+    ")"
+)
+
+DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR = (
+    "COALESCE("
+    "CAST(worker_node_provisioning_efficiency_pct AS DOUBLE), "
+    "CAST(worker_node_provisioning_efficency_pct AS DOUBLE)"
     ")"
 )
 
@@ -92,7 +99,13 @@ class JobClusterMetrics(BaseModel):
     avg_worker_memory_utilization_pct: float = 0.0
     peak_worker_cpu_utilization_pct: float = 0.0
     peak_worker_memory_utilization_pct: float = 0.0
-    worker_node_provisioning_efficency_pct: Optional[float] = None
+    worker_node_provisioning_efficiency_pct: Optional[float] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "worker_node_provisioning_efficiency_pct",
+            "worker_node_provisioning_efficency_pct",
+        ),
+    )
     worker_cpu_utilization_efficiency_pct: Optional[float] = None
     worker_memory_utilization_efficency_pct: Optional[float] = Field(
         default=None,
@@ -129,6 +142,13 @@ def enrich_metrics_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
         and out.get("total_worker_nodes_consumed") is not None
     ):
         out["avg_worker_nodes_consumed"] = out["total_worker_nodes_consumed"]
+    if (
+        out.get("worker_node_provisioning_efficiency_pct") is None
+        and out.get("worker_node_provisioning_efficency_pct") is not None
+    ):
+        out["worker_node_provisioning_efficiency_pct"] = out[
+            "worker_node_provisioning_efficency_pct"
+        ]
     if out.get("p95_worker_nodes_consumed") is None:
         out["p95_worker_nodes_consumed"] = (
             out.get("avg_worker_nodes_consumed") or out.get("p99_worker_nodes_consumed") or 0.0

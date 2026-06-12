@@ -58,7 +58,7 @@ class JobRunIngest(BaseModel):
     avg_worker_memory_utilization_pct: float = 0.0
     peak_worker_cpu_utilization_pct: float = 0.0
     peak_worker_memory_utilization_pct: float = 0.0
-    worker_node_provisioning_efficency_pct: Optional[float] = None
+    worker_node_provisioning_efficiency_pct: Optional[float] = None
     worker_cpu_utilization_efficiency_pct: Optional[float] = None
     worker_memory_utilization_efficency_pct: Optional[float] = Field(
         default=None,

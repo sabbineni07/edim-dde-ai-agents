@@ -14,8 +14,15 @@ _OPTIONAL_DELTA_KEYS = (
     "workspace_name",
     "job_run_start_time_utc",
     "job_run_end_time_utc",
+    "azure_driver_vm_size",
+    "driver_node_count",
+    "avg_driver_cpu_utilization_pct",
+    "avg_driver_memory_utilization_pct",
+    "peak_driver_cpu_utilization_pct",
+    "driver_vcpus_consumed",
+    "driver_memory_gb_consumed",
     "delta_tables_ingested",
-    "worker_node_provisioning_efficency_pct",
+    "worker_node_provisioning_efficiency_pct",
     "worker_cpu_utilization_efficiency_pct",
     "worker_memory_utilization_efficency_pct",
     "total_worker_vcpus_provisioned",
@@ -52,6 +59,23 @@ class MetricsProcessor:
 
             agg: Dict[str, Any] = {
                 "avg_job_run_duration_seconds": job_df["job_run_duration_seconds"].mean(),
+                "azure_driver_vm_size": first.get("azure_driver_vm_size"),
+                "driver_node_count": int(first.get("driver_node_count", 1)),
+                "avg_driver_cpu_utilization_pct": (
+                    job_df["avg_driver_cpu_utilization_pct"].mean()
+                    if "avg_driver_cpu_utilization_pct" in job_df.columns
+                    else None
+                ),
+                "avg_driver_memory_utilization_pct": (
+                    job_df["avg_driver_memory_utilization_pct"].mean()
+                    if "avg_driver_memory_utilization_pct" in job_df.columns
+                    else None
+                ),
+                "peak_driver_cpu_utilization_pct": (
+                    float(job_df["peak_driver_cpu_utilization_pct"].max())
+                    if "peak_driver_cpu_utilization_pct" in job_df.columns
+                    else None
+                ),
                 "avg_worker_cpu_utilization_pct": job_df["avg_worker_cpu_utilization_pct"].mean(),
                 "avg_worker_memory_utilization_pct": job_df[
                     "avg_worker_memory_utilization_pct"

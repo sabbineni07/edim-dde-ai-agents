@@ -57,6 +57,8 @@ def split_sizing_llm_response(out: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]
 def _default_pattern_analysis(job_run_ingest: Optional[Dict[str, Any]]) -> str:
     metrics = job_run_ingest or {}
     wt = metrics.get("job_type", "Unknown")
+    drv_cpu = metrics.get("avg_driver_cpu_utilization_pct", "n/a")
+    drv_mem = metrics.get("avg_driver_memory_utilization_pct", "n/a")
     cpu = metrics.get("avg_worker_cpu_utilization_pct", "n/a")
     mem = metrics.get("avg_worker_memory_utilization_pct", "n/a")
     p95 = metrics.get("p95_worker_nodes_consumed", "n/a")
@@ -64,8 +66,8 @@ def _default_pattern_analysis(job_run_ingest: Optional[Dict[str, Any]]) -> str:
         "### 1. Workload type\n"
         f"- Classified as **{wt}** from ingest.\n\n"
         "### 2. Resource utilization\n"
-        f"- Avg worker CPU %: {cpu}; avg worker memory %: {mem}.\n"
-        f"- p95 worker nodes consumed: {p95}.\n\n"
+        f"- Driver: avg CPU % {drv_cpu}, avg memory % {drv_mem}.\n"
+        f"- Workers: avg CPU % {cpu}, avg memory % {mem}; p95 nodes consumed {p95}.\n\n"
         "### 3. Performance characteristics\n"
         "- Fallback summary (LLM parse failed).\n\n"
         "### 4. Optimization opportunities\n"
@@ -104,7 +106,7 @@ For **one job run**, recommend the best cluster configuration (node family, vCPU
 Family/SKU fit first, then worker count. Use only values present in the inputs — do not invent metrics.
 
 ## Evaluation criteria
-- **VM family:** **D** general, **E** memory-heavy, **F** CPU-heavy, **L** storage. Compare avg/peak worker CPU and memory utilization, vCPU and memory consumed vs utilized, and peaks. Output **node_family** and **vcpus** only (final SKU is validated server-side).
+- **VM family:** **D** general, **E** memory-heavy, **F** CPU-heavy, **L** storage. Compare **driver and worker** avg/peak CPU and memory %, vCPU/memory consumed vs utilized, and peaks. Driver SKU is informational; worker **node_family** and **vcpus** are what you recommend (validated server-side).
 - **Workers:** Size **max_workers** from observed node consumption (p95/p99/total worker nodes) plus sizing_policy capacity_buffer_pct. **max_workers** must be **≥ sizing_hints.recommended_max_workers** and **≤** the provisioned ceiling in ingest. Base sizing on cluster consumption, not orchestration metadata.
 - **min_workers** ≤ **max_workers**; **vcpus** in 4–64.
 - **Target utilization:** Aim near sizing_policy target_utilization_pct on the limiting resource with buffer — do not under-provision peaks.

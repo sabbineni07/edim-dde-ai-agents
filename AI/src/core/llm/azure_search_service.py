@@ -182,8 +182,10 @@ class AzureSearchService:
             text = f"""
             WORKLOAD PATTERN (for similarity matching only):
             Workload Type: {metrics.job_type or 'Unknown'}
-            CPU Utilization: {metrics.avg_worker_cpu_utilization_pct}% average, {metrics.peak_worker_cpu_utilization_pct}% peak
-            Memory Utilization: {metrics.avg_worker_memory_utilization_pct}% average, {metrics.peak_worker_memory_utilization_pct}% peak
+            Driver CPU: {metrics.avg_driver_cpu_utilization_pct}% average, {metrics.peak_driver_cpu_utilization_pct}% peak
+            Driver Memory: {metrics.avg_driver_memory_utilization_pct}% average
+            Worker CPU: {metrics.avg_worker_cpu_utilization_pct}% average, {metrics.peak_worker_cpu_utilization_pct}% peak
+            Worker Memory: {metrics.avg_worker_memory_utilization_pct}% average, {metrics.peak_worker_memory_utilization_pct}% peak
             Node Consumption: {metrics.avg_worker_nodes_consumed} average, {metrics.p99_worker_nodes_consumed} p99
             Job Duration: {metrics.job_run_duration_seconds} seconds
             

@@ -6,3 +6,7 @@
 .job-detail-actions .form-select-sm {
   min-width: 11rem;
 }
+
+.metrics-panels .border-start {
+  border-left: 1px solid var(--bs-border-color) !important;
+}

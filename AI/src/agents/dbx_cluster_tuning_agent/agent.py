@@ -147,6 +147,13 @@ class DbxClusterTuningAgent:
             policy = default_sizing_policy()
             state["sizing_hints"] = compute_sizing_hints(metrics, policy)
             state["resource_utilization"] = {
+                "avg_driver_cpu_utilization_pct": metrics.get("avg_driver_cpu_utilization_pct", 0),
+                "avg_driver_memory_utilization_pct": metrics.get(
+                    "avg_driver_memory_utilization_pct", 0
+                ),
+                "peak_driver_cpu_utilization_pct": metrics.get(
+                    "peak_driver_cpu_utilization_pct", 0
+                ),
                 "peak_worker_cpu_utilization_pct": metrics.get(
                     "peak_worker_cpu_utilization_pct", 0
                 ),
@@ -171,6 +178,7 @@ class DbxClusterTuningAgent:
             hints = state.get("sizing_hints") or compute_sizing_hints(metrics)
             narrow_hints = sizing_hints_for_llm(hints)
             current_config = {
+                "azure_driver_vm_size": metrics.get("azure_driver_vm_size"),
                 "azure_worker_vm_size": metrics.get("azure_worker_vm_size", "Standard_E8s_v3"),
                 "driver_node_count": metrics.get("driver_node_count", 1),
                 "max_worker_nodes_provisioned": metrics.get("max_worker_nodes_provisioned", 16),

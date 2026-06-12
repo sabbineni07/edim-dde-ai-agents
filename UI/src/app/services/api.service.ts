@@ -83,6 +83,11 @@ export interface JobRunSummary {
   cluster_id: string;
   job_run_date?: string;
   job_run_duration_seconds?: number;
+  azure_driver_vm_size?: string;
+  driver_node_count?: number;
+  avg_driver_cpu_utilization_pct?: number;
+  avg_driver_memory_utilization_pct?: number;
+  peak_driver_cpu_utilization_pct?: number;
   avg_worker_cpu_utilization_pct?: number;
   avg_worker_memory_utilization_pct?: number;
   avg_worker_nodes_consumed?: number;

@@ -5,7 +5,11 @@ from typing import Any, Dict, List, Optional
 from databricks import sql
 
 from shared.config.settings import settings
-from shared.models.job_cluster_metrics import DELTA_MEMORY_EFFICIENCY_SQL_EXPR, JobClusterMetrics
+from shared.models.job_cluster_metrics import (
+    DELTA_MEMORY_EFFICIENCY_SQL_EXPR,
+    DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR,
+    JobClusterMetrics,
+)
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -43,7 +47,7 @@ SELECT
   COALESCE(CAST(avg_worker_memory_utilization_pct AS DOUBLE), 0.0) AS avg_worker_memory_utilization_pct,
   COALESCE(CAST(peak_worker_cpu_utilization_pct AS DOUBLE), 0.0) AS peak_worker_cpu_utilization_pct,
   COALESCE(CAST(peak_worker_memory_utilization_pct AS DOUBLE), 0.0) AS peak_worker_memory_utilization_pct,
-  CAST(worker_node_provisioning_efficency_pct AS DOUBLE) AS worker_node_provisioning_efficency_pct,
+  {DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR} AS worker_node_provisioning_efficiency_pct,
   CAST(worker_cpu_utilization_efficiency_pct AS DOUBLE) AS worker_cpu_utilization_efficiency_pct,
   {DELTA_MEMORY_EFFICIENCY_SQL_EXPR} AS worker_memory_utilization_efficency_pct,
   CAST(delta_tables_ingested AS BIGINT) AS delta_tables_ingested,
@@ -290,6 +294,11 @@ class DatabricksCollector:
           CAST(cluster_id AS STRING) AS cluster_id,
           MAX(job_run_date) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
+          COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,
+          CAST(COALESCE(MAX(driver_node_count), 1) AS BIGINT) AS driver_node_count,
+          COALESCE(AVG(avg_driver_cpu_utilization_pct), 0.0) AS avg_driver_cpu_utilization_pct,
+          COALESCE(AVG(avg_driver_memory_utilization_pct), 0.0) AS avg_driver_memory_utilization_pct,
+          COALESCE(MAX(peak_driver_cpu_utilization_pct), 0.0) AS peak_driver_cpu_utilization_pct,
           COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
           COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
           COALESCE(AVG(avg_worker_nodes_consumed), 0.0) AS avg_worker_nodes_consumed,
@@ -341,6 +350,13 @@ class DatabricksCollector:
         query = f"""
         SELECT
           COALESCE(AVG(job_run_duration_seconds), 0.0) AS avg_job_run_duration_seconds,
+          COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,
+          CAST(COALESCE(MAX(driver_node_count), 1) AS BIGINT) AS driver_node_count,
+          COALESCE(AVG(avg_driver_cpu_utilization_pct), 0.0) AS avg_driver_cpu_utilization_pct,
+          COALESCE(AVG(avg_driver_memory_utilization_pct), 0.0) AS avg_driver_memory_utilization_pct,
+          COALESCE(MAX(peak_driver_cpu_utilization_pct), 0.0) AS peak_driver_cpu_utilization_pct,
+          COALESCE(AVG(driver_vcpus_consumed), 0.0) AS avg_driver_vcpus_consumed,
+          COALESCE(AVG(driver_memory_gb_consumed), 0.0) AS avg_driver_memory_gb_consumed,
           COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
           COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
           COALESCE(MAX(peak_worker_cpu_utilization_pct), 0.0) AS peak_worker_cpu_utilization_pct,
@@ -359,7 +375,7 @@ class DatabricksCollector:
           MAX(job_run_start_time_utc) AS job_run_start_time_utc,
           MAX(job_run_end_time_utc) AS job_run_end_time_utc,
           MAX(delta_tables_ingested) AS delta_tables_ingested,
-          MAX(worker_node_provisioning_efficency_pct) AS worker_node_provisioning_efficency_pct,
+          MAX({DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR}) AS worker_node_provisioning_efficiency_pct,
           MAX(worker_cpu_utilization_efficiency_pct) AS worker_cpu_utilization_efficiency_pct,
           MAX({DELTA_MEMORY_EFFICIENCY_SQL_EXPR}) AS worker_memory_utilization_efficency_pct,
           MAX(job_type) AS job_type,

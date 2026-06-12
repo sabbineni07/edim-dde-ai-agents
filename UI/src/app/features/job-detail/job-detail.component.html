@@ -59,13 +59,20 @@
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
-            <th></th>
-            <th>Cluster ID</th>
-            <th>Run date</th>
-            <th>Worker CPU %</th>
-            <th>Worker mem %</th>
-            <th>Worker nodes</th>
-            <th>Worker VM</th>
+            <th rowspan="2"></th>
+            <th rowspan="2">Cluster ID</th>
+            <th rowspan="2">Run date</th>
+            <th colspan="3" class="text-center border-start">Driver</th>
+            <th colspan="4" class="text-center border-start">Workers</th>
+          </tr>
+          <tr>
+            <th class="border-start">CPU %</th>
+            <th>Mem %</th>
+            <th>VM</th>
+            <th class="border-start">CPU %</th>
+            <th>Mem %</th>
+            <th>Nodes</th>
+            <th>VM</th>
           </tr>
         </thead>
         <tbody>
@@ -84,10 +91,13 @@
             </td>
             <td><code class="small">{{ run.cluster_id }}</code></td>
             <td>{{ run.job_run_date ?? '–' }}</td>
-            <td>{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
+            <td class="border-start">{{ run.avg_driver_cpu_utilization_pct != null ? (run.avg_driver_cpu_utilization_pct | number:'1.0-1') : '–' }}</td>
+            <td>{{ run.avg_driver_memory_utilization_pct != null ? (run.avg_driver_memory_utilization_pct | number:'1.0-1') : '–' }}</td>
+            <td class="small">{{ run.azure_driver_vm_size ?? '–' }}</td>
+            <td class="border-start">{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
             <td>{{ run.avg_worker_memory_utilization_pct | number:'1.0-1' }}</td>
             <td>{{ run.avg_worker_nodes_consumed | number:'1.1-1' }}</td>
-            <td>{{ run.azure_worker_vm_size ?? '–' }}</td>
+            <td class="small">{{ run.azure_worker_vm_size ?? '–' }}</td>
           </tr>
         </tbody>
       </table>
@@ -100,13 +110,26 @@
   <div class="card-header"><strong>Job metrics (date range aggregate)</strong></div>
   <div class="card-body">
     <div *ngIf="loadingMetrics" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
-    <div *ngIf="!loadingMetrics && metricsData?.metrics" class="row g-3">
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Worker VM</strong><br>{{ metricsData!.metrics!['azure_worker_vm_size'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Max workers</strong><br>{{ metricsData!.metrics!['max_worker_nodes_provisioned'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker CPU %</strong><br>{{ metricsData!.metrics!['avg_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker memory %</strong><br>{{ metricsData!.metrics!['avg_worker_memory_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_worker_nodes_consumed'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
+    <div *ngIf="!loadingMetrics && metricsData?.metrics" class="metrics-panels">
+      <h6 class="text-muted text-uppercase small mb-2">Driver node</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Driver VM</strong><br>{{ metricsData!.metrics!['azure_driver_vm_size'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Driver count</strong><br>{{ metricsData!.metrics!['driver_node_count'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg driver CPU %</strong><br>{{ metricsData!.metrics!['avg_driver_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg driver memory %</strong><br>{{ metricsData!.metrics!['avg_driver_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak driver CPU %</strong><br>{{ metricsData!.metrics!['peak_driver_cpu_utilization_pct'] ?? '–' }}</div></div>
+      </div>
+      <h6 class="text-muted text-uppercase small mb-2">Worker cluster</h6>
+      <div class="row g-3">
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Worker VM</strong><br>{{ metricsData!.metrics!['azure_worker_vm_size'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Max workers</strong><br>{{ metricsData!.metrics!['max_worker_nodes_provisioned'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker CPU %</strong><br>{{ metricsData!.metrics!['avg_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker memory %</strong><br>{{ metricsData!.metrics!['avg_worker_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak worker CPU %</strong><br>{{ metricsData!.metrics!['peak_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak worker memory %</strong><br>{{ metricsData!.metrics!['peak_worker_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_worker_nodes_consumed'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
+      </div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">
       No aggregated metrics for this job in the selected range (404).

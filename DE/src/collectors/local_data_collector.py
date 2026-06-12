@@ -450,6 +450,23 @@ class LocalDataCollector:
                         "job_run_duration_seconds": float(
                             group["job_run_duration_seconds"].iloc[0]
                         ),
+                        "azure_driver_vm_size": first.get("azure_driver_vm_size"),
+                        "driver_node_count": int(first.get("driver_node_count", 1)),
+                        "avg_driver_cpu_utilization_pct": (
+                            float(group["avg_driver_cpu_utilization_pct"].mean())
+                            if "avg_driver_cpu_utilization_pct" in group.columns
+                            else None
+                        ),
+                        "avg_driver_memory_utilization_pct": (
+                            float(group["avg_driver_memory_utilization_pct"].mean())
+                            if "avg_driver_memory_utilization_pct" in group.columns
+                            else None
+                        ),
+                        "peak_driver_cpu_utilization_pct": (
+                            float(group["peak_driver_cpu_utilization_pct"].max())
+                            if "peak_driver_cpu_utilization_pct" in group.columns
+                            else None
+                        ),
                         "avg_worker_cpu_utilization_pct": float(
                             group["avg_worker_cpu_utilization_pct"].mean()
                         ),
@@ -545,6 +562,33 @@ class LocalDataCollector:
                 "avg_job_run_duration_seconds": float(
                     df_filtered["job_run_duration_seconds"].mean()
                 ),
+                "azure_driver_vm_size": first.get("azure_driver_vm_size"),
+                "driver_node_count": int(first.get("driver_node_count", 1)),
+                "avg_driver_cpu_utilization_pct": (
+                    float(df_filtered["avg_driver_cpu_utilization_pct"].mean())
+                    if "avg_driver_cpu_utilization_pct" in df_filtered.columns
+                    else None
+                ),
+                "avg_driver_memory_utilization_pct": (
+                    float(df_filtered["avg_driver_memory_utilization_pct"].mean())
+                    if "avg_driver_memory_utilization_pct" in df_filtered.columns
+                    else None
+                ),
+                "peak_driver_cpu_utilization_pct": (
+                    float(df_filtered["peak_driver_cpu_utilization_pct"].max())
+                    if "peak_driver_cpu_utilization_pct" in df_filtered.columns
+                    else None
+                ),
+                "avg_driver_vcpus_consumed": (
+                    float(df_filtered["driver_vcpus_consumed"].mean())
+                    if "driver_vcpus_consumed" in df_filtered.columns
+                    else None
+                ),
+                "avg_driver_memory_gb_consumed": (
+                    float(df_filtered["driver_memory_gb_consumed"].mean())
+                    if "driver_memory_gb_consumed" in df_filtered.columns
+                    else None
+                ),
                 "avg_worker_cpu_utilization_pct": float(
                     df_filtered["avg_worker_cpu_utilization_pct"].mean()
                 ),
@@ -587,8 +631,12 @@ class LocalDataCollector:
                 "cluster_id",
                 "job_run_start_time_utc",
                 "job_run_end_time_utc",
+                "azure_driver_vm_size",
+                "driver_node_count",
+                "driver_vcpus_consumed",
+                "driver_memory_gb_consumed",
                 "delta_tables_ingested",
-                "worker_node_provisioning_efficency_pct",
+                "worker_node_provisioning_efficiency_pct",
                 "worker_cpu_utilization_efficiency_pct",
                 "worker_memory_utilization_efficency_pct",
                 "max_worker_nodes_provisioned",
