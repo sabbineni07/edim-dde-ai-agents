@@ -184,7 +184,7 @@ class AzureSearchService:
             Workload Type: {metrics.job_type or 'Unknown'}
             CPU Utilization: {metrics.avg_worker_cpu_utilization_pct}% average, {metrics.peak_worker_cpu_utilization_pct}% peak
             Memory Utilization: {metrics.avg_worker_memory_utilization_pct}% average, {metrics.peak_worker_memory_utilization_pct}% peak
-            Node Consumption: {metrics.total_worker_nodes_consumed} average, {metrics.p99_worker_nodes_consumed} p99
+            Node Consumption: {metrics.avg_worker_nodes_consumed} average, {metrics.p99_worker_nodes_consumed} p99
             Job Duration: {metrics.job_run_duration_seconds} seconds
             
             CURRENT CONFIGURATION (for reference only, may not be optimal):
@@ -203,7 +203,7 @@ class AzureSearchService:
                 "avg_worker_memory_utilization_pct": metrics.avg_worker_memory_utilization_pct,
                 "peak_worker_cpu_utilization_pct": metrics.peak_worker_cpu_utilization_pct,
                 "peak_worker_memory_utilization_pct": metrics.peak_worker_memory_utilization_pct,
-                "total_worker_nodes_consumed": metrics.total_worker_nodes_consumed,
+                "avg_worker_nodes_consumed": metrics.avg_worker_nodes_consumed,
                 "p99_worker_nodes_consumed": metrics.p99_worker_nodes_consumed,
                 "job_run_duration_seconds": metrics.job_run_duration_seconds,
             }

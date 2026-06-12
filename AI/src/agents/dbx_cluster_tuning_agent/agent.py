@@ -153,7 +153,7 @@ class DbxClusterTuningAgent:
                 "peak_worker_memory_utilization_pct": metrics.get(
                     "peak_worker_memory_utilization_pct", 0
                 ),
-                "total_worker_nodes_consumed": metrics.get("total_worker_nodes_consumed", 0),
+                "avg_worker_nodes_consumed": metrics.get("avg_worker_nodes_consumed", 0),
             }
             cost_start = state.get("start_date") or run_date
             cost_end = state.get("end_date") or run_date
@@ -281,7 +281,7 @@ class DbxClusterTuningAgent:
                 co.get("vcpus", 8),
                 current_node_type=current_node_type,
             )
-            avg_nodes = float(metrics.get("total_worker_nodes_consumed") or 4)
+            avg_nodes = float(metrics.get("avg_worker_nodes_consumed") or 4)
             current_cost = calculate_cluster_cost.invoke(
                 {
                     "node_type": current_node_type,

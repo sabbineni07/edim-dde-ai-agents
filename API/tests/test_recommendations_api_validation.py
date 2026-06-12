@@ -80,7 +80,7 @@ async def test_generate_success_per_run_without_dates(api_client):
     assert response.status_code == 200, response.text
     data = response.json()
     assert data["cluster_id"] == "run-001-001"
-    assert data["job_cluster_metrics"]["total_worker_nodes_consumed"] == 4.2
+    assert data["job_cluster_metrics"]["avg_worker_nodes_consumed"] == 4.2
 
 
 @pytest.mark.asyncio

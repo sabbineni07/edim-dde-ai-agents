@@ -216,7 +216,7 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
             except Exception:
                 snippet = ""
             logger.warning("failed_to_parse_json", result=snippet)
-            avg_nodes = (job_run_ingest or {}).get("total_worker_nodes_consumed") or (
+            avg_nodes = (job_run_ingest or {}).get("avg_worker_nodes_consumed") or (
                 job_run_ingest or {}
             ).get("p95_worker_nodes_consumed")
             max_workers = 8

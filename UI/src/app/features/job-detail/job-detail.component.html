@@ -45,6 +45,7 @@
   </div>
 </div>
 
+<div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
 <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
 <!-- Job runs -->
 <div class="card mb-4">
@@ -85,7 +86,7 @@
             <td>{{ run.job_run_date ?? '–' }}</td>
             <td>{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
             <td>{{ run.avg_worker_memory_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.total_worker_nodes_consumed | number:'1.1-1' }}</td>
+            <td>{{ run.avg_worker_nodes_consumed | number:'1.1-1' }}</td>
             <td>{{ run.azure_worker_vm_size ?? '–' }}</td>
           </tr>
         </tbody>
@@ -104,7 +105,7 @@
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Max workers</strong><br>{{ metricsData!.metrics!['max_worker_nodes_provisioned'] ?? '–' }}</div></div>
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker CPU %</strong><br>{{ metricsData!.metrics!['avg_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker memory %</strong><br>{{ metricsData!.metrics!['avg_worker_memory_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_total_worker_nodes_consumed'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_worker_nodes_consumed'] ?? '–' }}</div></div>
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">

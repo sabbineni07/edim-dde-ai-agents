@@ -45,7 +45,9 @@ class JobRunIngest(BaseModel):
     peak_driver_cpu_utilization_pct: Optional[float] = None
     azure_worker_vm_size: str = "Standard_E8s_v3"
     max_worker_nodes_provisioned: int = 1
-    total_worker_nodes_consumed: float = 0.0
+    total_worker_vcpus_provisioned: Optional[float] = None
+    total_worker_gb_provisioned: Optional[float] = None
+    avg_worker_nodes_consumed: float = 0.0
     p95_worker_nodes_consumed: float = 0.0
     p99_worker_nodes_consumed: float = 0.0
     avg_worker_vcpus_consumed: Optional[float] = None

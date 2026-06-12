@@ -30,6 +30,9 @@ export class JobsListComponent implements OnInit {
   dateRangeWarning = '';
   filterText = '';
   uiHints: UiHints | null = null;
+  readonly pageSizeOptions = [10, 25, 50, 100];
+  pageSize = 25;
+  currentPage = 1;
 
   constructor(
     private api: ApiService,
@@ -202,6 +205,7 @@ export class JobsListComponent implements OnInit {
     if (!this.workspaceId) return;
     this.loading = true;
     this.error = '';
+    this.currentPage = 1;
     this.api
       .getJobs(
         this.workspaceId,
@@ -231,6 +235,44 @@ export class JobsListComponent implements OnInit {
         (j.job_name || '').toLowerCase().includes(q) ||
         (j.job_type || '').toLowerCase().includes(q)
     );
+  }
+
+  get totalFilteredJobs(): number {
+    return this.filteredJobs.length;
+  }
+
+  get totalPages(): number {
+    if (this.totalFilteredJobs === 0) return 1;
+    return Math.ceil(this.totalFilteredJobs / this.pageSize);
+  }
+
+  get paginatedJobs(): JobSummary[] {
+    const start = (this.currentPage - 1) * this.pageSize;
+    return this.filteredJobs.slice(start, start + this.pageSize);
+  }
+
+  get pageRangeStart(): number {
+    if (this.totalFilteredJobs === 0) return 0;
+    return (this.currentPage - 1) * this.pageSize + 1;
+  }
+
+  get pageRangeEnd(): number {
+    return Math.min(this.currentPage * this.pageSize, this.totalFilteredJobs);
+  }
+
+  onFilterChange(): void {
+    this.currentPage = 1;
+  }
+
+  onPageSizeChange(): void {
+    this.currentPage = 1;
+  }
+
+  goToPage(page: number): void {
+    const next = Math.min(Math.max(1, page), this.totalPages);
+    if (next !== this.currentPage) {
+      this.currentPage = next;
+    }
   }
 
   openDetail(j: JobSummary): void {

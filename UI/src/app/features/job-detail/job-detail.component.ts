@@ -1,7 +1,9 @@
-import { Component, OnInit, input } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, input } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { combineLatest } from 'rxjs';
 import {
   ApiService,
   GenerateRecommendationRequest,
@@ -53,6 +55,10 @@ export class JobDetailComponent implements OnInit {
   lifecycleFeedback: Record<string, { type: 'success' | 'error'; message: string }> = {};
 
   uiHints: UiHints | null = null;
+  loadError = '';
+
+  private readonly destroyRef = inject(DestroyRef);
+  private lastLoadKey = '';
 
   constructor(
     private api: ApiService,
@@ -71,18 +77,15 @@ export class JobDetailComponent implements OnInit {
     this.loadLifecycleMeta();
     this.loadWorkspaceAgents();
 
-    this.api.getUiHints().subscribe({
-      next: (hints) => {
+    combineLatest([this.api.getUiHints(), this.route.queryParamMap])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([hints, qp]) => {
         this.uiHints = hints;
-        this.syncDatesAndLoad();
-      },
-    });
-
-    this.route.queryParamMap.subscribe(() => this.syncDatesAndLoad());
+        this.syncDatesAndLoad(qp);
+      });
   }
 
-  private syncDatesAndLoad(): void {
-    const qp = this.route.snapshot.queryParamMap;
+  private syncDatesAndLoad(qp: { get: (name: string) => string | null }): void {
     const qs = qp.get('start_date')?.trim();
     const qe = qp.get('end_date')?.trim();
 
@@ -98,6 +101,13 @@ export class JobDetailComponent implements OnInit {
     } else {
       return;
     }
+
+    const loadKey = `${this.workspaceId()}|${this.jobId()}|${this.startDate}|${this.endDate}`;
+    if (loadKey === this.lastLoadKey) {
+      return;
+    }
+    this.lastLoadKey = loadKey;
+    this.loadError = '';
 
     this.loadMetrics();
     this.loadRuns();
@@ -224,7 +234,7 @@ export class JobDetailComponent implements OnInit {
     const j = this.jobId();
     this.loadingMetrics = true;
     this.api
-      .getJobMetrics(
+      .browseJobMetrics(
         ws,
         j,
         this.startDate || undefined,
@@ -233,15 +243,16 @@ export class JobDetailComponent implements OnInit {
         this.environmentSelection.getSelectedConnectionId()
       )
       .subscribe({
-      next: (data) => {
-        this.metricsData = data;
-        this.loadingMetrics = false;
-      },
-      error: () => {
-        this.loadingMetrics = false;
-        this.metricsData = null;
-      },
-    });
+        next: (data) => {
+          this.metricsData = data;
+          this.loadingMetrics = false;
+        },
+        error: (err) => {
+          this.loadingMetrics = false;
+          this.metricsData = null;
+          this.reportLoadError(err, 'Failed to load job metrics');
+        },
+      });
   }
 
   loadRuns(): void {
@@ -249,7 +260,7 @@ export class JobDetailComponent implements OnInit {
     const j = this.jobId();
     this.loadingRuns = true;
     this.api
-      .getJobRuns(
+      .browseJobRuns(
         ws,
         j,
         this.startDate || undefined,
@@ -258,20 +269,21 @@ export class JobDetailComponent implements OnInit {
         this.environmentSelection.getSelectedConnectionId()
       )
       .subscribe({
-      next: (list) => {
-        this.runs = list;
-        this.loadingRuns = false;
-        if (list.length && !this.selectedClusterId) {
-          this.selectedClusterId = list[0].cluster_id;
-        } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
-          this.selectedClusterId = list[0].cluster_id;
-        }
-      },
-      error: () => {
-        this.loadingRuns = false;
-        this.runs = [];
-      },
-    });
+        next: (list) => {
+          this.runs = list;
+          this.loadingRuns = false;
+          if (list.length && !this.selectedClusterId) {
+            this.selectedClusterId = list[0].cluster_id;
+          } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
+            this.selectedClusterId = list[0].cluster_id;
+          }
+        },
+        error: (err) => {
+          this.loadingRuns = false;
+          this.runs = [];
+          this.reportLoadError(err, 'Failed to load job runs');
+        },
+      });
   }
 
   loadRecommendations(): void {
@@ -292,6 +304,11 @@ export class JobDetailComponent implements OnInit {
 
   selectRun(clusterId: string): void {
     this.selectedClusterId = clusterId;
+  }
+
+  private reportLoadError(err: unknown, fallback: string): void {
+    if (this.loadError) return;
+    this.loadError = parseApiError(err, fallback);
   }
 
   formatCost(summary: Record<string, unknown>): string {

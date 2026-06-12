@@ -85,7 +85,9 @@ export interface JobRunSummary {
   job_run_duration_seconds?: number;
   avg_worker_cpu_utilization_pct?: number;
   avg_worker_memory_utilization_pct?: number;
-  total_worker_nodes_consumed?: number;
+  avg_worker_nodes_consumed?: number;
+  total_worker_vcpus_provisioned?: number;
+  total_worker_gb_provisioned?: number;
   peak_worker_cpu_utilization_pct?: number;
   peak_worker_memory_utilization_pct?: number;
   azure_worker_vm_size?: string;
@@ -456,7 +458,8 @@ export class ApiService {
       );
   }
 
-  getJobRuns(
+  /** Browse job runs; errors propagate (use in Job detail UI). */
+  browseJobRuns(
     workspaceId: string,
     jobId: string,
     start_date?: string,
@@ -468,19 +471,56 @@ export class ApiService {
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
     params = this.withEnvironmentParams(params, environmentId, connectionId);
-    return this.http
-      .get<JobRunSummary[]>(
-        `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/runs`,
-        { params }
-      )
-      .pipe(
-        catchError((err) => {
-          console.error('getJobRuns error', err);
-          return of([]);
-        })
-      );
+    return this.http.get<JobRunSummary[]>(
+      `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/runs`,
+      { params }
+    );
   }
 
+  /** @deprecated Prefer browseJobRuns when errors should surface in the UI. */
+  getJobRuns(
+    workspaceId: string,
+    jobId: string,
+    start_date?: string,
+    end_date?: string,
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): Observable<JobRunSummary[]> {
+    return this.browseJobRuns(
+      workspaceId,
+      jobId,
+      start_date,
+      end_date,
+      environmentId,
+      connectionId
+    ).pipe(
+      catchError((err) => {
+        console.error('getJobRuns error', err);
+        return of([]);
+      })
+    );
+  }
+
+  /** Browse job metrics; errors propagate (use in Job detail UI). */
+  browseJobMetrics(
+    workspaceId: string,
+    jobId: string,
+    start_date?: string,
+    end_date?: string,
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): Observable<JobMetricsResponse> {
+    let params = new HttpParams();
+    if (start_date) params = params.set('start_date', start_date);
+    if (end_date) params = params.set('end_date', end_date);
+    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    return this.http.get<JobMetricsResponse>(
+      `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/metrics`,
+      { params }
+    );
+  }
+
+  /** @deprecated Prefer browseJobMetrics when errors should surface in the UI. */
   getJobMetrics(
     workspaceId: string,
     jobId: string,
@@ -489,16 +529,14 @@ export class ApiService {
     environmentId?: string | null,
     connectionId?: string | null
   ): Observable<JobMetricsResponse | null> {
-    let params = new HttpParams();
-    if (start_date) params = params.set('start_date', start_date);
-    if (end_date) params = params.set('end_date', end_date);
-    params = this.withEnvironmentParams(params, environmentId, connectionId);
-    return this.http
-      .get<JobMetricsResponse>(
-        `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/metrics`,
-        { params }
-      )
-      .pipe(catchError(() => of(null)));
+    return this.browseJobMetrics(
+      workspaceId,
+      jobId,
+      start_date,
+      end_date,
+      environmentId,
+      connectionId
+    ).pipe(catchError(() => of(null)));
   }
 
   getRecommendations(

@@ -36,7 +36,7 @@ def recommended_min_max_workers(
     elif p99 > 0:
         base_nodes = p99
     else:
-        base_nodes = max(float(ingest.get("total_worker_nodes_consumed") or 1), 1.0)
+        base_nodes = max(float(ingest.get("avg_worker_nodes_consumed") or 1), 1.0)
     buffered = math.ceil(base_nodes * (1.0 + buffer_pct / 100.0))
     max_w = max(int(buffered), 1)
     max_w = min(max_w, ceiling) if ceiling > 0 else max_w

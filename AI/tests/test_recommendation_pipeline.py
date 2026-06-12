@@ -25,7 +25,7 @@ def _sample_metrics() -> JobClusterMetrics:
         avg_worker_memory_utilization_pct=10.0,
         peak_worker_cpu_utilization_pct=25.0,
         peak_worker_memory_utilization_pct=30.0,
-        total_worker_nodes_consumed=6.0,
+        avg_worker_nodes_consumed=6.0,
         p99_worker_nodes_consumed=8.0,
         azure_worker_vm_size="Standard_E8s_v3",
         max_worker_nodes_provisioned=17,

@@ -18,6 +18,8 @@ _OPTIONAL_DELTA_KEYS = (
     "worker_node_provisioning_efficency_pct",
     "worker_cpu_utilization_efficiency_pct",
     "worker_memory_utilization_efficency_pct",
+    "total_worker_vcpus_provisioned",
+    "total_worker_gb_provisioned",
     "avg_worker_vcpus_consumed",
     "avg_worker_memory_gb_consumed",
     "job_type",
@@ -60,11 +62,9 @@ class MetricsProcessor:
                 "peak_worker_memory_utilization_pct": float(
                     job_df["peak_worker_memory_utilization_pct"].max()
                 ),
-                "avg_total_worker_nodes_consumed": float(
-                    job_df["total_worker_nodes_consumed"].mean()
-                ),
+                "avg_worker_nodes_consumed": float(job_df["avg_worker_nodes_consumed"].mean()),
                 "p95_worker_nodes_consumed": float(
-                    job_df["total_worker_nodes_consumed"].quantile(0.95)
+                    job_df["avg_worker_nodes_consumed"].quantile(0.95)
                 ),
                 "p99_worker_nodes_consumed": float(
                     job_df["p99_worker_nodes_consumed"].quantile(0.99)

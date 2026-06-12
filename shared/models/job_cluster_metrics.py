@@ -25,7 +25,9 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "peak_driver_cpu_utilization_pct",
     "azure_worker_vm_size",
     "max_worker_nodes_provisioned",
-    "total_worker_nodes_consumed",
+    "total_worker_vcpus_provisioned",
+    "total_worker_gb_provisioned",
+    "avg_worker_nodes_consumed",
     "p99_worker_nodes_consumed",
     "avg_worker_vcpus_consumed",
     "avg_worker_memory_gb_consumed",
@@ -78,7 +80,9 @@ class JobClusterMetrics(BaseModel):
     peak_driver_cpu_utilization_pct: Optional[float] = None
     azure_worker_vm_size: str = "Standard_E8s_v3"
     max_worker_nodes_provisioned: int = 1
-    total_worker_nodes_consumed: float = 0.0
+    total_worker_vcpus_provisioned: Optional[float] = None
+    total_worker_gb_provisioned: Optional[float] = None
+    avg_worker_nodes_consumed: float = 0.0
     p99_worker_nodes_consumed: float = 0.0
     avg_worker_vcpus_consumed: Optional[float] = None
     avg_worker_memory_gb_consumed: Optional[float] = None
@@ -120,9 +124,14 @@ def enrich_metrics_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
         out["cluster_id"] = out["job_run_id"]
     if out.get("job_run_date") is None:
         out["job_run_date"] = out.get("job_date") or out.get("date")
+    if (
+        out.get("avg_worker_nodes_consumed") is None
+        and out.get("total_worker_nodes_consumed") is not None
+    ):
+        out["avg_worker_nodes_consumed"] = out["total_worker_nodes_consumed"]
     if out.get("p95_worker_nodes_consumed") is None:
         out["p95_worker_nodes_consumed"] = (
-            out.get("total_worker_nodes_consumed") or out.get("p99_worker_nodes_consumed") or 0.0
+            out.get("avg_worker_nodes_consumed") or out.get("p99_worker_nodes_consumed") or 0.0
         )
     return out
 

@@ -10,3 +10,27 @@
 .jobs-list-search {
   width: min(100%, 20rem);
 }
+
+.jobs-page-size-select {
+  width: 4.5rem;
+}
+
+.jobs-pagination .page-link {
+  cursor: pointer;
+}
+
+.jobs-pagination .page-item.disabled .page-link {
+  cursor: default;
+}
+
+.jobs-col-name {
+  max-width: 14rem;
+  width: 14rem;
+}
+
+.jobs-name-text {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

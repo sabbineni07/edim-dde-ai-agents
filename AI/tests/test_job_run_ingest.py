@@ -20,7 +20,7 @@ def _sample_metrics() -> JobClusterMetrics:
         avg_worker_memory_utilization_pct=10.0,
         peak_worker_cpu_utilization_pct=25.0,
         peak_worker_memory_utilization_pct=30.0,
-        total_worker_nodes_consumed=6.0,
+        avg_worker_nodes_consumed=6.0,
         p99_worker_nodes_consumed=8.0,
         azure_worker_vm_size="Standard_E8s_v3",
         max_worker_nodes_provisioned=17,
@@ -32,7 +32,7 @@ def test_to_llm_ingest_dict_copilot_field_names():
     assert ingest["cluster_id"] == "run-99"
     assert ingest["azure_worker_vm_size"] == "Standard_E8s_v3"
     assert ingest["max_worker_nodes_provisioned"] == 17
-    assert ingest["total_worker_nodes_consumed"] == 6.0
+    assert ingest["avg_worker_nodes_consumed"] == 6.0
     assert "avg_worker_vcpus_consumed" in ingest or ingest.get("p95_worker_nodes_consumed") == 6.0
     assert "p99_worker_nodes_consumed" in ingest
 
@@ -65,7 +65,7 @@ def test_auto_termination_always_immediate():
 def test_recommended_min_max_workers_from_nodes_not_task_count():
     ingest = to_llm_ingest_dict(_sample_metrics())
     _, max_w = recommended_min_max_workers(ingest)
-    # p95 defaults to total_worker_nodes_consumed=6, 10% buffer -> ceil(6.6)=7
+    # p95 defaults to avg_worker_nodes_consumed=6, 10% buffer -> ceil(6.6)=7
     assert max_w == 7
 
 

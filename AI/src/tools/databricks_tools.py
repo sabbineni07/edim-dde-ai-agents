@@ -65,7 +65,7 @@ def get_job_cluster_metrics(
             "get_job_cluster_metrics_result",
             job_id=job_id,
             cluster_id=run_id,
-            total_worker_nodes_consumed=out.get("total_worker_nodes_consumed"),
+            avg_worker_nodes_consumed=out.get("avg_worker_nodes_consumed"),
         )
         return out
     except Exception as e:

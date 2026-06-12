@@ -217,10 +217,10 @@ class LocalDataCollector:
                     metric.peak_worker_memory_utilization_pct
                 )
                 utilization_by_job[job_id]["avg_nodes_consumed"].append(
-                    metric.total_worker_nodes_consumed
+                    metric.avg_worker_nodes_consumed
                 )
                 utilization_by_job[job_id]["p95_nodes_consumed"].append(
-                    metric.total_worker_nodes_consumed
+                    metric.avg_worker_nodes_consumed
                 )
                 utilization_by_job[job_id]["p99_nodes_consumed"].append(
                     metric.p99_worker_nodes_consumed
@@ -456,8 +456,18 @@ class LocalDataCollector:
                         "avg_worker_memory_utilization_pct": float(
                             group["avg_worker_memory_utilization_pct"].mean()
                         ),
-                        "total_worker_nodes_consumed": float(
-                            group["total_worker_nodes_consumed"].mean()
+                        "avg_worker_nodes_consumed": float(
+                            group["avg_worker_nodes_consumed"].mean()
+                        ),
+                        "total_worker_vcpus_provisioned": (
+                            float(group["total_worker_vcpus_provisioned"].iloc[0])
+                            if "total_worker_vcpus_provisioned" in group.columns
+                            else None
+                        ),
+                        "total_worker_gb_provisioned": (
+                            float(group["total_worker_gb_provisioned"].iloc[0])
+                            if "total_worker_gb_provisioned" in group.columns
+                            else None
                         ),
                         "peak_worker_cpu_utilization_pct": float(
                             group["peak_worker_cpu_utilization_pct"].max()
@@ -507,7 +517,7 @@ class LocalDataCollector:
                 "avg_worker_memory_utilization_pct",
                 "peak_worker_cpu_utilization_pct",
                 "peak_worker_memory_utilization_pct",
-                "total_worker_nodes_consumed",
+                "avg_worker_nodes_consumed",
                 "p99_worker_nodes_consumed",
                 "azure_worker_vm_size",
                 "max_worker_nodes_provisioned",
@@ -547,11 +557,19 @@ class LocalDataCollector:
                 "peak_worker_memory_utilization_pct": float(
                     df_filtered["peak_worker_memory_utilization_pct"].max()
                 ),
-                "avg_total_worker_nodes_consumed": float(
-                    df_filtered["total_worker_nodes_consumed"].mean()
-                ),
+                "avg_worker_nodes_consumed": float(df_filtered["avg_worker_nodes_consumed"].mean()),
                 "p95_worker_nodes_consumed": float(
-                    df_filtered["total_worker_nodes_consumed"].quantile(0.95)
+                    df_filtered["avg_worker_nodes_consumed"].quantile(0.95)
+                ),
+                "avg_total_worker_vcpus_provisioned": (
+                    float(df_filtered["total_worker_vcpus_provisioned"].mean())
+                    if "total_worker_vcpus_provisioned" in df_filtered.columns
+                    else None
+                ),
+                "avg_total_worker_gb_provisioned": (
+                    float(df_filtered["total_worker_gb_provisioned"].mean())
+                    if "total_worker_gb_provisioned" in df_filtered.columns
+                    else None
                 ),
                 "p99_worker_nodes_consumed": float(
                     df_filtered["p99_worker_nodes_consumed"].quantile(0.99)
