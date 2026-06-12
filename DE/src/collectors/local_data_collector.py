@@ -464,9 +464,9 @@ class LocalDataCollector:
                             if "total_worker_vcpus_provisioned" in group.columns
                             else None
                         ),
-                        "total_worker_gb_provisioned": (
-                            float(group["total_worker_gb_provisioned"].iloc[0])
-                            if "total_worker_gb_provisioned" in group.columns
+                        "total_worker_memory_gb_provisioned": (
+                            float(group["total_worker_memory_gb_provisioned"].iloc[0])
+                            if "total_worker_memory_gb_provisioned" in group.columns
                             else None
                         ),
                         "peak_worker_cpu_utilization_pct": float(
@@ -566,9 +566,9 @@ class LocalDataCollector:
                     if "total_worker_vcpus_provisioned" in df_filtered.columns
                     else None
                 ),
-                "avg_total_worker_gb_provisioned": (
-                    float(df_filtered["total_worker_gb_provisioned"].mean())
-                    if "total_worker_gb_provisioned" in df_filtered.columns
+                "avg_total_worker_memory_gb_provisioned": (
+                    float(df_filtered["total_worker_memory_gb_provisioned"].mean())
+                    if "total_worker_memory_gb_provisioned" in df_filtered.columns
                     else None
                 ),
                 "p99_worker_nodes_consumed": float(

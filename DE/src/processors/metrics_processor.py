@@ -19,7 +19,7 @@ _OPTIONAL_DELTA_KEYS = (
     "worker_cpu_utilization_efficiency_pct",
     "worker_memory_utilization_efficency_pct",
     "total_worker_vcpus_provisioned",
-    "total_worker_gb_provisioned",
+    "total_worker_memory_gb_provisioned",
     "avg_worker_vcpus_consumed",
     "avg_worker_memory_gb_consumed",
     "job_type",

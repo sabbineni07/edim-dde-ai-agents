@@ -135,7 +135,7 @@ class JobRunSummary(BaseModel):
     avg_worker_memory_utilization_pct: Optional[float] = None
     avg_worker_nodes_consumed: Optional[float] = None
     total_worker_vcpus_provisioned: Optional[float] = None
-    total_worker_gb_provisioned: Optional[float] = None
+    total_worker_memory_gb_provisioned: Optional[float] = None
     peak_worker_cpu_utilization_pct: Optional[float] = None
     peak_worker_memory_utilization_pct: Optional[float] = None
     azure_worker_vm_size: Optional[str] = None

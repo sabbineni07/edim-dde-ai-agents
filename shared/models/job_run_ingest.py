@@ -46,7 +46,7 @@ class JobRunIngest(BaseModel):
     azure_worker_vm_size: str = "Standard_E8s_v3"
     max_worker_nodes_provisioned: int = 1
     total_worker_vcpus_provisioned: Optional[float] = None
-    total_worker_gb_provisioned: Optional[float] = None
+    total_worker_memory_gb_provisioned: Optional[float] = None
     avg_worker_nodes_consumed: float = 0.0
     p95_worker_nodes_consumed: float = 0.0
     p99_worker_nodes_consumed: float = 0.0

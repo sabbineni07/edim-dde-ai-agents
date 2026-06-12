@@ -26,7 +26,7 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "azure_worker_vm_size",
     "max_worker_nodes_provisioned",
     "total_worker_vcpus_provisioned",
-    "total_worker_gb_provisioned",
+    "total_worker_memory_gb_provisioned",
     "avg_worker_nodes_consumed",
     "p99_worker_nodes_consumed",
     "avg_worker_vcpus_consumed",
@@ -81,7 +81,7 @@ class JobClusterMetrics(BaseModel):
     azure_worker_vm_size: str = "Standard_E8s_v3"
     max_worker_nodes_provisioned: int = 1
     total_worker_vcpus_provisioned: Optional[float] = None
-    total_worker_gb_provisioned: Optional[float] = None
+    total_worker_memory_gb_provisioned: Optional[float] = None
     avg_worker_nodes_consumed: float = 0.0
     p99_worker_nodes_consumed: float = 0.0
     avg_worker_vcpus_consumed: Optional[float] = None

@@ -87,7 +87,7 @@ export interface JobRunSummary {
   avg_worker_memory_utilization_pct?: number;
   avg_worker_nodes_consumed?: number;
   total_worker_vcpus_provisioned?: number;
-  total_worker_gb_provisioned?: number;
+  total_worker_memory_gb_provisioned?: number;
   peak_worker_cpu_utilization_pct?: number;
   peak_worker_memory_utilization_pct?: number;
   azure_worker_vm_size?: string;
