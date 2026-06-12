@@ -328,12 +328,16 @@ export class JobDetailComponent implements OnInit {
     this.runningRecommendation = true;
     this.error = '';
     this.lastResult = null;
+    const selectedRun = this.runs.find((r) => r.cluster_id === this.selectedClusterId);
     const body: GenerateRecommendationRequest = {
       agent_id: this.resolveAgentId(),
       job_id: j,
       cluster_id: this.selectedClusterId,
       include_explanation: this.includeExplanation,
     };
+    if (selectedRun?.job_run_id) {
+      body.job_run_id = selectedRun.job_run_id;
+    }
     if (this.selectedWorkspaceAgentId) {
       body.workspace_agent_id = this.selectedWorkspaceAgentId;
     }
