@@ -24,7 +24,7 @@ _OPTIONAL_DELTA_KEYS = (
     "delta_tables_ingested",
     "worker_node_provisioning_efficiency_pct",
     "worker_cpu_utilization_efficiency_pct",
-    "worker_memory_utilization_efficency_pct",
+    "worker_memory_utilization_efficiency_pct",
     "total_worker_vcpus_provisioned",
     "total_worker_memory_gb_provisioned",
     "avg_worker_vcpus_consumed",

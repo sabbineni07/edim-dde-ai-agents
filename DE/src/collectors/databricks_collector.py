@@ -5,11 +5,7 @@ from typing import Any, Dict, List, Optional
 from databricks import sql
 
 from shared.config.settings import settings
-from shared.models.job_cluster_metrics import (
-    DELTA_MEMORY_EFFICIENCY_SQL_EXPR,
-    DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR,
-    JobClusterMetrics,
-)
+from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -47,9 +43,9 @@ SELECT
   COALESCE(CAST(avg_worker_memory_utilization_pct AS DOUBLE), 0.0) AS avg_worker_memory_utilization_pct,
   COALESCE(CAST(peak_worker_cpu_utilization_pct AS DOUBLE), 0.0) AS peak_worker_cpu_utilization_pct,
   COALESCE(CAST(peak_worker_memory_utilization_pct AS DOUBLE), 0.0) AS peak_worker_memory_utilization_pct,
-  {DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR} AS worker_node_provisioning_efficiency_pct,
+  CAST(worker_node_provisioning_efficiency_pct AS DOUBLE) AS worker_node_provisioning_efficiency_pct,
   CAST(worker_cpu_utilization_efficiency_pct AS DOUBLE) AS worker_cpu_utilization_efficiency_pct,
-  {DELTA_MEMORY_EFFICIENCY_SQL_EXPR} AS worker_memory_utilization_efficency_pct,
+  CAST(worker_memory_utilization_efficiency_pct AS DOUBLE) AS worker_memory_utilization_efficiency_pct,
   CAST(delta_tables_ingested AS BIGINT) AS delta_tables_ingested,
   CAST(processed_bytes AS BIGINT) AS processed_bytes,
   CAST(processed_row_count AS BIGINT) AS processed_row_count
@@ -375,9 +371,9 @@ class DatabricksCollector:
           MAX(job_run_start_time_utc) AS job_run_start_time_utc,
           MAX(job_run_end_time_utc) AS job_run_end_time_utc,
           MAX(delta_tables_ingested) AS delta_tables_ingested,
-          MAX({DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR}) AS worker_node_provisioning_efficiency_pct,
+          MAX(worker_node_provisioning_efficiency_pct) AS worker_node_provisioning_efficiency_pct,
           MAX(worker_cpu_utilization_efficiency_pct) AS worker_cpu_utilization_efficiency_pct,
-          MAX({DELTA_MEMORY_EFFICIENCY_SQL_EXPR}) AS worker_memory_utilization_efficency_pct,
+          MAX(worker_memory_utilization_efficiency_pct) AS worker_memory_utilization_efficiency_pct,
           MAX(job_type) AS job_type,
           MAX(processed_row_count) AS processed_row_count,
           MAX(processed_bytes) AS processed_bytes

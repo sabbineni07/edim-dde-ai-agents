@@ -638,7 +638,7 @@ class LocalDataCollector:
                 "delta_tables_ingested",
                 "worker_node_provisioning_efficiency_pct",
                 "worker_cpu_utilization_efficiency_pct",
-                "worker_memory_utilization_efficency_pct",
+                "worker_memory_utilization_efficiency_pct",
                 "max_worker_nodes_provisioned",
                 "avg_worker_vcpus_consumed",
                 "avg_worker_memory_gb_consumed",

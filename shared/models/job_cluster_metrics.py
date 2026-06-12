@@ -2,7 +2,7 @@
 
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict
 
 # Canonical Delta table column names (Unity Catalog: *.dde_metrics.job_cluster_metrics)
 DELTA_TABLE_COLUMNS: List[str] = [
@@ -39,7 +39,7 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "peak_worker_memory_utilization_pct",
     "worker_node_provisioning_efficiency_pct",
     "worker_cpu_utilization_efficiency_pct",
-    "worker_memory_utilization_efficency_pct",
+    "worker_memory_utilization_efficiency_pct",
     "delta_tables_ingested",
     "processed_bytes",
     "processed_row_count",
@@ -47,20 +47,6 @@ DELTA_TABLE_COLUMNS: List[str] = [
 
 # Derived field used by sizing/guardrails (not stored in Delta).
 DERIVED_AGENT_FIELDS = ("p95_worker_nodes_consumed",)
-
-DELTA_MEMORY_EFFICIENCY_SQL_EXPR = (
-    "COALESCE("
-    "CAST(worker_memory_utilization_efficency_pct AS DOUBLE), "
-    "CAST(`worker_memory_utilization-efficency_pct` AS DOUBLE)"
-    ")"
-)
-
-DELTA_WORKER_NODE_PROVISIONING_EFFICIENCY_SQL_EXPR = (
-    "COALESCE("
-    "CAST(worker_node_provisioning_efficiency_pct AS DOUBLE), "
-    "CAST(worker_node_provisioning_efficency_pct AS DOUBLE)"
-    ")"
-)
 
 
 class JobClusterMetrics(BaseModel):
@@ -99,18 +85,9 @@ class JobClusterMetrics(BaseModel):
     avg_worker_memory_utilization_pct: float = 0.0
     peak_worker_cpu_utilization_pct: float = 0.0
     peak_worker_memory_utilization_pct: float = 0.0
-    worker_node_provisioning_efficiency_pct: Optional[float] = Field(
-        default=None,
-        validation_alias=AliasChoices(
-            "worker_node_provisioning_efficiency_pct",
-            "worker_node_provisioning_efficency_pct",
-        ),
-    )
+    worker_node_provisioning_efficiency_pct: Optional[float] = None
     worker_cpu_utilization_efficiency_pct: Optional[float] = None
-    worker_memory_utilization_efficency_pct: Optional[float] = Field(
-        default=None,
-        validation_alias="worker_memory_utilization-efficency_pct",
-    )
+    worker_memory_utilization_efficiency_pct: Optional[float] = None
     delta_tables_ingested: Optional[int] = None
     processed_bytes: Optional[int] = None
     processed_row_count: Optional[int] = None
@@ -142,13 +119,6 @@ def enrich_metrics_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
         and out.get("total_worker_nodes_consumed") is not None
     ):
         out["avg_worker_nodes_consumed"] = out["total_worker_nodes_consumed"]
-    if (
-        out.get("worker_node_provisioning_efficiency_pct") is None
-        and out.get("worker_node_provisioning_efficency_pct") is not None
-    ):
-        out["worker_node_provisioning_efficiency_pct"] = out[
-            "worker_node_provisioning_efficency_pct"
-        ]
     if out.get("p95_worker_nodes_consumed") is None:
         out["p95_worker_nodes_consumed"] = (
             out.get("avg_worker_nodes_consumed") or out.get("p99_worker_nodes_consumed") or 0.0

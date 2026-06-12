@@ -6,7 +6,7 @@ import json
 import math
 from typing import Any, Dict, Optional, Union
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from shared.models.job_cluster_metrics import (
     JobClusterMetrics,
@@ -60,10 +60,7 @@ class JobRunIngest(BaseModel):
     peak_worker_memory_utilization_pct: float = 0.0
     worker_node_provisioning_efficiency_pct: Optional[float] = None
     worker_cpu_utilization_efficiency_pct: Optional[float] = None
-    worker_memory_utilization_efficency_pct: Optional[float] = Field(
-        default=None,
-        validation_alias="worker_memory_utilization-efficency_pct",
-    )
+    worker_memory_utilization_efficiency_pct: Optional[float] = None
     delta_tables_ingested: Optional[int] = None
     processed_bytes: Optional[int] = None
     processed_row_count: Optional[int] = None
