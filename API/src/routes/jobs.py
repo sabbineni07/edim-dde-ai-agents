@@ -1,10 +1,10 @@
 """Jobs and workspaces APIs for the UI."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional, Set
 
 from fastapi import APIRouter, Header, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from DE.src.access.environment_job_metrics_collector import (
     get_collector as get_job_metrics_collector,
@@ -146,6 +146,15 @@ class JobRunSummary(BaseModel):
     azure_worker_vm_size: Optional[str] = None
     max_worker_nodes_provisioned: Optional[int] = None
     job_type: Optional[str] = None
+
+    @field_validator("job_run_date", mode="before")
+    @classmethod
+    def _coerce_job_run_date(cls, value: Any) -> Any:
+        if isinstance(value, datetime):
+            return value.date().isoformat()
+        if isinstance(value, date):
+            return value.isoformat()
+        return value
 
 
 @router.get(

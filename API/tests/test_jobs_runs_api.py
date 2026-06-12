@@ -1,4 +1,5 @@
 import os
+from datetime import date
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -7,6 +8,12 @@ os.environ.setdefault("USE_POSTGRES", "false")
 os.environ.setdefault("USE_LOCAL_DATA", "true")
 
 from API.src.main import app
+from API.src.routes.jobs import JobRunSummary
+
+
+def test_job_run_summary_coerces_date_field():
+    summary = JobRunSummary(cluster_id="run-001-001", job_run_date=date(2026, 6, 2))
+    assert summary.job_run_date == "2026-06-02"
 
 
 @pytest.mark.asyncio

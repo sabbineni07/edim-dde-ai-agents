@@ -1,5 +1,6 @@
 """Databricks data collector: reads pre-aggregated job metrics from a centralized Delta table."""
 
+from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
 from databricks import sql
@@ -9,6 +10,20 @@ from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+def _normalize_sql_value(value: Any) -> Any:
+    """Coerce Databricks SQL driver values to JSON-friendly primitives."""
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return value
+
+
+def _rows_to_dicts(columns: List[str], rows: List[Any]) -> List[Dict[str, Any]]:
+    return [{col: _normalize_sql_value(val) for col, val in zip(columns, row)} for row in rows]
+
 
 _METRICS_SELECT = f"""
 SELECT
@@ -166,7 +181,7 @@ class DatabricksCollector:
                     results = cursor.fetchall()
                     metrics = []
                     for row in results:
-                        row_dict = dict(zip(columns, row))
+                        row_dict = _rows_to_dicts(columns, [row])[0]
                         try:
                             metrics.append(JobClusterMetrics.model_validate(row_dict))
                         except Exception as e:
@@ -208,7 +223,7 @@ class DatabricksCollector:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
                     results = cursor.fetchall()
-                    workspaces = [dict(zip(columns, row)) for row in results]
+                    workspaces = _rows_to_dicts(columns, results)
                     logger.info("listed_workspaces_from_delta", count=len(workspaces), table=table)
                     return workspaces
         except Exception as e:
@@ -255,7 +270,8 @@ class DatabricksCollector:
                     columns = [desc[0] for desc in cursor.description]
                     results = cursor.fetchall()
                     jobs = [
-                        {"workspace_id": workspace_id, **dict(zip(columns, row))} for row in results
+                        {"workspace_id": workspace_id, **row}
+                        for row in _rows_to_dicts(columns, results)
                     ]
                     logger.info(
                         "listed_jobs_for_workspace_from_delta",
@@ -288,7 +304,7 @@ class DatabricksCollector:
         query = f"""
         SELECT
           CAST(cluster_id AS STRING) AS cluster_id,
-          MAX(job_run_date) AS job_run_date,
+          CAST(MAX(job_run_date) AS STRING) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
           COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,
           CAST(COALESCE(MAX(driver_node_count), 1) AS BIGINT) AS driver_node_count,
@@ -320,7 +336,7 @@ class DatabricksCollector:
                 with conn.cursor() as cursor:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
-                    return [dict(zip(columns, row)) for row in cursor.fetchall()]
+                    return _rows_to_dicts(columns, cursor.fetchall())
         except Exception as e:
             logger.error(
                 "list_job_runs_error",
@@ -365,7 +381,7 @@ class DatabricksCollector:
           COUNT(*) AS total_runs,
           COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
-          MAX(job_run_date) AS last_job_run_date,
+          CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
           MAX(job_name) AS job_name,
           MAX(workspace_name) AS workspace_name,
           MAX(job_run_start_time_utc) AS job_run_start_time_utc,
@@ -392,7 +408,7 @@ class DatabricksCollector:
                     if not row:
                         return None
                     columns = [desc[0] for desc in cursor.description]
-                    rec = dict(zip(columns, row))
+                    rec = _rows_to_dicts(columns, [row])[0]
                     total_runs = int(rec.get("total_runs") or 0)
                     if total_runs == 0:
                         return None
