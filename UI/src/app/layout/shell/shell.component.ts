@@ -9,6 +9,7 @@ import {
 } from '../../core/services/environment-selection.service';
 import { ApiService, PlatformEnvironment } from '../../services/api.service';
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
+import { parseApiError } from '../../core/api-error.util';
 import { SidebarComponent, MenuItem } from '../sidebar/sidebar.component';
 
 @Component({
@@ -24,6 +25,8 @@ export class ShellComponent implements OnInit {
   environments: PlatformEnvironment[] = [];
   selectedEnvironment: SelectedEnvironment | null = null;
   showEnvPicker = false;
+  environmentsLoadError = '';
+  environmentsLoadFailed = false;
   sidebarOpen = true;
   menuItems: MenuItem[] = [
     { label: 'Connections', route: '/app/connections', icon: 'plug' },
@@ -61,6 +64,8 @@ export class ShellComponent implements OnInit {
 
     this.environmentSelection.loadEnvironments().subscribe({
       next: (list) => {
+        this.environmentsLoadError = '';
+        this.environmentsLoadFailed = false;
         this.environments = list.filter((e) => e.is_enabled !== false);
         const selected = this.environmentSelection.getSelected();
         if (selected && selected.id !== 'local') {
@@ -69,6 +74,18 @@ export class ShellComponent implements OnInit {
         if (!selected && this.environments.length) {
           this.showEnvPicker = true;
         }
+        if (!this.environments.length) {
+          this.environmentsLoadError = 'No environments are available.';
+        }
+      },
+      error: (err) => {
+        console.error('loadEnvironments error', err);
+        this.environments = [];
+        this.environmentsLoadFailed = true;
+        this.environmentsLoadError = parseApiError(
+          err,
+          'Failed to load environments from the API.'
+        );
       },
     });
 

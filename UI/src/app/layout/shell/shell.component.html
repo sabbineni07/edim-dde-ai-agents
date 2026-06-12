@@ -56,6 +56,13 @@
   </header>
 
   <div class="shell-body">
+    <div
+      class="alert mx-3 mt-2 mb-0 py-2 small"
+      [ngClass]="environmentsLoadFailed ? 'alert-danger' : 'alert-warning'"
+      *ngIf="environmentsLoadError"
+    >
+      {{ environmentsLoadError }}
+    </div>
     <app-sidebar
       [menuItems]="menuItems"
       [activeMenuItem]="activeMenuItem"

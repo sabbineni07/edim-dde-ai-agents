@@ -304,12 +304,7 @@ export class ApiService {
   }
 
   getEnvironments(): Observable<PlatformEnvironment[]> {
-    return this.http.get<PlatformEnvironment[]>(`${API_BASE}/environments`).pipe(
-      catchError((err) => {
-        console.error('getEnvironments error', err);
-        return of([]);
-      })
-    );
+    return this.http.get<PlatformEnvironment[]>(`${API_BASE}/environments`);
   }
 
   updateEnvironment(

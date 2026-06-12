@@ -95,7 +95,14 @@ def list_platform_environments(
     """List platform environments for Screen A (from Postgres)."""
     user = _user_id(x_user_name, x_user_id)
     admin_view = is_admin(user)
-    return [_env_payload(env, user, admin_view=admin_view) for env in list_environments()]
+    try:
+        return [_env_payload(env, user, admin_view=admin_view) for env in list_environments()]
+    except Exception as e:
+        logger.error("list_platform_environments_failed", error=str(e))
+        raise HTTPException(
+            status_code=503,
+            detail=f"Unable to load environments: {e}",
+        ) from e
 
 
 @router.get("/local/template")

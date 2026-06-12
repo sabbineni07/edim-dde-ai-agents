@@ -34,6 +34,25 @@ def _db_enabled() -> bool:
     return bool(getattr(get_platform_settings(), "use_postgres", False))
 
 
+def _list_mem_connections(
+    *,
+    environment_id: str,
+    purpose: Optional[str] = None,
+    connection_type: Optional[str] = None,
+) -> List[EnvironmentConnectionRecord]:
+    eid = environment_id.strip()
+    rows = [r for r in _MEM_CONNECTIONS.values() if r["environment_id"] == eid]
+    if purpose:
+        rows = [r for r in rows if r["purpose"] == purpose]
+    if connection_type:
+        rows = [r for r in rows if r["connection_type"] == connection_type]
+    svc = EnvironmentConnectionService()
+    return [
+        svc._mem_to_record(r)
+        for r in sorted(rows, key=lambda x: (not x.get("is_default"), x["name"]))
+    ]
+
+
 @dataclass(frozen=True)
 class EnvironmentConnectionRecord:
     id: UUID
@@ -128,15 +147,11 @@ class EnvironmentConnectionService:
             return []
 
         if not _db_enabled():
-            rows = [r for r in _MEM_CONNECTIONS.values() if r["environment_id"] == eid]
-            if purpose:
-                rows = [r for r in rows if r["purpose"] == purpose]
-            if connection_type:
-                rows = [r for r in rows if r["connection_type"] == connection_type]
-            return [
-                self._mem_to_record(r)
-                for r in sorted(rows, key=lambda x: (not x.get("is_default"), x["name"]))
-            ]
+            return _list_mem_connections(
+                environment_id=eid,
+                purpose=purpose,
+                connection_type=connection_type,
+            )
 
         from shared.database.connection import get_database_session
         from shared.database.models import EnvironmentConnectionRow
