@@ -1,8 +1,9 @@
 """Platform metadata for UI (guardrails, sample data hints)."""
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
+from shared.auth.admin import list_admin_usernames
 from shared.config.connection_types import list_connection_types
 from shared.config.settings import settings
 
@@ -15,6 +16,7 @@ class UiHintsResponse(BaseModel):
     sample_data_start_date: str
     sample_data_end_date: str
     default_agent_id: str = "dbx_cluster_tuning_agent"
+    admin_usernames: list[str] = Field(default_factory=list)
 
 
 @router.get("/connection-types")
@@ -31,4 +33,5 @@ async def get_ui_hints():
         use_local_data=settings.use_local_data,
         sample_data_start_date="2026-06-01",
         sample_data_end_date="2026-06-03",
+        admin_usernames=list_admin_usernames(),
     )

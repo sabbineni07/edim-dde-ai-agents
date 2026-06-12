@@ -20,5 +20,7 @@ logs/
 .idea/
 .DS_Store
 secrets/
+data/uploads/**
+!data/uploads/.gitkeep
 *.pem
 *.key

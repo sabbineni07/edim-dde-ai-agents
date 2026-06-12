@@ -5,7 +5,11 @@ export function parseApiError(err: unknown, fallback = 'Request failed'): string
     status?: number;
     error?: { detail?: unknown; error_code?: string };
     message?: string;
+    name?: string;
   };
+  if (e?.name === 'TimeoutError' || e?.message?.includes('Timeout')) {
+    return 'Request timed out. The data source may be unreachable — check the Databricks connection.';
+  }
   const detail = e?.error?.detail;
   const code = e?.error?.error_code;
 
@@ -23,6 +27,11 @@ export function parseApiError(err: unknown, fallback = 'Request failed'): string
   }
   if (e?.status === 503) {
     return typeof detail === 'string' ? detail : 'Service unavailable.';
+  }
+  if (e?.status === 500) {
+    return typeof detail === 'string'
+      ? detail
+      : 'Server error while loading data. Check the connection configuration.';
   }
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {

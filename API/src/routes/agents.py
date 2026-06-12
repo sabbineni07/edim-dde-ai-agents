@@ -17,7 +17,7 @@ AGENT_DISPLAY: Dict[str, Dict[str, str]] = {
     "dbx_cluster_tuning_agent": {
         "name": "DBX Cluster Tuning Agent",
         "description": "Per-run utilization right-sizing (Databricks cluster config).",
-        "get_started_route": "/app/workspaces",
+        "get_started_route": "/app/environments",
     },
 }
 
@@ -26,7 +26,7 @@ class AgentInfo(BaseModel):
     agent_id: str
     name: str
     description: str
-    get_started_route: str = "/app/workspaces"
+    get_started_route: str = "/app/environments"
 
 
 class AgentsListResponse(BaseModel):
@@ -69,7 +69,7 @@ async def list_agents():
             {
                 "name": agent_id,
                 "description": "Registered agent.",
-                "get_started_route": "/app/workspaces",
+                "get_started_route": "/app/environments",
             },
         )
         agents.append(AgentInfo(agent_id=agent_id, **meta))

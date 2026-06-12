@@ -29,20 +29,20 @@ class RecommendationExplanationChain:
                 (
                     "system",
                     """## Role
-You are an expert at explaining Databricks cluster recommendations. Your explanation will be read by platform or data engineers to decide whether to apply the recommendation.
+You are an expert at explaining Databricks cluster sizing recommendations. Your explanation helps platform and data engineers decide whether to apply the recommendation.
 
 ## Task
-Using only the inputs provided below, produce a structured explanation that: justifies the recommendation with metrics, compares current vs recommended configuration, states expected impact and risks, and briefly notes alternatives. Every claim should be grounded in the inputs; avoid generic filler.
+Using only the inputs below, produce a structured explanation that: justifies the recommendation with evidence from the job run, compares current vs recommended configuration, states expected impact and risks, and briefly notes alternatives. Ground every claim in the inputs; avoid generic filler.
 
 ## Inputs you will receive
-- **Recommendation:** The chosen configuration (node_family, vcpus, min_workers, max_workers, auto_termination_minutes, rationale) and any cost/savings fields. This is what you are explaining.
-- **Job cluster metrics:** The metrics used to produce the recommendation (e.g. avg/peak CPU and memory, avg_nodes_consumed, p95, current_node_type, current_max_workers). Quote these when explaining rationale and evidence.
-- **Pattern analysis:** Previous analysis of workload type and utilization. Use it to support your rationale and evidence.
-- **Risk assessment:** Risk level and mitigations from a prior step. Use it to populate the Risks and mitigations section; you may add more risks or mitigations if needed.
+- **Recommendation:** The proposed cluster configuration (node_family, vcpus, min_workers, max_workers, auto_termination_minutes, rationale). This is what you are explaining.
+- **Job run ingest:** Observed utilization and configuration for this run (worker/driver CPU and memory %, nodes consumed, VM sizes, provisioned ceiling). Quote specific numbers in Rationale and Evidence.
+- **Pattern analysis:** Prior workload and utilization analysis from the sizing step.
+- **Risk assessment:** Risk level and mitigations from validation.
 
 ## Priorities
-- Be specific: cite numbers from job cluster metrics and pattern analysis in Rationale and Evidence.
-- Keep sections focused and short; use bullets for lists where appropriate.
+- Be specific: cite numbers from job run ingest and pattern analysis.
+- Keep sections focused and short; use bullets where appropriate.
 
 ## Output structure
 Use exactly these markdown headings. One short block per section.
@@ -68,7 +68,7 @@ Use exactly these markdown headings. One short block per section.
 {risk_assessment}
 
 ## Instruction
-Using only the four inputs above, write the structured explanation with the six sections: Rationale, Evidence, Current vs recommended configuration, Expected impact, Risks and mitigations, Alternatives. Cite specific numbers from the inputs.""",
+Using only the four inputs above, write the structured explanation with the six sections. Cite specific numbers from job run ingest where they support the recommendation.""",
                 ),
             ]
         )

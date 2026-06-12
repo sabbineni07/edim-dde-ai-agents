@@ -118,6 +118,61 @@ CREATE TABLE IF NOT EXISTS workspace_agents (
 CREATE INDEX IF NOT EXISTS idx_workspace_agents_workspace_id ON workspace_agents(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_agents_agent_id ON workspace_agents(agent_id);
 
+CREATE TABLE IF NOT EXISTS platform_environments (
+    id VARCHAR(64) PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    display_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    environment_tier VARCHAR(32) NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    catalog_name VARCHAR(255),
+    schema_name VARCHAR(255),
+    table_name VARCHAR(255),
+    databricks_server_hostname VARCHAR(512),
+    databricks_http_path VARCHAR(512),
+    default_metrics_connection_id UUID,
+    default_llm_connection_id UUID,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    icon VARCHAR(64) NOT NULL DEFAULT 'cloud',
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_environments_tier ON platform_environments(environment_tier);
+CREATE INDEX IF NOT EXISTS idx_platform_environments_source ON platform_environments(source_type);
+
+CREATE TABLE IF NOT EXISTS environment_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    environment_id VARCHAR(64) NOT NULL REFERENCES platform_environments(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    connection_type VARCHAR(64) NOT NULL,
+    purpose VARCHAR(32) NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_environment_connections_env ON environment_connections(environment_id);
+CREATE INDEX IF NOT EXISTS idx_environment_connections_purpose ON environment_connections(environment_id, purpose);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_connections_default
+    ON environment_connections(environment_id, purpose)
+    WHERE is_default = TRUE;
+
+ALTER TABLE platform_environments
+    DROP CONSTRAINT IF EXISTS platform_environments_default_metrics_connection_id_fkey;
+ALTER TABLE platform_environments
+    ADD CONSTRAINT platform_environments_default_metrics_connection_id_fkey
+    FOREIGN KEY (default_metrics_connection_id) REFERENCES environment_connections(id) ON DELETE SET NULL;
+
+ALTER TABLE platform_environments
+    DROP CONSTRAINT IF EXISTS platform_environments_default_llm_connection_id_fkey;
+ALTER TABLE platform_environments
+    ADD CONSTRAINT platform_environments_default_llm_connection_id_fkey
+    FOREIGN KEY (default_llm_connection_id) REFERENCES environment_connections(id) ON DELETE SET NULL;
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cost_logs_job_id ON cost_usage_logs(job_id);
 CREATE INDEX IF NOT EXISTS idx_cost_logs_timestamp ON cost_usage_logs(timestamp);

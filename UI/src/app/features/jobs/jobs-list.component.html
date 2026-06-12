@@ -95,11 +95,11 @@
       <tr *ngFor="let j of filteredJobs">
         <td><code class="small">{{ j.job_id }}</code></td>
         <td>{{ j.job_name || '–' }}</td>
-        <td>{{ j.workload_type || '–' }}</td>
-        <td>{{ j.avg_cpu_utilization_pct != null ? (j.avg_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
-        <td>{{ j.avg_memory_utilization_pct != null ? (j.avg_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td>{{ j.job_type || '–' }}</td>
+        <td>{{ j.avg_worker_cpu_utilization_pct != null ? (j.avg_worker_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
         <td>{{ j.total_runs ?? '–' }}</td>
-        <td class="small">{{ j.current_node_type || '–' }}</td>
+        <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
         <td><button class="btn btn-primary btn-sm" (click)="openDetail(j)">View details</button></td>
       </tr>
     </tbody>

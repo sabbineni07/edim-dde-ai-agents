@@ -2,7 +2,7 @@
 
 import uuid
 
-from sqlalchemy import Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -137,5 +137,67 @@ class WorkspaceAgent(Base):
     name = Column(String(255), nullable=False)
     bindings = Column(JSONB, nullable=False, default=dict)
     agent_settings = Column(JSONB, nullable=False, default=dict)
+    created_at = Column(DateTime(timezone=True), default=func.now())
+    updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class EnvironmentConnectionRow(Base):
+    """Environment-scoped connection (metrics, llm, rag)."""
+
+    __tablename__ = "environment_connections"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    environment_id = Column(
+        String(64),
+        ForeignKey("platform_environments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(255), nullable=False)
+    connection_type = Column(String(64), nullable=False, index=True)
+    purpose = Column(String(32), nullable=False, index=True)
+    config = Column(JSONB, nullable=False, default=dict)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class PlatformEnvironmentRow(Base):
+    """Platform environment tier / UC scope.
+
+    ``id`` is a stable business slug (e.g. dim_dev), not a generated UUID.
+    """
+
+    __tablename__ = "platform_environments"
+
+    id = Column(String(64), primary_key=True)
+    code = Column(String(64), nullable=False, unique=True, index=True)
+    display_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    environment_tier = Column(String(32), nullable=False, index=True)
+    source_type = Column(String(32), nullable=False, index=True)
+    catalog_name = Column(String(255), nullable=True)
+    schema_name = Column(String(255), nullable=True)
+    table_name = Column(String(255), nullable=True)
+    databricks_server_hostname = Column(String(512), nullable=True)
+    databricks_http_path = Column(String(512), nullable=True)
+    default_metrics_connection_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("environment_connections.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    default_llm_connection_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("environment_connections.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    sort_order = Column(Integer, nullable=False, default=0)
+    icon = Column(String(64), nullable=False, default="cloud")
+    is_enabled = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())

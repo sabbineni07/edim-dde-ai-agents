@@ -36,7 +36,7 @@
         <button
           class="btn btn-primary btn-sm"
           (click)="runRecommendation()"
-          [disabled]="runningRecommendation || !selectedRunId">
+          [disabled]="runningRecommendation || !selectedClusterId">
           <span *ngIf="!runningRecommendation">Run Recommendation</span>
           <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>Running...</span>
         </button>
@@ -59,34 +59,34 @@
         <thead>
           <tr>
             <th></th>
-            <th>Run ID</th>
-            <th>Date</th>
-            <th>CPU %</th>
-            <th>Memory %</th>
-            <th>Nodes</th>
-            <th>Node type</th>
+            <th>Cluster ID</th>
+            <th>Run date</th>
+            <th>Worker CPU %</th>
+            <th>Worker mem %</th>
+            <th>Worker nodes</th>
+            <th>Worker VM</th>
           </tr>
         </thead>
         <tbody>
           <tr
             *ngFor="let run of runs"
-            [class.table-active]="run.job_run_id === selectedRunId"
-            (click)="selectRun(run.job_run_id)"
+            [class.table-active]="run.cluster_id === selectedClusterId"
+            (click)="selectRun(run.cluster_id)"
             role="button">
             <td>
               <input
                 type="radio"
                 name="selectedRun"
-                [value]="run.job_run_id"
-                [checked]="run.job_run_id === selectedRunId"
-                (click)="$event.stopPropagation(); selectRun(run.job_run_id)" />
+                [value]="run.cluster_id"
+                [checked]="run.cluster_id === selectedClusterId"
+                (click)="$event.stopPropagation(); selectRun(run.cluster_id)" />
             </td>
-            <td><code class="small">{{ run.job_run_id }}</code></td>
-            <td>{{ run.run_date ?? '–' }}</td>
-            <td>{{ run.avg_cpu_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_memory_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_nodes_consumed | number:'1.1-1' }}</td>
-            <td>{{ run.current_node_type ?? '–' }}</td>
+            <td><code class="small">{{ run.cluster_id }}</code></td>
+            <td>{{ run.job_run_date ?? '–' }}</td>
+            <td>{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.avg_worker_memory_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.total_worker_nodes_consumed | number:'1.1-1' }}</td>
+            <td>{{ run.azure_worker_vm_size ?? '–' }}</td>
           </tr>
         </tbody>
       </table>
@@ -100,11 +100,11 @@
   <div class="card-body">
     <div *ngIf="loadingMetrics" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingMetrics && metricsData?.metrics" class="row g-3">
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Node type</strong><br>{{ metricsData!.metrics!['current_node_type'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Workers</strong><br>{{ metricsData!.metrics!['current_min_workers'] ?? '–' }} – {{ metricsData!.metrics!['current_max_workers'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg CPU %</strong><br>{{ metricsData!.metrics!['avg_cpu_utilization'] ?? metricsData!.metrics!['avg_cpu_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg memory %</strong><br>{{ metricsData!.metrics!['avg_memory_utilization'] ?? metricsData!.metrics!['avg_memory_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg nodes</strong><br>{{ metricsData!.metrics!['avg_nodes_consumed'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Worker VM</strong><br>{{ metricsData!.metrics!['azure_worker_vm_size'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Max workers</strong><br>{{ metricsData!.metrics!['max_worker_nodes_provisioned'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker CPU %</strong><br>{{ metricsData!.metrics!['avg_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker memory %</strong><br>{{ metricsData!.metrics!['avg_worker_memory_utilization_pct'] ?? '–' }}</div></div>
+      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_total_worker_nodes_consumed'] ?? '–' }}</div></div>
       <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">

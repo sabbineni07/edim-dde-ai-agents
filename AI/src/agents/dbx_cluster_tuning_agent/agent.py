@@ -51,13 +51,13 @@ AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 
 class RecommendationState(TypedDict, total=False):
     job_id: str
+    cluster_id: str
     job_run_id: str
     start_date: Optional[str]
     end_date: Optional[str]
     include_explanation: bool
-    job_run_ingest_override: Optional[Dict]
+    job_cluster_metrics_override: Optional[Dict]
     job_cluster_metrics: Dict
-    job_run_ingest: Dict
     sizing_hints: Dict
     resource_utilization: Dict
     cost_analysis: Dict
@@ -108,8 +108,8 @@ class DbxClusterTuningAgent:
         self.graph = self._create_recommendation_graph()
         logger.info("dbx_cluster_tuning_agent_initialized")
 
-    def _ingest_from_state(self, state: RecommendationState) -> Dict:
-        return state.get("job_run_ingest") or state.get("job_cluster_metrics") or {}
+    def _metrics_from_state(self, state: RecommendationState) -> Dict:
+        return state.get("job_cluster_metrics") or {}
 
     def _create_recommendation_graph(self) -> StateGraph:
         sizing_chain = self.sizing_chain
@@ -117,42 +117,43 @@ class DbxClusterTuningAgent:
         model_name = self.settings.azure_openai_deployment_name or self.settings.default_model_name
 
         def collect_data(state: RecommendationState) -> RecommendationState:
+            cluster_id = state.get("cluster_id") or state.get("job_run_id")
             logger.info(
                 "collecting_job_data",
                 job_id=state["job_id"],
-                job_run_id=state.get("job_run_id"),
+                cluster_id=cluster_id,
             )
-            override = state.get("job_run_ingest_override")
+            override = state.get("job_cluster_metrics_override")
             if override:
-                ingest = to_llm_ingest_dict(override)
-                state["job_cluster_metrics"] = {**override, **ingest, "job_run_ingest": ingest}
+                state["job_cluster_metrics"] = to_llm_ingest_dict(override)
             else:
                 state["job_cluster_metrics"] = get_job_cluster_metrics.invoke(
                     {
                         "job_id": state["job_id"],
-                        "job_run_id": state["job_run_id"],
+                        "cluster_id": cluster_id,
                         "start_date": state.get("start_date") or None,
                         "end_date": state.get("end_date") or None,
                     }
                 )
-            jcm = state["job_cluster_metrics"]
-            if not jcm or not isinstance(jcm, dict) or len(jcm) == 0:
+            metrics = state["job_cluster_metrics"]
+            if not metrics or not isinstance(metrics, dict) or len(metrics) == 0:
                 raise NoJobMetricsError(
                     job_id=state["job_id"],
                     start_date=state.get("start_date") or "",
                     end_date=state.get("end_date") or "",
-                    job_run_id=state.get("job_run_id"),
+                    job_run_id=cluster_id,
                 )
-            ingest = jcm.get("job_run_ingest") or to_llm_ingest_dict(jcm)
-            state["job_run_ingest"] = ingest
-            run_date = str(ingest.get("date") or ingest.get("job_date") or "").strip()
+            run_date = str(metrics.get("job_run_date") or "").strip()
             policy = default_sizing_policy()
-            state["sizing_hints"] = compute_sizing_hints(ingest, policy)
+            state["sizing_hints"] = compute_sizing_hints(metrics, policy)
             state["resource_utilization"] = {
-                "peak_cpu_utilization_pct": ingest.get("peak_cpu_utilization_pct", 0),
-                "peak_memory_utilization_pct": ingest.get("peak_memory_utilization_pct", 0),
-                "avg_worker_nodes_consumed": ingest.get("avg_worker_nodes_consumed", 0),
-                "workflow_task_count": ingest.get("workflow_task_count", 0),
+                "peak_worker_cpu_utilization_pct": metrics.get(
+                    "peak_worker_cpu_utilization_pct", 0
+                ),
+                "peak_worker_memory_utilization_pct": metrics.get(
+                    "peak_worker_memory_utilization_pct", 0
+                ),
+                "total_worker_nodes_consumed": metrics.get("total_worker_nodes_consumed", 0),
             }
             cost_start = state.get("start_date") or run_date
             cost_end = state.get("end_date") or run_date
@@ -166,13 +167,13 @@ class DbxClusterTuningAgent:
             return state
 
         def run_cluster_sizing(state: RecommendationState) -> RecommendationState:
-            ingest = self._ingest_from_state(state)
-            hints = state.get("sizing_hints") or compute_sizing_hints(ingest)
+            metrics = self._metrics_from_state(state)
+            hints = state.get("sizing_hints") or compute_sizing_hints(metrics)
             narrow_hints = sizing_hints_for_llm(hints)
             current_config = {
-                "azure_worker_vm_size": ingest.get("azure_worker_vm_size", "Standard_E8s_v3"),
-                "min_workers": ingest.get("current_min_workers", 1),
-                "max_workers": ingest.get("max_worker_nodes_cluster_ceiling", 16),
+                "azure_worker_vm_size": metrics.get("azure_worker_vm_size", "Standard_E8s_v3"),
+                "driver_node_count": metrics.get("driver_node_count", 1),
+                "max_worker_nodes_provisioned": metrics.get("max_worker_nodes_provisioned", 16),
             }
             attempts = 0
             llm_sizing: Dict = {}
@@ -188,14 +189,14 @@ class DbxClusterTuningAgent:
 
                 llm_sizing = sizing_chain.optimize(
                     current_config,
-                    ingest,
+                    metrics,
                     narrow_hints,
                     guardrail_feedback=feedback,
                 )
                 pattern_text, llm_rec = split_sizing_llm_response(llm_sizing)
                 state["pattern_analysis"] = pattern_text
                 applied, adjustments = validate_and_clamp_with_adjustments(
-                    llm_rec, job_run_ingest=ingest
+                    llm_rec, job_run_ingest=metrics
                 )
 
                 if not (
@@ -219,7 +220,7 @@ class DbxClusterTuningAgent:
                     model=model_name,
                     input_text={
                         "current_config": current_config,
-                        "job_run_ingest": ingest,
+                        "job_cluster_metrics": metrics,
                         "sizing_hints": narrow_hints,
                         "recommendation_attempts": attempts,
                     },
@@ -228,32 +229,32 @@ class DbxClusterTuningAgent:
             return state
 
         def validate_performance_node(state: RecommendationState) -> RecommendationState:
-            ingest = self._ingest_from_state(state)
+            metrics = self._metrics_from_state(state)
             ru = state["resource_utilization"]
-            current_node_type = ingest.get("azure_worker_vm_size", "Standard_E8s_v3")
+            current_node_type = metrics.get("azure_worker_vm_size", "Standard_E8s_v3")
             current_vcpus = parse_vcpus_from_node_type(current_node_type)
-            current_max_workers = int(ingest.get("max_worker_nodes_cluster_ceiling", 16))
+            current_max_workers = int(metrics.get("max_worker_nodes_provisioned", 16))
             recommended_vcpus = state["cost_optimization"].get("vcpus", 8)
             recommended_max_workers = state["cost_optimization"].get("max_workers", 8)
             state["performance_validation"] = validate_performance.invoke(
                 {
-                    "current_peak_cpu": ru.get("peak_cpu_utilization_pct", 0),
-                    "current_peak_memory": ru.get("peak_memory_utilization_pct", 0),
+                    "current_peak_cpu": ru.get("peak_worker_cpu_utilization_pct", 0),
+                    "current_peak_memory": ru.get("peak_worker_memory_utilization_pct", 0),
                     "recommended_vcpus": recommended_vcpus,
                     "recommended_max_workers": recommended_max_workers,
                     "current_vcpus": current_vcpus,
                     "current_max_workers": current_max_workers,
-                    "job_run_ingest": ingest,
+                    "job_run_ingest": metrics,
                 }
             )
             return state
 
         def assess_risks_node(state: RecommendationState) -> RecommendationState:
-            ingest = self._ingest_from_state(state)
+            metrics = self._metrics_from_state(state)
             current_vcpus = parse_vcpus_from_node_type(
-                ingest.get("azure_worker_vm_size", "Standard_E8s_v3")
+                metrics.get("azure_worker_vm_size", "Standard_E8s_v3")
             )
-            current_max = int(ingest.get("max_worker_nodes_cluster_ceiling", 16))
+            current_max = int(metrics.get("max_worker_nodes_provisioned", 16))
             rec = state["cost_optimization"]
             current_capacity = current_max * current_vcpus
             recommended_capacity = rec.get("max_workers", 8) * rec.get("vcpus", 8)
@@ -272,20 +273,20 @@ class DbxClusterTuningAgent:
             return state
 
         def generate_recommendation(state: RecommendationState) -> RecommendationState:
-            ingest = self._ingest_from_state(state)
-            current_node_type = ingest.get("azure_worker_vm_size", "Standard_E8s_v3")
+            metrics = self._metrics_from_state(state)
+            current_node_type = metrics.get("azure_worker_vm_size", "Standard_E8s_v3")
             co = state["cost_optimization"]
             recommended_node_type = co.get("azure_node_type") or nearest_allowed_node_type(
                 co.get("node_family", "E"),
                 co.get("vcpus", 8),
                 current_node_type=current_node_type,
             )
-            avg_nodes = float(ingest.get("avg_worker_nodes_consumed") or 4)
+            avg_nodes = float(metrics.get("total_worker_nodes_consumed") or 4)
             current_cost = calculate_cluster_cost.invoke(
                 {
                     "node_type": current_node_type,
-                    "min_workers": ingest.get("current_min_workers", 1),
-                    "max_workers": int(ingest.get("max_worker_nodes_cluster_ceiling", 16)),
+                    "min_workers": max(int(metrics.get("driver_node_count", 1)) - 1, 0),
+                    "max_workers": int(metrics.get("max_worker_nodes_provisioned", 16)),
                     "avg_nodes": avg_nodes,
                     "hours_per_month": 730,
                 }
@@ -318,17 +319,17 @@ class DbxClusterTuningAgent:
             }
             change_required = recommended_node_type != current_node_type or co.get(
                 "max_workers"
-            ) != int(ingest.get("max_worker_nodes_cluster_ceiling", 16))
+            ) != int(metrics.get("max_worker_nodes_provisioned", 16))
             state["reason_codes"] = infer_reason_codes(
-                ingest, state["recommendation"], change_required=change_required
+                metrics, state["recommendation"], change_required=change_required
             )
             return state
 
         def generate_explanation_node(state: RecommendationState) -> RecommendationState:
-            ingest = self._ingest_from_state(state)
+            metrics = self._metrics_from_state(state)
             result = explanation_chain.explain(
                 recommendation=state["recommendation"],
-                job_run_ingest=ingest,
+                job_run_ingest=metrics,
                 pattern_analysis=state["pattern_analysis"],
                 risk_assessment=state["risk_assessment"],
             )
@@ -367,31 +368,35 @@ class DbxClusterTuningAgent:
         workflow.add_edge("generate_explanation", END)
         return workflow.compile()
 
-    async def run(self, job_id: str, job_run_id: str, **kwargs) -> Dict:
-        return await self.generate_recommendation(job_id=job_id, job_run_id=job_run_id, **kwargs)
+    async def run(self, job_id: str, cluster_id: str, **kwargs) -> Dict:
+        return await self.generate_recommendation(job_id=job_id, cluster_id=cluster_id, **kwargs)
 
     async def generate_recommendation(
         self,
         job_id: str,
-        job_run_id: str,
+        cluster_id: str,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
         include_explanation: bool = False,
+        job_cluster_metrics: Optional[Dict] = None,
+        job_run_id: Optional[str] = None,
         job_run_ingest: Optional[Dict] = None,
         request_log_request_id: Optional[UUID] = None,
     ) -> Dict:
-        logger.info("generating_recommendation", job_id=job_id, job_run_id=job_run_id)
+        run_id = (cluster_id or job_run_id or "").strip()
+        metrics_override = job_cluster_metrics or job_run_ingest
+        logger.info("generating_recommendation", job_id=job_id, cluster_id=run_id)
         token_tracker = TokenUsageTracker()
         request_id = uuid4()
         initial_state: RecommendationState = {
             "job_id": job_id,
-            "job_run_id": job_run_id,
+            "cluster_id": run_id,
+            "job_run_id": run_id,
             "start_date": start_date,
             "end_date": end_date,
             "include_explanation": include_explanation,
-            "job_run_ingest_override": job_run_ingest,
+            "job_cluster_metrics_override": metrics_override,
             "job_cluster_metrics": {},
-            "job_run_ingest": {},
             "sizing_hints": {},
             "resource_utilization": {},
             "cost_analysis": {},
@@ -410,12 +415,12 @@ class DbxClusterTuningAgent:
         }
         final_state = await self.graph.ainvoke(initial_state)
         token_usage_summary = token_tracker.get_summary()
-        ingest = final_state.get("job_run_ingest") or {}
+        metrics = final_state.get("job_cluster_metrics") or {}
         recommendation = final_state.get("recommendation") or {}
         reason_codes = final_state.get("reason_codes") or []
         comparison_payload = build_recommendation_response_v2(
             recommendation_id=str(request_id),
-            ingest=ingest,
+            ingest=metrics,
             recommendation=recommendation,
             reason_codes=reason_codes,
             pattern_analysis=final_state.get("pattern_analysis", ""),
@@ -451,8 +456,8 @@ class DbxClusterTuningAgent:
                     risk_assessment=final_state.get("risk_assessment", {}),
                     token_usage_analysis=token_usage_summary,
                     request_log_request_id=request_log_request_id,
-                    workspace_id=ingest.get("workspace_id"),
-                    job_run_id=job_run_id or ingest.get("job_run_id"),
+                    workspace_id=metrics.get("workspace_id"),
+                    job_run_id=run_id or metrics.get("cluster_id"),
                     comparison=comparison_payload,
                     reason_codes=reason_codes,
                 )
@@ -461,7 +466,7 @@ class DbxClusterTuningAgent:
                         RecommendationLifecycleService,
                     )
 
-                    run_id = job_run_id or ingest.get("job_run_id")
+                    run_id = run_id or metrics.get("cluster_id")
                     if run_id:
                         RecommendationLifecycleService().supersede_prior_recommendations(
                             job_id=job_id,
@@ -479,9 +484,10 @@ class DbxClusterTuningAgent:
                 recommendation_doc = {
                     "recommendation_id": str(request_id),
                     "job_id": job_id,
-                    "job_run_id": job_run_id,
-                    "workspace_id": ingest.get("workspace_id"),
-                    "workload_type": ingest.get("workload_type", "Unknown"),
+                    "cluster_id": run_id,
+                    "job_run_id": run_id,
+                    "workspace_id": metrics.get("workspace_id"),
+                    "job_type": metrics.get("job_type", "Unknown"),
                     "rationale": recommendation.get("rationale", ""),
                     "detailed_explanation": final_state.get("explanation", ""),
                     **recommendation,
@@ -494,14 +500,16 @@ class DbxClusterTuningAgent:
         current_configuration = comparison_payload["comparison"]["current_configuration"]
         return {
             "request_id": str(request_id),
-            "job_run_id": job_run_id,
+            "cluster_id": run_id,
+            "job_run_id": run_id,
             "current_configuration": current_configuration,
             "recommendation": recommendation,
             "explanation": final_state.get("explanation", ""),
             "pattern_analysis": final_state.get("pattern_analysis", ""),
             "risk_assessment": final_state.get("risk_assessment", {}),
             "reason_codes": reason_codes,
-            "job_run_ingest": ingest,
+            "job_cluster_metrics": metrics,
+            "job_run_ingest": metrics,
             "sizing_hints": final_state.get("sizing_hints", {}),
             "llm_recommendation": final_state.get("llm_recommendation", {}),
             "guardrail_recommendation": final_state.get("guardrail_recommendation", {}),

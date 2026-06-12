@@ -1,12 +1,13 @@
 """Azure AI Search service integration."""
 
 import json
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 
-from azure.core.credentials import AzureKeyCredential
+from azure.core.credentials import AzureKeyCredential, TokenCredential
 from azure.search.documents import SearchClient
 
 from AI.src.core.llm.azure_openai_service import AzureOpenAIService
+from shared.auth.azure_tokens import get_default_azure_credential
 from shared.config.settings import settings
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
@@ -14,13 +15,25 @@ from shared.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+def _build_search_credential() -> tuple[Union[AzureKeyCredential, TokenCredential], str]:
+    """Resolve Search auth: API key when set, otherwise Azure identity (Managed Identity, az login)."""
+    api_key = (settings.azure_search_api_key or "").strip()
+    if api_key:
+        return AzureKeyCredential(api_key), "api_key"
+    return get_default_azure_credential(), "azure_ad"
+
+
 class AzureSearchService:
     """Service for Azure AI Search integration."""
 
     def __init__(self):
-        """Initialize Azure AI Search service."""
-        # Check if Azure AI Search is configured
-        if not settings.azure_search_endpoint or not settings.azure_search_api_key:
+        """Initialize Azure AI Search service.
+
+        Auth order: (1) API key when ``AZURE_SEARCH_API_KEY`` is set,
+        (2) DefaultAzureCredential (Managed Identity, az login, etc.) when only endpoint is set.
+        """
+        endpoint = (settings.azure_search_endpoint or "").strip()
+        if not endpoint:
             logger.warning("azure_search_not_configured")
             self.client = None
             self.openai_service = None
@@ -28,13 +41,14 @@ class AzureSearchService:
 
         index_name = settings.azure_search_index_name or "recommendations-index"
         try:
+            credential, auth = _build_search_credential()
             self.client = SearchClient(
-                endpoint=settings.azure_search_endpoint,
+                endpoint=endpoint,
                 index_name=index_name,
-                credential=AzureKeyCredential(settings.azure_search_api_key),
+                credential=credential,
             )
             self.openai_service = AzureOpenAIService()
-            logger.info("azure_search_service_initialized")
+            logger.info("azure_search_service_initialized", auth=auth)
         except Exception as e:
             logger.warning("azure_search_init_failed", error=str(e))
             self.client = None
@@ -167,17 +181,15 @@ class AzureSearchService:
             # Build searchable text from utilization patterns (not configs)
             text = f"""
             WORKLOAD PATTERN (for similarity matching only):
-            Workload Type: {metrics.workload_type or 'Unknown'}
-            CPU Utilization: {metrics.avg_cpu_utilization_pct}% average, {metrics.peak_cpu_utilization_pct}% peak
-            Memory Utilization: {metrics.avg_memory_utilization_pct}% average, {metrics.peak_memory_utilization_pct}% peak
-            Node Consumption: {metrics.avg_nodes_consumed} average, {metrics.p95_nodes_consumed} p95, {metrics.p99_nodes_consumed} p99
-            Job Duration: {metrics.job_duration_seconds} seconds
-            Task Count: {metrics.task_count}
-            Parallelism Ratio: {metrics.parallelism_ratio}
+            Workload Type: {metrics.job_type or 'Unknown'}
+            CPU Utilization: {metrics.avg_worker_cpu_utilization_pct}% average, {metrics.peak_worker_cpu_utilization_pct}% peak
+            Memory Utilization: {metrics.avg_worker_memory_utilization_pct}% average, {metrics.peak_worker_memory_utilization_pct}% peak
+            Node Consumption: {metrics.total_worker_nodes_consumed} average, {metrics.p99_worker_nodes_consumed} p99
+            Job Duration: {metrics.job_run_duration_seconds} seconds
             
             CURRENT CONFIGURATION (for reference only, may not be optimal):
-            Node Type: {metrics.current_node_type}
-            Workers: {metrics.current_min_workers}-{metrics.current_max_workers}
+            Node Type: {metrics.azure_worker_vm_size}
+            Max Workers: {metrics.max_worker_nodes_provisioned}
             
             NOTE: This configuration is what was used, not necessarily what should be used.
             Use this for pattern matching only. Optimization should be based on utilization patterns.
@@ -187,28 +199,24 @@ class AzureSearchService:
             embedding = self.openai_service.get_embeddings().embed_query(text)
 
             metrics_dict = {
-                "avg_cpu_utilization_pct": metrics.avg_cpu_utilization_pct,
-                "avg_memory_utilization_pct": metrics.avg_memory_utilization_pct,
-                "peak_cpu_utilization_pct": metrics.peak_cpu_utilization_pct,
-                "peak_memory_utilization_pct": metrics.peak_memory_utilization_pct,
-                "avg_nodes_consumed": metrics.avg_nodes_consumed,
-                "p95_nodes_consumed": metrics.p95_nodes_consumed,
-                "p99_nodes_consumed": metrics.p99_nodes_consumed,
-                "job_duration_seconds": metrics.job_duration_seconds,
-                "task_count": metrics.task_count,
-                "parallelism_ratio": metrics.parallelism_ratio,
+                "avg_worker_cpu_utilization_pct": metrics.avg_worker_cpu_utilization_pct,
+                "avg_worker_memory_utilization_pct": metrics.avg_worker_memory_utilization_pct,
+                "peak_worker_cpu_utilization_pct": metrics.peak_worker_cpu_utilization_pct,
+                "peak_worker_memory_utilization_pct": metrics.peak_worker_memory_utilization_pct,
+                "total_worker_nodes_consumed": metrics.total_worker_nodes_consumed,
+                "p99_worker_nodes_consumed": metrics.p99_worker_nodes_consumed,
+                "job_run_duration_seconds": metrics.job_run_duration_seconds,
             }
             current_config_dict = {
-                "node_type": metrics.current_node_type,
-                "min_workers": metrics.current_min_workers,
-                "max_workers": metrics.current_max_workers,
+                "node_type": metrics.azure_worker_vm_size,
+                "max_workers": metrics.max_worker_nodes_provisioned,
             }
             document = {
                 "id": f"metrics-{metrics.job_id}-{metrics.job_run_id}",
                 "job_id": metrics.job_id,
                 "job_run_id": metrics.job_run_id,
                 "workspace_id": metrics.workspace_id,
-                "workload_type": metrics.workload_type or "Unknown",
+                "workload_type": metrics.job_type or "Unknown",
                 "content": text,
                 "embedding": embedding,
                 "document_type": "job_cluster_metrics",

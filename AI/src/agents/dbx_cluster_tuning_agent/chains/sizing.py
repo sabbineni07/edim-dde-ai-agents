@@ -55,16 +55,16 @@ def split_sizing_llm_response(out: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]
 
 
 def _default_pattern_analysis(job_run_ingest: Optional[Dict[str, Any]]) -> str:
-    ingest = job_run_ingest or {}
-    wt = ingest.get("workload_type", "Unknown")
-    cpu = ingest.get("cluster_avg_cpu_utilization_pct_of_ceiling_capacity", "n/a")
-    mem = ingest.get("cluster_avg_memory_utilization_pct_of_ceiling_capacity", "n/a")
-    p95 = ingest.get("p95_worker_nodes_consumed", "n/a")
+    metrics = job_run_ingest or {}
+    wt = metrics.get("job_type", "Unknown")
+    cpu = metrics.get("avg_worker_cpu_utilization_pct", "n/a")
+    mem = metrics.get("avg_worker_memory_utilization_pct", "n/a")
+    p95 = metrics.get("p95_worker_nodes_consumed", "n/a")
     return (
         "### 1. Workload type\n"
         f"- Classified as **{wt}** from ingest.\n\n"
         "### 2. Resource utilization\n"
-        f"- Avg CPU % of ceiling: {cpu}; avg memory % of ceiling: {mem}.\n"
+        f"- Avg worker CPU %: {cpu}; avg worker memory %: {mem}.\n"
         f"- p95 worker nodes consumed: {p95}.\n\n"
         "### 3. Performance characteristics\n"
         "- Fallback summary (LLM parse failed).\n\n"
@@ -97,15 +97,15 @@ class ClusterSizingChain:
 You are a Databricks cluster right-sizing expert. Your output will be parsed as **one JSON object**; no other text is allowed.
 
 ## Task
-For **one job run**, using job_run_ingest:
-1. Analyze workload patterns (CPU, memory, nodes, over/under-provisioned).
-2. Recommend optimal cluster configuration (node family, vCPUs, worker range, auto-termination).
+For **one job run**, recommend the best cluster configuration (node family, vCPUs per node, min/max workers, auto-termination) from observed utilization in **job_run_ingest**:
+1. Classify workload and whether the run was over- or under-provisioned.
+2. Right-size SKU (family + vCPUs) and autoscale ceiling from actual worker and driver utilization.
 
-Family/SKU fit first, then workers/autoscale. Do not invent metrics.
+Family/SKU fit first, then worker count. Use only values present in the inputs — do not invent metrics.
 
 ## Evaluation criteria
-- **VM family:** **D** general, **E** memory-heavy, **F** CPU-heavy, **L** storage. Use cluster_avg_*_pct_of_ceiling_capacity, avg_vcpus_utilized_by_workload vs avg_vcpus_allocated_active_cluster, avg_memory_gb_utilized_by_workload vs avg_memory_gb_allocated_active_cluster, peak_*_utilization_pct. Final SKU is validated server-side — output **node_family** and **vcpus** only (no azure_node_type).
-- **Workers:** Set max_workers from **p95_worker_nodes_consumed** / **p99_worker_nodes_consumed** plus sizing_policy capacity_buffer_pct. **max_workers** must be **≥ sizing_hints.recommended_max_workers** and **≤ job_run_ingest.max_worker_nodes_cluster_ceiling**. **Do not** set max_workers from workflow_task_count (job-task count, not cluster workers).
+- **VM family:** **D** general, **E** memory-heavy, **F** CPU-heavy, **L** storage. Compare avg/peak worker CPU and memory utilization, vCPU and memory consumed vs utilized, and peaks. Output **node_family** and **vcpus** only (final SKU is validated server-side).
+- **Workers:** Size **max_workers** from observed node consumption (p95/p99/total worker nodes) plus sizing_policy capacity_buffer_pct. **max_workers** must be **≥ sizing_hints.recommended_max_workers** and **≤** the provisioned ceiling in ingest. Base sizing on cluster consumption, not orchestration metadata.
 - **min_workers** ≤ **max_workers**; **vcpus** in 4–64.
 - **Target utilization:** Aim near sizing_policy target_utilization_pct on the limiting resource with buffer — do not under-provision peaks.
 - **Auto-termination:** ALWAYS set `auto_termination_minutes` to **"""
@@ -113,15 +113,15 @@ Family/SKU fit first, then workers/autoscale. Do not invent metrics.
                     + """** — terminate immediately when the job completes.
 
 ## Inputs
-- **current_config:** azure_worker_vm_size, min_workers, max_workers.
-- **job_run_ingest:** Flat JSON (primary source of truth).
-- **sizing_hints:** Deterministic pre-check (advisory; ingest wins on conflict).
+- **current_config:** What the job ran with (worker VM size, driver nodes, max workers provisioned).
+- **job_run_ingest:** Observed metrics for this run only (primary source of truth).
+- **sizing_hints:** Deterministic pre-check from ingest (advisory; ingest wins on conflict).
 - **guardrail_feedback:** Retry only — fix listed violations.
 - **historical_context:** Optional; secondary only.
 
 ## Priorities
-- Utilization only (no budget / monthly spend).
-- Cite ingest keys in rationale and pattern_analysis.
+- Optimize for fit and utilization — not cost estimates or monthly spend.
+- Cite specific ingest fields and numbers in rationale and pattern_analysis.
 - Output only valid JSON.
 
 ## Output schema (exact keys)
@@ -216,7 +216,7 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
             except Exception:
                 snippet = ""
             logger.warning("failed_to_parse_json", result=snippet)
-            avg_nodes = (job_run_ingest or {}).get("avg_worker_nodes_consumed") or (
+            avg_nodes = (job_run_ingest or {}).get("total_worker_nodes_consumed") or (
                 job_run_ingest or {}
             ).get("p95_worker_nodes_consumed")
             max_workers = 8
@@ -231,7 +231,9 @@ Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_work
                 "vcpus": 8,
                 "min_workers": 1,
                 "max_workers": max_workers,
-                "auto_termination_minutes": AUTO_TERMINATION_MINUTES_IMMEDIATE,
+                "auto_termination_minutes": int(
+                    self.settings.recommendation_auto_termination_minutes or 0
+                ),
                 "rationale": "Conservative fallback: parse failed; recommend validating metrics and retrying.",
             }
         except Exception as e:

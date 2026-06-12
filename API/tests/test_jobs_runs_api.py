@@ -20,7 +20,7 @@ async def test_list_job_runs():
         runs = resp.json()
         assert isinstance(runs, list)
         assert len(runs) > 0
-        assert runs[0]["job_run_id"].startswith("run-001-")
+        assert runs[0]["cluster_id"].startswith("run-001-")
 
 
 @pytest.mark.asyncio

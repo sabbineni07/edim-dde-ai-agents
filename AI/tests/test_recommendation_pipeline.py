@@ -16,26 +16,19 @@ from shared.sizing.policy import compute_sizing_hints, sizing_hints_for_llm
 
 def _sample_metrics() -> JobClusterMetrics:
     return JobClusterMetrics(
-        date="2026-04-30",
+        job_run_date="2026-04-30",
         workspace_id="ws-1",
+        cluster_id="run-99",
         job_id="job-1",
-        job_run_id="run-99",
-        job_duration_seconds=1540.0,
-        task_count=10,
-        parallelism_ratio=2.0,
-        avg_cpu_utilization_pct=4.48,
-        avg_memory_utilization_pct=10.0,
-        peak_cpu_utilization_pct=25.0,
-        peak_memory_utilization_pct=30.0,
-        avg_nodes_consumed=2.0,
-        p95_nodes_consumed=6.0,
-        p99_nodes_consumed=8.0,
-        total_cost_usd=1.0,
-        cost_per_hour_usd=0.1,
-        current_node_type="Standard_E8s_v3",
-        current_min_workers=1,
-        current_max_workers=17,
-        job_date="2026-04-30",
+        job_run_duration_seconds=1540.0,
+        avg_worker_cpu_utilization_pct=4.48,
+        avg_worker_memory_utilization_pct=10.0,
+        peak_worker_cpu_utilization_pct=25.0,
+        peak_worker_memory_utilization_pct=30.0,
+        total_worker_nodes_consumed=6.0,
+        p99_worker_nodes_consumed=8.0,
+        azure_worker_vm_size="Standard_E8s_v3",
+        max_worker_nodes_provisioned=17,
     )
 
 

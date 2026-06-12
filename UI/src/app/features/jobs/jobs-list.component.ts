@@ -9,6 +9,7 @@ import {
   sampleDataDateStrings,
 } from '../../core/date-range.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
+import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 
 @Component({
   selector: 'app-jobs-list',
@@ -34,10 +35,16 @@ export class JobsListComponent implements OnInit {
     private api: ApiService,
     private router: Router,
     private route: ActivatedRoute,
-    private workspaceSelection: WorkspaceSelectionService
+    private workspaceSelection: WorkspaceSelectionService,
+    private environmentSelection: EnvironmentSelectionService
   ) {}
 
   ngOnInit(): void {
+    if (!this.environmentSelection.getSelectedId()) {
+      void this.router.navigate(['/app/workspaces']);
+      return;
+    }
+
     this.api.getUiHints().subscribe({
       next: (hints) => {
         this.uiHints = hints;
@@ -51,8 +58,9 @@ export class JobsListComponent implements OnInit {
   }
 
   private loadWorkspaces(): void {
+    const envId = this.environmentSelection.getSelectedId();
     this.workspacesLoading = true;
-    this.api.getWorkspaces().subscribe({
+    this.api.getWorkspaces(envId, this.environmentSelection.getSelectedConnectionId()).subscribe({
       next: (list) => {
         this.workspaces = list;
         this.workspacesLoading = false;
@@ -194,7 +202,15 @@ export class JobsListComponent implements OnInit {
     if (!this.workspaceId) return;
     this.loading = true;
     this.error = '';
-    this.api.getJobs(this.workspaceId, this.startDate, this.endDate).subscribe({
+    this.api
+      .getJobs(
+        this.workspaceId,
+        this.startDate,
+        this.endDate,
+        this.environmentSelection.getSelectedId(),
+        this.environmentSelection.getSelectedConnectionId()
+      )
+      .subscribe({
       next: (list) => {
         this.jobs = list;
         this.loading = false;
@@ -213,7 +229,7 @@ export class JobsListComponent implements OnInit {
       (j) =>
         (j.job_id || '').toLowerCase().includes(q) ||
         (j.job_name || '').toLowerCase().includes(q) ||
-        (j.workload_type || '').toLowerCase().includes(q)
+        (j.job_type || '').toLowerCase().includes(q)
     );
   }
 

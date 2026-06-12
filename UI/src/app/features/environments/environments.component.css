@@ -1,0 +1,47 @@
+.env-card {
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.env-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.env-card-local {
+  border-color: rgba(25, 135, 84, 0.35);
+}
+
+.env-icon-wrap {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+  background: var(--navy-bg, #f0f4f8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.25rem;
+  color: var(--navy-primary, #1a365d);
+}
+
+.local-upload-panel {
+  border-color: rgba(25, 135, 84, 0.3);
+}
+
+.env-edit-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 1040;
+}
+
+.env-edit-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1050;
+  width: min(560px, 92vw);
+  max-height: 90vh;
+  overflow: auto;
+}

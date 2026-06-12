@@ -14,6 +14,7 @@ import {
 import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
 import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
+import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { UiHints } from '../../services/api.service';
 
 @Component({
@@ -29,7 +30,7 @@ export class JobDetailComponent implements OnInit {
 
   metricsData: JobMetricsResponse | null = null;
   runs: JobRunSummary[] = [];
-  selectedRunId = '';
+  selectedClusterId = '';
   recommendations: RecommendationHistoryEntry[] = [];
   lastResult: GenerateRecommendationResponse | null = null;
 
@@ -56,7 +57,8 @@ export class JobDetailComponent implements OnInit {
   constructor(
     private api: ApiService,
     private route: ActivatedRoute,
-    private auth: AuthService
+    private auth: AuthService,
+    private environmentSelection: EnvironmentSelectionService
   ) {}
 
   /** Signed-in user for lifecycle audit (from login session). */
@@ -221,7 +223,16 @@ export class JobDetailComponent implements OnInit {
     const ws = this.workspaceId();
     const j = this.jobId();
     this.loadingMetrics = true;
-    this.api.getJobMetrics(ws, j, this.startDate || undefined, this.endDate || undefined).subscribe({
+    this.api
+      .getJobMetrics(
+        ws,
+        j,
+        this.startDate || undefined,
+        this.endDate || undefined,
+        this.environmentSelection.getSelectedId(),
+        this.environmentSelection.getSelectedConnectionId()
+      )
+      .subscribe({
       next: (data) => {
         this.metricsData = data;
         this.loadingMetrics = false;
@@ -237,14 +248,23 @@ export class JobDetailComponent implements OnInit {
     const ws = this.workspaceId();
     const j = this.jobId();
     this.loadingRuns = true;
-    this.api.getJobRuns(ws, j, this.startDate || undefined, this.endDate || undefined).subscribe({
+    this.api
+      .getJobRuns(
+        ws,
+        j,
+        this.startDate || undefined,
+        this.endDate || undefined,
+        this.environmentSelection.getSelectedId(),
+        this.environmentSelection.getSelectedConnectionId()
+      )
+      .subscribe({
       next: (list) => {
         this.runs = list;
         this.loadingRuns = false;
-        if (list.length && !this.selectedRunId) {
-          this.selectedRunId = list[0].job_run_id;
-        } else if (list.length && !list.some((r) => r.job_run_id === this.selectedRunId)) {
-          this.selectedRunId = list[0].job_run_id;
+        if (list.length && !this.selectedClusterId) {
+          this.selectedClusterId = list[0].cluster_id;
+        } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
+          this.selectedClusterId = list[0].cluster_id;
         }
       },
       error: () => {
@@ -270,8 +290,8 @@ export class JobDetailComponent implements OnInit {
     });
   }
 
-  selectRun(runId: string): void {
-    this.selectedRunId = runId;
+  selectRun(clusterId: string): void {
+    this.selectedClusterId = clusterId;
   }
 
   formatCost(summary: Record<string, unknown>): string {
@@ -283,8 +303,8 @@ export class JobDetailComponent implements OnInit {
   }
 
   runRecommendation(): void {
-    if (!this.selectedRunId) {
-      this.error = 'Select a job run first.';
+    if (!this.selectedClusterId) {
+      this.error = 'Select a cluster run first.';
       return;
     }
     const j = this.jobId();
@@ -294,7 +314,7 @@ export class JobDetailComponent implements OnInit {
     const body: GenerateRecommendationRequest = {
       agent_id: this.resolveAgentId(),
       job_id: j,
-      job_run_id: this.selectedRunId,
+      cluster_id: this.selectedClusterId,
       include_explanation: this.includeExplanation,
     };
     if (this.selectedWorkspaceAgentId) {

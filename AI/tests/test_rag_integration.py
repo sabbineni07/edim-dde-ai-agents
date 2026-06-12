@@ -43,6 +43,70 @@ class TestAzureSearchService:
             assert service.client is None
             assert service.openai_service is None
 
+    def test_initialization_with_managed_identity(self):
+        """Endpoint without API key uses DefaultAzureCredential."""
+        mock_client = MagicMock()
+        mock_openai = MagicMock()
+        mock_credential = MagicMock()
+
+        with patch("AI.src.core.llm.azure_search_service.settings") as mock_settings:
+            mock_settings.azure_search_endpoint = "https://search.example.net"
+            mock_settings.azure_search_api_key = None
+            mock_settings.azure_search_index_name = "recommendations-index"
+
+            with patch(
+                "AI.src.core.llm.azure_search_service.get_default_azure_credential",
+                return_value=mock_credential,
+            ) as get_cred:
+                with patch(
+                    "AI.src.core.llm.azure_search_service.SearchClient",
+                    return_value=mock_client,
+                ) as search_client:
+                    with patch(
+                        "AI.src.core.llm.azure_search_service.AzureOpenAIService",
+                        return_value=mock_openai,
+                    ):
+                        service = AzureSearchService()
+
+        get_cred.assert_called_once()
+        search_client.assert_called_once_with(
+            endpoint="https://search.example.net",
+            index_name="recommendations-index",
+            credential=mock_credential,
+        )
+        assert service.client is mock_client
+        assert service.openai_service is mock_openai
+
+    def test_initialization_with_api_key(self):
+        """API key path uses AzureKeyCredential."""
+        mock_client = MagicMock()
+        mock_openai = MagicMock()
+
+        with patch("AI.src.core.llm.azure_search_service.settings") as mock_settings:
+            mock_settings.azure_search_endpoint = "https://search.example.net"
+            mock_settings.azure_search_api_key = "search-key"
+            mock_settings.azure_search_index_name = "recommendations-index"
+
+            with patch(
+                "AI.src.core.llm.azure_search_service.SearchClient",
+                return_value=mock_client,
+            ) as search_client:
+                with patch(
+                    "AI.src.core.llm.azure_search_service.AzureOpenAIService",
+                    return_value=mock_openai,
+                ):
+                    with patch(
+                        "AI.src.core.llm.azure_search_service.get_default_azure_credential",
+                    ) as get_cred:
+                        service = AzureSearchService()
+
+        get_cred.assert_not_called()
+        _, kwargs = search_client.call_args
+        assert kwargs["endpoint"] == "https://search.example.net"
+        assert kwargs["index_name"] == "recommendations-index"
+        assert kwargs["credential"].key == "search-key"
+        assert service.client is mock_client
+
     def test_index_recommendation_without_client(self):
         """Test index_recommendation returns False when client is None."""
         service = AzureSearchService()

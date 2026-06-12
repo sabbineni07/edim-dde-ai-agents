@@ -3,9 +3,12 @@
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
+from DE.src.access.environment_job_metrics_collector import (
+    get_collector as get_job_metrics_collector,
+)
 from shared.database.connection import get_database_session
 from shared.database.models import CostUsageLog, RecommendationHistory, RequestLog
 from shared.factories.data_collector_factory import get_data_collector
@@ -21,6 +24,21 @@ from shared.utils.logging import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _resolve_collector(
+    environment_id: Optional[str],
+    x_user_name: Optional[str],
+    x_user_id: Optional[str],
+    connection_id: Optional[str] = None,
+):
+    if environment_id:
+        user = (x_user_id or x_user_name or "anonymous").strip() or "anonymous"
+        try:
+            return get_job_metrics_collector(environment_id, user, connection_id=connection_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+    return get_data_collector()
 
 
 def _default_date_range(start_date: Optional[date], end_date: Optional[date]) -> Dict[str, str]:
@@ -48,17 +66,30 @@ def _default_date_range(start_date: Optional[date], end_date: Optional[date]) ->
 
 
 @router.get("/workspaces")
-def list_workspaces() -> List[Dict[str, Any]]:
+def list_workspaces(
+    environment_id: Optional[str] = Query(
+        None,
+        description="Metrics environment id (dim_dev, local, etc.).",
+    ),
+    connection_id: Optional[str] = Query(
+        None,
+        description="Optional metrics connection override (UUID).",
+    ),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
+) -> List[Dict[str, Any]]:
     """List all distinct workspaces discovered from job metrics.
 
     Uses the configured data collector (local CSV or Databricks Delta table) to return
     unique workspaces with job counts and overall first/last seen dates (no date filter).
     """
-    collector = get_data_collector()
+    collector = _resolve_collector(
+        environment_id, x_user_name, x_user_id, connection_id=connection_id
+    )
     try:
         return collector.list_workspaces()
     except Exception as e:
-        logger.error("list_workspaces_error", error=str(e))
+        logger.error("list_workspaces_error", error=str(e), environment_id=environment_id)
         raise HTTPException(status_code=500, detail="Failed to load workspaces") from e
 
 
@@ -73,10 +104,16 @@ def list_jobs_for_workspace(
         None,
         description="End date (YYYY-MM-DD). Defaults to today.",
     ),
+    environment_id: Optional[str] = Query(default=None),
+    connection_id: Optional[str] = Query(default=None),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
 ) -> List[Dict[str, Any]]:
     """List jobs for a workspace with aggregated metrics summary."""
     dr = _default_date_range(start_date, end_date)
-    collector = get_data_collector()
+    collector = _resolve_collector(
+        environment_id, x_user_name, x_user_id, connection_id=connection_id
+    )
     try:
         return collector.list_jobs_for_workspace(
             workspace_id=workspace_id,
@@ -89,20 +126,19 @@ def list_jobs_for_workspace(
 
 
 class JobRunSummary(BaseModel):
-    job_run_id: str
-    run_date: Optional[str] = None
-    job_duration_seconds: Optional[float] = None
-    avg_cpu_utilization_pct: Optional[float] = None
-    avg_memory_utilization_pct: Optional[float] = None
-    avg_nodes_consumed: Optional[float] = None
-    peak_cpu_utilization_pct: Optional[float] = None
-    peak_memory_utilization_pct: Optional[float] = None
-    total_cost_usd: Optional[float] = None
-    current_node_type: Optional[str] = None
-    current_min_workers: Optional[int] = None
-    current_max_workers: Optional[int] = None
-    workload_type: Optional[str] = None
-    task_count: Optional[int] = None
+    """Per-run metrics summary for the job run picker."""
+
+    cluster_id: str
+    job_run_date: Optional[str] = None
+    job_run_duration_seconds: Optional[float] = None
+    avg_worker_cpu_utilization_pct: Optional[float] = None
+    avg_worker_memory_utilization_pct: Optional[float] = None
+    total_worker_nodes_consumed: Optional[float] = None
+    peak_worker_cpu_utilization_pct: Optional[float] = None
+    peak_worker_memory_utilization_pct: Optional[float] = None
+    azure_worker_vm_size: Optional[str] = None
+    max_worker_nodes_provisioned: Optional[int] = None
+    job_type: Optional[str] = None
 
 
 @router.get(
@@ -120,10 +156,16 @@ def list_job_runs(
         None,
         description="End date (YYYY-MM-DD). Defaults to today.",
     ),
+    environment_id: Optional[str] = Query(default=None),
+    connection_id: Optional[str] = Query(default=None),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
 ) -> List[JobRunSummary]:
     """List job runs for a job in a workspace (for run picker in UI)."""
     dr = _default_date_range(start_date, end_date)
-    collector = get_data_collector()
+    collector = _resolve_collector(
+        environment_id, x_user_name, x_user_id, connection_id=connection_id
+    )
     if not hasattr(collector, "list_job_runs"):
         raise HTTPException(status_code=501, detail="Job run listing not supported by collector")
     try:
@@ -156,14 +198,20 @@ def get_job_metrics(
         None,
         description="End date (YYYY-MM-DD). Defaults to today.",
     ),
+    environment_id: Optional[str] = Query(default=None),
+    connection_id: Optional[str] = Query(default=None),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
     """Get aggregated job cluster metrics for a job in a workspace.
 
-    This returns the same kind of aggregated metrics dict that the recommendation
-    agent uses (avg CPU/memory, p95 nodes, workload_type, current_node_type, etc.).
+    Returns aggregated job-run metrics for the browse window (utilization,
+    nodes consumed, worker VM size, job type, etc.).
     """
     dr = _default_date_range(start_date, end_date)
-    collector = get_data_collector()
+    collector = _resolve_collector(
+        environment_id, x_user_name, x_user_id, connection_id=connection_id
+    )
     try:
         agg = collector.get_job_metrics(
             workspace_id=workspace_id,

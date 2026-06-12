@@ -44,7 +44,6 @@ services:
       USE_LOCAL_DATA: ${USE_LOCAL_DATA:-true}
       # Use container path (avoid leaking host paths via compose substitution)
       LOCAL_DATA_PATH: /app/data/sample_job_metrics.csv
-      # YAML configuration root inside container
       CONFIG_DIR: /app/config
 #      CONFIG_DIR: ${CONFIG_DIR:-/app/config}
       # Use mock LLM provider (tests/local) instead of Azure OpenAI
@@ -64,7 +63,7 @@ services:
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
-      - ./data:/app/data:ro
+      - ./data:/app/data
       - ./shared:/app/shared:ro
       - ./AI:/app/AI:ro
       - ./API:/app/API:ro

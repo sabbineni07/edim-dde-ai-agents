@@ -9,22 +9,20 @@ from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Optional Delta table fields to pass through to the agent (from centralized table)
 _OPTIONAL_DELTA_KEYS = (
     "job_name",
     "workspace_name",
-    "job_date",
-    "cluster_id",
-    "start_time",
-    "end_time",
-    "delta_tables",
-    "provisioning_efficiency_pct",
-    "cpu_utilization_efficiency_pct",
-    "memory_utilization_efficiency_pct",
-    "max_nodes_provisioned",
-    "total_cpus_provisioned",
-    "total_memory_gb_provisioned",
-    "workload_type",
+    "job_run_start_time_utc",
+    "job_run_end_time_utc",
+    "delta_tables_ingested",
+    "worker_node_provisioning_efficency_pct",
+    "worker_cpu_utilization_efficiency_pct",
+    "worker_memory_utilization_efficency_pct",
+    "avg_worker_vcpus_consumed",
+    "avg_worker_memory_gb_consumed",
+    "job_type",
+    "processed_row_count",
+    "processed_bytes",
 )
 
 
@@ -32,48 +30,50 @@ class MetricsProcessor:
     """Process and aggregate job metrics."""
 
     def aggregate_by_job(self, metrics: List[JobClusterMetrics]) -> Dict[str, Dict]:
-        """Aggregate metrics by job_id.
-        Passes through optional Delta table fields (job_name, delta_tables, efficiency %, etc.)
-        from the first record per job so agents can use them.
-        """
+        """Aggregate metrics by job_id."""
         if not metrics:
             return {}
 
-        raw = [m.model_dump() if hasattr(m, "model_dump") else m.dict() for m in metrics]
+        raw = [m.model_dump() for m in metrics]
         df = pd.DataFrame(raw)
 
         aggregated = {}
         for job_id in df["job_id"].unique():
             job_df = df[df["job_id"] == job_id]
             first = job_df.iloc[0]
-            # Derive last run date if job_date is present
             last_run_date = None
-            if "job_date" in job_df.columns:
+            if "job_run_date" in job_df.columns:
                 try:
-                    # job_date is stored as string YYYY-MM-DD in JobClusterMetrics
-                    last_run_date = max(job_df["job_date"])
+                    last_run_date = max(job_df["job_run_date"])
                 except Exception:
                     last_run_date = None
 
             agg: Dict[str, Any] = {
-                "avg_duration_seconds": job_df["job_duration_seconds"].mean(),
-                "avg_cost_usd": job_df["total_cost_usd"].mean(),
-                "avg_cpu_utilization": job_df["avg_cpu_utilization_pct"].mean(),
-                "avg_memory_utilization": job_df["avg_memory_utilization_pct"].mean(),
-                "peak_cpu_utilization": job_df["peak_cpu_utilization_pct"].max(),
-                "peak_memory_utilization": job_df["peak_memory_utilization_pct"].max(),
-                "peak_cpu_utilization_pct": float(job_df["peak_cpu_utilization_pct"].max()),
-                "peak_memory_utilization_pct": float(job_df["peak_memory_utilization_pct"].max()),
-                "avg_nodes_consumed": float(job_df["avg_nodes_consumed"].mean()),
-                "p95_nodes_consumed": job_df["p95_nodes_consumed"].quantile(0.95),
-                "p99_nodes_consumed": job_df["p99_nodes_consumed"].quantile(0.99),
+                "avg_job_run_duration_seconds": job_df["job_run_duration_seconds"].mean(),
+                "avg_worker_cpu_utilization_pct": job_df["avg_worker_cpu_utilization_pct"].mean(),
+                "avg_worker_memory_utilization_pct": job_df[
+                    "avg_worker_memory_utilization_pct"
+                ].mean(),
+                "peak_worker_cpu_utilization_pct": float(
+                    job_df["peak_worker_cpu_utilization_pct"].max()
+                ),
+                "peak_worker_memory_utilization_pct": float(
+                    job_df["peak_worker_memory_utilization_pct"].max()
+                ),
+                "avg_total_worker_nodes_consumed": float(
+                    job_df["total_worker_nodes_consumed"].mean()
+                ),
+                "p95_worker_nodes_consumed": float(
+                    job_df["total_worker_nodes_consumed"].quantile(0.95)
+                ),
+                "p99_worker_nodes_consumed": float(
+                    job_df["p99_worker_nodes_consumed"].quantile(0.99)
+                ),
                 "total_runs": len(job_df),
-                "current_node_type": first["current_node_type"],
-                "current_min_workers": int(first["current_min_workers"]),
-                "current_max_workers": int(first["current_max_workers"]),
-                "last_run_date": last_run_date,
+                "azure_worker_vm_size": first["azure_worker_vm_size"],
+                "max_worker_nodes_provisioned": int(first["max_worker_nodes_provisioned"]),
+                "last_job_run_date": last_run_date,
             }
-            # Pass through optional Delta fields for the agent
             for key in _OPTIONAL_DELTA_KEYS:
                 if key in first and first[key] is not None:
                     agg[key] = first[key]
@@ -83,24 +83,16 @@ class MetricsProcessor:
         return aggregated
 
     def identify_workload_pattern(self, metrics: JobClusterMetrics) -> str:
-        """Identify workload pattern from metrics.
-
-        Args:
-            metrics: JobClusterMetrics object
-
-        Returns:
-            Workload type string
-        """
-        # Simple pattern identification logic
-        if metrics.rows_added and metrics.rows_added > 10000000:
-            if metrics.num_of_tables and metrics.num_of_tables <= 3:
+        """Identify workload pattern from metrics."""
+        if metrics.processed_row_count and metrics.processed_row_count > 10000000:
+            if metrics.delta_tables_ingested and metrics.delta_tables_ingested <= 3:
                 return "Large_ETL"
             return "Complex_ETL"
 
-        if metrics.avg_cpu_utilization_pct > 70:
+        if metrics.avg_worker_cpu_utilization_pct > 70:
             return "CPU_Intensive"
 
-        if metrics.avg_memory_utilization_pct > 70:
+        if metrics.avg_worker_memory_utilization_pct > 70:
             return "Memory_Intensive"
 
         return "Balanced"

@@ -37,12 +37,14 @@ def _cluster_config_from_ingest_and_rec(
         "cluster_topology": "multi_node",
         "autoscale": {
             "min_workers": int(
-                rec.get("min_workers", 0) if recommended else ingest.get("current_min_workers", 1)
+                rec.get("min_workers", 0)
+                if recommended
+                else max(int(ingest.get("driver_node_count", 1)) - 1, 0)
             ),
             "max_workers": int(
                 rec.get("max_workers", 8)
                 if recommended
-                else ingest.get("max_worker_nodes_cluster_ceiling", 1)
+                else ingest.get("max_worker_nodes_provisioned", 1)
             ),
         },
         "notes": rec.get("rationale", "") if recommended else "",
@@ -86,7 +88,7 @@ def build_comparison(
             ),
         },
         "single_node": {
-            "eligible": int(ingest.get("workflow_task_count") or 0) <= 1,
+            "eligible": int(ingest.get("max_worker_nodes_provisioned") or 0) <= 1,
             "recommended": False,
             "notes": [],
         },

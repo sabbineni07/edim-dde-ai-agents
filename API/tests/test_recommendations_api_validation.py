@@ -58,7 +58,7 @@ async def test_generate_unknown_run_returns_404(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "nonexistent-run",
+                "cluster_id": "nonexistent-run",
             },
         )
     assert response.status_code == 404
@@ -73,14 +73,14 @@ async def test_generate_success_per_run_without_dates(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "run-001-001",
+                "cluster_id": "run-001-001",
                 "include_explanation": False,
             },
         )
     assert response.status_code == 200, response.text
     data = response.json()
-    assert data["job_run_id"] == "run-001-001"
-    assert data["job_run_ingest"]["workflow_task_count"] == 150
+    assert data["cluster_id"] == "run-001-001"
+    assert data["job_cluster_metrics"]["total_worker_nodes_consumed"] == 4.2
 
 
 @pytest.mark.asyncio
@@ -90,7 +90,7 @@ async def test_generate_success_per_run(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "run-001-001",
+                "cluster_id": "run-001-001",
                 "start_date": "2026-06-01",
                 "end_date": "2026-06-03",
                 "include_explanation": False,
@@ -99,14 +99,14 @@ async def test_generate_success_per_run(api_client):
     assert response.status_code == 200, response.text
     data = response.json()
 
-    assert data["job_run_id"] == "run-001-001"
+    assert data["cluster_id"] == "run-001-001"
     assert data["request_id"]
     assert data["recommendation"]["node_family"] in ("D", "E", "F", "L")
     assert "max_workers" in data["recommendation"]
     assert data["reason_codes"]
     assert isinstance(data["reason_codes"], list)
-    assert data["job_run_ingest"]["workflow_task_count"] == 150
-    assert data["job_run_ingest"]["azure_worker_vm_size"] == "Standard_E8s_v3"
+    assert data["job_cluster_metrics"]["azure_worker_vm_size"] == "Standard_E8s_v3"
+    assert data["job_cluster_metrics"]["p99_worker_nodes_consumed"] == 8.0
     assert data["sizing_hints"]["recommended_max_workers"] >= 1
     assert data["llm_recommendation"]["node_family"] in ("D", "E", "F", "L")
     assert data["guardrail_recommendation"]["max_workers"] == data["recommendation"]["max_workers"]
@@ -159,7 +159,7 @@ async def test_generate_with_explanation(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "run-001-002",
+                "cluster_id": "run-001-002",
                 "include_explanation": True,
             },
         )

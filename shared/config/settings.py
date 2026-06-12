@@ -73,6 +73,8 @@ class Settings(BaseSettings):
     guardrail_max_date_range_days: int = 30
     guardrail_supported_intent: str = "cluster_recommendation"
 
+    admin_usernames: str = "admin"
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

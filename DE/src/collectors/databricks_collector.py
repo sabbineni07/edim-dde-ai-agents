@@ -5,17 +5,66 @@ from typing import Any, Dict, List, Optional
 from databricks import sql
 
 from shared.config.settings import settings
-from shared.models.job_cluster_metrics import JobClusterMetrics
+from shared.models.job_cluster_metrics import DELTA_MEMORY_EFFICIENCY_SQL_EXPR, JobClusterMetrics
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
+
+_METRICS_SELECT = f"""
+SELECT
+  CAST(job_run_date AS STRING) AS job_run_date,
+  CAST(workspace_id AS STRING) AS workspace_id,
+  workspace_name,
+  CAST(cluster_id AS STRING) AS cluster_id,
+  CAST(job_id AS STRING) AS job_id,
+  job_type,
+  job_name,
+  CAST(job_run_start_time_utc AS STRING) AS job_run_start_time_utc,
+  CAST(job_run_end_time_utc AS STRING) AS job_run_end_time_utc,
+  COALESCE(CAST(job_run_duration_seconds AS DOUBLE), 0.0) AS job_run_duration_seconds,
+  azure_driver_vm_size,
+  COALESCE(CAST(driver_node_count AS BIGINT), 1) AS driver_node_count,
+  CAST(driver_vcpus_consumed AS DOUBLE) AS driver_vcpus_consumed,
+  CAST(driver_memory_gb_consumed AS DOUBLE) AS driver_memory_gb_consumed,
+  CAST(avg_driver_cpu_utilization_pct AS DOUBLE) AS avg_driver_cpu_utilization_pct,
+  CAST(avg_driver_memory_utilization_pct AS DOUBLE) AS avg_driver_memory_utilization_pct,
+  CAST(peak_driver_cpu_utilization_pct AS DOUBLE) AS peak_driver_cpu_utilization_pct,
+  COALESCE(azure_worker_vm_size, 'Standard_E8s_v3') AS azure_worker_vm_size,
+  COALESCE(CAST(max_worker_nodes_provisioned AS BIGINT), 1) AS max_worker_nodes_provisioned,
+  COALESCE(CAST(total_worker_nodes_consumed AS DOUBLE), 0.0) AS total_worker_nodes_consumed,
+  COALESCE(CAST(p99_worker_nodes_consumed AS DOUBLE), 0.0) AS p99_worker_nodes_consumed,
+  CAST(avg_worker_vcpus_consumed AS DOUBLE) AS avg_worker_vcpus_consumed,
+  CAST(avg_worker_memory_gb_consumed AS DOUBLE) AS avg_worker_memory_gb_consumed,
+  CAST(avg_worker_vcpus_utilized AS DOUBLE) AS avg_worker_vcpus_utilized,
+  CAST(avg_worker_memory_gb_utilized AS DOUBLE) AS avg_worker_memory_gb_utilized,
+  COALESCE(CAST(avg_worker_cpu_utilization_pct AS DOUBLE), 0.0) AS avg_worker_cpu_utilization_pct,
+  COALESCE(CAST(avg_worker_memory_utilization_pct AS DOUBLE), 0.0) AS avg_worker_memory_utilization_pct,
+  COALESCE(CAST(peak_worker_cpu_utilization_pct AS DOUBLE), 0.0) AS peak_worker_cpu_utilization_pct,
+  COALESCE(CAST(peak_worker_memory_utilization_pct AS DOUBLE), 0.0) AS peak_worker_memory_utilization_pct,
+  CAST(worker_node_provisioning_efficency_pct AS DOUBLE) AS worker_node_provisioning_efficency_pct,
+  CAST(worker_cpu_utilization_efficiency_pct AS DOUBLE) AS worker_cpu_utilization_efficiency_pct,
+  {DELTA_MEMORY_EFFICIENCY_SQL_EXPR} AS worker_memory_utilization_efficency_pct,
+  CAST(delta_tables_ingested AS BIGINT) AS delta_tables_ingested,
+  CAST(processed_bytes AS BIGINT) AS processed_bytes,
+  CAST(processed_row_count AS BIGINT) AS processed_row_count
+"""
 
 
 class DatabricksCollector:
     """Collects job metrics from a pre-aggregated centralized Delta table only."""
 
-    def __init__(self):
-        self._metrics_table = (settings.databricks_job_cluster_metrics_table or "").strip() or None
+    def __init__(
+        self,
+        *,
+        metrics_table: Optional[str] = None,
+        server_hostname: Optional[str] = None,
+        http_path: Optional[str] = None,
+    ):
+        self._metrics_table = (
+            metrics_table or settings.databricks_job_cluster_metrics_table or ""
+        ).strip() or None
+        self._server_hostname = server_hostname or settings.databricks_server_hostname
+        self._http_path = http_path or settings.databricks_http_path
 
     def _connection_params(self) -> Dict[str, Any]:
         """Build SQL connector params; token from env override or Azure identity at runtime."""
@@ -34,9 +83,11 @@ class DatabricksCollector:
                     hint="Run az login or assign Managed Identity with Databricks access.",
                 )
         return {
-            "server_hostname": settings.databricks_server_hostname,
-            "http_path": settings.databricks_http_path,
+            "server_hostname": self._server_hostname,
+            "http_path": self._http_path,
             "access_token": token,
+            "_socket_timeout": 30,
+            "_query_timeout": 60,
         }
 
     def collect_job_cluster_metrics(
@@ -81,7 +132,7 @@ class DatabricksCollector:
             if not start_date or not end_date:
                 logger.warning("databricks_missing_date_range")
                 return []
-            conditions.extend(["job_date >= ?", "job_date <= ?"])
+            conditions.extend(["job_run_date >= ?", "job_run_date <= ?"])
             params.extend([start_date, end_date])
         if job_ids:
             placeholders = ", ".join(["?" for _ in job_ids])
@@ -91,52 +142,17 @@ class DatabricksCollector:
             conditions.append("workspace_id = ?")
             params.append(workspace_id)
         if job_run_id:
-            conditions.append("CAST(COALESCE(cluster_id, job_run_id) AS STRING) = ?")
+            conditions.append("CAST(cluster_id AS STRING) = ?")
             params.append(str(job_run_id))
         if not conditions:
             logger.warning("databricks_collect_metrics_no_filters")
             return []
         where = " AND ".join(conditions)
         query = f"""
-        SELECT
-          CAST(COALESCE(job_date, date) AS STRING) AS date,
-          CAST(workspace_id AS STRING) AS workspace_id,
-          CAST(job_id AS STRING) AS job_id,
-          CAST(COALESCE(cluster_id, job_run_id) AS STRING) AS job_run_id,
-          COALESCE(CAST(duration AS DOUBLE), CAST(job_duration_seconds AS DOUBLE), 0.0) AS job_duration_seconds,
-          CAST(COALESCE(task_count, 0) AS BIGINT) AS task_count,
-          COALESCE(CAST(parallelism_ratio AS DOUBLE), 1.0) AS parallelism_ratio,
-          COALESCE(CAST(cpu_utilization_pct AS DOUBLE), CAST(avg_cpu_utilization_pct AS DOUBLE), 0.0) AS avg_cpu_utilization_pct,
-          COALESCE(CAST(memory_utilization_pct AS DOUBLE), CAST(avg_memory_utilization_pct AS DOUBLE), 0.0) AS avg_memory_utilization_pct,
-          COALESCE(CAST(peak_cpu_utilization_pct AS DOUBLE), 0.0) AS peak_cpu_utilization_pct,
-          COALESCE(CAST(peak_memory_utilization_pct AS DOUBLE), 0.0) AS peak_memory_utilization_pct,
-          COALESCE(CAST(avg_nodes_consumed AS DOUBLE), 0.0) AS avg_nodes_consumed,
-          COALESCE(CAST(p95_nodes_consumed AS DOUBLE), 0.0) AS p95_nodes_consumed,
-          COALESCE(CAST(p99_nodes_consumed AS DOUBLE), 0.0) AS p99_nodes_consumed,
-          COALESCE(CAST(total_cost_usd AS DOUBLE), 0.0) AS total_cost_usd,
-          COALESCE(CAST(cost_per_hour_usd AS DOUBLE), 0.0) AS cost_per_hour_usd,
-          CAST(rows_added AS BIGINT) AS rows_added,
-          CAST(num_of_tables AS BIGINT) AS num_of_tables,
-          COALESCE(workload_type, job_type) AS workload_type,
-          COALESCE(current_node_type, node_type, 'Standard_E8s_v3') AS current_node_type,
-          CAST(COALESCE(current_min_workers, 1) AS BIGINT) AS current_min_workers,
-          CAST(COALESCE(max_nodes_provisioned, current_max_workers, 16) AS BIGINT) AS current_max_workers,
-          CAST(job_date AS STRING) AS job_date,
-          workspace_name,
-          job_name,
-          CAST(cluster_id AS STRING) AS cluster_id,
-          CAST(start_time AS STRING) AS start_time,
-          CAST(end_time AS STRING) AS end_time,
-          CAST(NULL AS ARRAY<STRING>) AS delta_tables,
-          CAST(provisioning_efficiency_pct AS DOUBLE) AS provisioning_efficiency_pct,
-          CAST(cpu_utilization_efficiency_pct AS DOUBLE) AS cpu_utilization_efficiency_pct,
-          CAST(memory_utilization_efficiency_pct AS DOUBLE) AS memory_utilization_efficiency_pct,
-          CAST(max_nodes_provisioned AS BIGINT) AS max_nodes_provisioned,
-          CAST(total_cpus_provisioned AS BIGINT) AS total_cpus_provisioned,
-          CAST(total_memory_gb_provisioned AS DOUBLE) AS total_memory_gb_provisioned
+        {_METRICS_SELECT}
         FROM {table}
         WHERE {where}
-        ORDER BY job_date DESC, start_time DESC
+        ORDER BY job_run_date DESC, job_run_start_time_utc DESC
         LIMIT 1000
         """
 
@@ -176,8 +192,8 @@ class DatabricksCollector:
           CAST(workspace_id AS STRING) AS workspace_id,
           COALESCE(MAX(workspace_name), CAST(workspace_id AS STRING), 'unknown') AS workspace_name,
           CAST(COUNT(DISTINCT job_id) AS BIGINT) AS job_count,
-          CAST(MIN(job_date) AS STRING) AS first_seen_date,
-          CAST(MAX(job_date) AS STRING) AS last_seen_date
+          CAST(MIN(job_run_date) AS STRING) AS first_seen_date,
+          CAST(MAX(job_run_date) AS STRING) AS last_seen_date
         FROM {table}
         GROUP BY workspace_id
         ORDER BY last_seen_date DESC, workspace_id
@@ -213,19 +229,18 @@ class DatabricksCollector:
         SELECT
           CAST(job_id AS STRING) AS job_id,
           COALESCE(MAX(job_name), CAST(job_id AS STRING)) AS job_name,
-          COALESCE(MAX(workload_type), MAX(job_type)) AS workload_type,
-          COALESCE(AVG(COALESCE(cpu_utilization_pct, avg_cpu_utilization_pct)), 0.0) AS avg_cpu_utilization_pct,
-          COALESCE(AVG(COALESCE(memory_utilization_pct, avg_memory_utilization_pct)), 0.0) AS avg_memory_utilization_pct,
+          COALESCE(MAX(job_type)) AS job_type,
+          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
+          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
           CAST(COUNT(*) AS BIGINT) AS total_runs,
-          COALESCE(AVG(COALESCE(duration, job_duration_seconds)), 0.0) AS avg_duration_seconds,
-          COALESCE(MAX(current_node_type), MAX(node_type), 'Standard_E8s_v3') AS current_node_type,
-          CAST(COALESCE(MAX(COALESCE(current_min_workers, 1)), 1) AS BIGINT) AS current_min_workers,
-          CAST(COALESCE(MAX(COALESCE(max_nodes_provisioned, current_max_workers, 16)), 16) AS BIGINT) AS current_max_workers,
-          CAST(MAX(job_date) AS STRING) AS last_run_date
+          COALESCE(AVG(job_run_duration_seconds), 0.0) AS avg_job_run_duration_seconds,
+          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
+          CAST(MAX(job_run_date) AS STRING) AS last_job_run_date
         FROM {table}
         WHERE workspace_id = ?
-          AND job_date >= ?
-          AND job_date <= ?
+          AND job_run_date >= ?
+          AND job_run_date <= ?
         GROUP BY job_id
         ORDER BY job_name, job_id
         """
@@ -270,28 +285,25 @@ class DatabricksCollector:
         table = self._metrics_table
         query = f"""
         SELECT
-          CAST(job_run_id AS STRING) AS job_run_id,
-          MAX(job_date) AS run_date,
-          COALESCE(MAX(job_duration_seconds), MAX(duration), 0.0) AS job_duration_seconds,
-          COALESCE(AVG(avg_cpu_utilization_pct), 0.0) AS avg_cpu_utilization_pct,
-          COALESCE(AVG(avg_memory_utilization_pct), 0.0) AS avg_memory_utilization_pct,
-          COALESCE(AVG(avg_nodes_consumed), 0.0) AS avg_nodes_consumed,
-          COALESCE(MAX(peak_cpu_utilization_pct), 0.0) AS peak_cpu_utilization_pct,
-          COALESCE(MAX(peak_memory_utilization_pct), 0.0) AS peak_memory_utilization_pct,
-          COALESCE(SUM(total_cost_usd), 0.0) AS total_cost_usd,
-          COALESCE(MAX(current_node_type), MAX(node_type), 'Standard_E8s_v3') AS current_node_type,
-          CAST(COALESCE(MAX(current_min_workers), 1) AS BIGINT) AS current_min_workers,
-          CAST(COALESCE(MAX(current_max_workers), 16) AS BIGINT) AS current_max_workers,
-          MAX(workload_type) AS workload_type,
-          CAST(MAX(task_count) AS BIGINT) AS task_count
+          CAST(cluster_id AS STRING) AS cluster_id,
+          MAX(job_run_date) AS job_run_date,
+          COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
+          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
+          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
+          COALESCE(AVG(total_worker_nodes_consumed), 0.0) AS total_worker_nodes_consumed,
+          COALESCE(MAX(peak_worker_cpu_utilization_pct), 0.0) AS peak_worker_cpu_utilization_pct,
+          COALESCE(MAX(peak_worker_memory_utilization_pct), 0.0) AS peak_worker_memory_utilization_pct,
+          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
+          MAX(job_type) AS job_type
         FROM {table}
         WHERE workspace_id = ?
           AND job_id = ?
-          AND job_date >= ?
-          AND job_date <= ?
-          AND job_run_id IS NOT NULL
-        GROUP BY job_run_id
-        ORDER BY run_date DESC, job_run_id DESC
+          AND job_run_date >= ?
+          AND job_run_date <= ?
+          AND cluster_id IS NOT NULL
+        GROUP BY cluster_id
+        ORDER BY job_run_date DESC, cluster_id DESC
         """
         params: List[Any] = [workspace_id, job_id, start_date, end_date]
         try:
@@ -324,41 +336,34 @@ class DatabricksCollector:
         table = self._metrics_table
         query = f"""
         SELECT
-          COALESCE(AVG(COALESCE(duration, job_duration_seconds)), 0.0) AS avg_duration_seconds,
-          COALESCE(AVG(total_cost_usd), 0.0) AS avg_cost_usd,
-          COALESCE(AVG(COALESCE(cpu_utilization_pct, avg_cpu_utilization_pct)), 0.0) AS avg_cpu_utilization,
-          COALESCE(AVG(COALESCE(memory_utilization_pct, avg_memory_utilization_pct)), 0.0) AS avg_memory_utilization,
-          COALESCE(MAX(peak_cpu_utilization_pct), 0.0) AS peak_cpu_utilization,
-          COALESCE(MAX(peak_memory_utilization_pct), 0.0) AS peak_memory_utilization,
-          COALESCE(MAX(peak_cpu_utilization_pct), 0.0) AS peak_cpu_utilization_pct,
-          COALESCE(MAX(peak_memory_utilization_pct), 0.0) AS peak_memory_utilization_pct,
-          COALESCE(AVG(avg_nodes_consumed), 0.0) AS avg_nodes_consumed,
-          COALESCE(percentile_approx(p95_nodes_consumed, 0.95), 0.0) AS p95_nodes_consumed,
-          COALESCE(percentile_approx(p99_nodes_consumed, 0.99), 0.0) AS p99_nodes_consumed,
+          COALESCE(AVG(job_run_duration_seconds), 0.0) AS avg_job_run_duration_seconds,
+          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
+          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
+          COALESCE(MAX(peak_worker_cpu_utilization_pct), 0.0) AS peak_worker_cpu_utilization_pct,
+          COALESCE(MAX(peak_worker_memory_utilization_pct), 0.0) AS peak_worker_memory_utilization_pct,
+          COALESCE(AVG(total_worker_nodes_consumed), 0.0) AS avg_total_worker_nodes_consumed,
+          COALESCE(percentile_approx(total_worker_nodes_consumed, 0.95), 0.0) AS p95_worker_nodes_consumed,
+          COALESCE(percentile_approx(p99_worker_nodes_consumed, 0.99), 0.0) AS p99_worker_nodes_consumed,
           COUNT(*) AS total_runs,
-          COALESCE(MAX(current_node_type), MAX(node_type), 'Standard_E8s_v3') AS current_node_type,
-          CAST(COALESCE(MAX(COALESCE(current_min_workers, 1)), 1) AS BIGINT) AS current_min_workers,
-          CAST(COALESCE(MAX(COALESCE(max_nodes_provisioned, current_max_workers, 16)), 16) AS BIGINT) AS current_max_workers,
-          MAX(job_date) AS last_run_date,
+          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
+          MAX(job_run_date) AS last_job_run_date,
           MAX(job_name) AS job_name,
           MAX(workspace_name) AS workspace_name,
-          MAX(job_date) AS job_date,
-          MAX(cluster_id) AS cluster_id,
-          MAX(start_time) AS start_time,
-          MAX(end_time) AS end_time,
-          MAX(delta_tables) AS delta_tables,
-          MAX(provisioning_efficiency_pct) AS provisioning_efficiency_pct,
-          MAX(cpu_utilization_efficiency_pct) AS cpu_utilization_efficiency_pct,
-          MAX(memory_utilization_efficiency_pct) AS memory_utilization_efficiency_pct,
-          CAST(MAX(max_nodes_provisioned) AS BIGINT) AS max_nodes_provisioned,
-          CAST(MAX(total_cpus_provisioned) AS BIGINT) AS total_cpus_provisioned,
-          MAX(total_memory_gb_provisioned) AS total_memory_gb_provisioned,
-          COALESCE(MAX(workload_type), MAX(job_type)) AS workload_type
+          MAX(job_run_start_time_utc) AS job_run_start_time_utc,
+          MAX(job_run_end_time_utc) AS job_run_end_time_utc,
+          MAX(delta_tables_ingested) AS delta_tables_ingested,
+          MAX(worker_node_provisioning_efficency_pct) AS worker_node_provisioning_efficency_pct,
+          MAX(worker_cpu_utilization_efficiency_pct) AS worker_cpu_utilization_efficiency_pct,
+          MAX({DELTA_MEMORY_EFFICIENCY_SQL_EXPR}) AS worker_memory_utilization_efficency_pct,
+          MAX(job_type) AS job_type,
+          MAX(processed_row_count) AS processed_row_count,
+          MAX(processed_bytes) AS processed_bytes
         FROM {table}
         WHERE workspace_id = ?
           AND job_id = ?
-          AND job_date >= ?
-          AND job_date <= ?
+          AND job_run_date >= ?
+          AND job_run_date <= ?
         """
         params: List[Any] = [workspace_id, job_id, start_date, end_date]
         try:

@@ -77,8 +77,8 @@ class LocalDataCollector:
             if "workspace_id" in df.columns:
                 df["workspace_id"] = df["workspace_id"].astype(str)
 
-            # Convert date column to datetime for filtering
-            df["date"] = pd.to_datetime(df["date"])
+            date_col = "job_run_date" if "job_run_date" in df.columns else "date"
+            df[date_col] = pd.to_datetime(df[date_col])
             if run_only:
                 df_filtered = df
             else:
@@ -87,7 +87,7 @@ class LocalDataCollector:
                     return []
                 start_dt = pd.to_datetime(start_date)
                 end_dt = pd.to_datetime(end_date)
-                df_filtered = df[(df["date"] >= start_dt) & (df["date"] <= end_dt)]
+                df_filtered = df[(df[date_col] >= start_dt) & (df[date_col] <= end_dt)]
             logger.info(
                 "local_csv_after_date_filter",
                 rows=len(df_filtered),
@@ -108,12 +108,16 @@ class LocalDataCollector:
             if workspace_id:
                 df_filtered = df_filtered[df_filtered["workspace_id"] == str(workspace_id)]
 
-            if job_run_id and "job_run_id" in df_filtered.columns:
-                df_filtered = df_filtered[df_filtered["job_run_id"].astype(str) == str(job_run_id)]
+            run_col = (
+                "cluster_id"
+                if "cluster_id" in df_filtered.columns
+                else ("job_run_id" if "job_run_id" in df_filtered.columns else None)
+            )
+            if job_run_id and run_col:
+                df_filtered = df_filtered[df_filtered[run_col].astype(str) == str(job_run_id)]
 
-            # Convert date back to string format
             df_filtered = df_filtered.copy()
-            df_filtered["date"] = df_filtered["date"].dt.strftime("%Y-%m-%d")
+            df_filtered[date_col] = df_filtered[date_col].dt.strftime("%Y-%m-%d")
 
             # Convert to JobClusterMetrics objects
             metrics = []
@@ -126,7 +130,10 @@ class LocalDataCollector:
                         if pd.isna(value):
                             row_dict[key] = None
                         # Ensure workspace_id and job_id are strings
-                        elif key in ["workspace_id", "job_id", "job_run_id"] and value is not None:
+                        elif (
+                            key in ["workspace_id", "job_id", "cluster_id", "job_run_id"]
+                            and value is not None
+                        ):
                             row_dict[key] = str(value)
 
                     metric = JobClusterMetrics(**row_dict)
@@ -142,7 +149,7 @@ class LocalDataCollector:
                     "collected_job_cluster_metrics_from_csv",
                     count=len(metrics),
                     first_record_job_id=rec.get("job_id"),
-                    first_record_date=rec.get("date"),
+                    first_record_date=rec.get("job_run_date") or rec.get("date"),
                     first_record_keys=list(rec.keys())[:15],
                 )
             else:
@@ -198,20 +205,26 @@ class LocalDataCollector:
                     }
 
                 utilization_by_job[job_id]["avg_cpu_utilization_pct"].append(
-                    metric.avg_cpu_utilization_pct
+                    metric.avg_worker_cpu_utilization_pct
                 )
                 utilization_by_job[job_id]["avg_memory_utilization_pct"].append(
-                    metric.avg_memory_utilization_pct
+                    metric.avg_worker_memory_utilization_pct
                 )
                 utilization_by_job[job_id]["peak_cpu_utilization_pct"].append(
-                    metric.peak_cpu_utilization_pct
+                    metric.peak_worker_cpu_utilization_pct
                 )
                 utilization_by_job[job_id]["peak_memory_utilization_pct"].append(
-                    metric.peak_memory_utilization_pct
+                    metric.peak_worker_memory_utilization_pct
                 )
-                utilization_by_job[job_id]["avg_nodes_consumed"].append(metric.avg_nodes_consumed)
-                utilization_by_job[job_id]["p95_nodes_consumed"].append(metric.p95_nodes_consumed)
-                utilization_by_job[job_id]["p99_nodes_consumed"].append(metric.p99_nodes_consumed)
+                utilization_by_job[job_id]["avg_nodes_consumed"].append(
+                    metric.total_worker_nodes_consumed
+                )
+                utilization_by_job[job_id]["p95_nodes_consumed"].append(
+                    metric.total_worker_nodes_consumed
+                )
+                utilization_by_job[job_id]["p99_nodes_consumed"].append(
+                    metric.p99_worker_nodes_consumed
+                )
 
             # Calculate averages and peaks
             result = []
@@ -242,7 +255,8 @@ class LocalDataCollector:
         logger.info("listing_workspaces_from_csv")
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
-            if "workspace_id" not in df.columns or "date" not in df.columns:
+            date_col = "job_run_date" if "job_run_date" in df.columns else "date"
+            if "workspace_id" not in df.columns or date_col not in df.columns:
                 return []
 
             df["workspace_id"] = df["workspace_id"].astype(str)
@@ -251,7 +265,7 @@ class LocalDataCollector:
             else:
                 df["workspace_name"] = df["workspace_id"]
 
-            df["date"] = pd.to_datetime(df["date"])
+            df[date_col] = pd.to_datetime(df[date_col])
             if df.empty:
                 return []
 
@@ -265,8 +279,8 @@ class LocalDataCollector:
                 .agg(
                     workspace_name=("workspace_name", "max"),
                     job_count=("job_id", lambda s: s.dropna().nunique()),
-                    first_seen_date=("date", "min"),
-                    last_seen_date=("date", "max"),
+                    first_seen_date=(date_col, "min"),
+                    last_seen_date=(date_col, "max"),
                 )
                 .reset_index()
             )
@@ -316,52 +330,51 @@ class LocalDataCollector:
         )
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
+            date_col = "job_run_date" if "job_run_date" in df.columns else "date"
             required_cols = {
                 "workspace_id",
                 "job_id",
-                "date",
-                "avg_cpu_utilization_pct",
-                "avg_memory_utilization_pct",
-                "job_duration_seconds",
-                "current_node_type",
-                "current_min_workers",
-                "current_max_workers",
+                date_col,
+                "avg_worker_cpu_utilization_pct",
+                "avg_worker_memory_utilization_pct",
+                "job_run_duration_seconds",
+                "azure_worker_vm_size",
+                "max_worker_nodes_provisioned",
             }
             if not required_cols.issubset(set(df.columns)):
                 return []
 
             df["workspace_id"] = df["workspace_id"].astype(str)
             df["job_id"] = df["job_id"].astype(str)
-            df["date"] = pd.to_datetime(df["date"])
+            df[date_col] = pd.to_datetime(df[date_col])
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
 
             df_filtered = df[
                 (df["workspace_id"] == str(workspace_id))
-                & (df["date"] >= start_dt)
-                & (df["date"] <= end_dt)
+                & (df[date_col] >= start_dt)
+                & (df[date_col] <= end_dt)
             ].copy()
             if df_filtered.empty:
                 return []
 
             if "job_name" not in df_filtered.columns:
                 df_filtered["job_name"] = df_filtered["job_id"]
-            if "workload_type" not in df_filtered.columns:
-                df_filtered["workload_type"] = None
+            if "job_type" not in df_filtered.columns:
+                df_filtered["job_type"] = None
 
             grouped = (
                 df_filtered.groupby("job_id", dropna=False)
                 .agg(
                     job_name=("job_name", "max"),
-                    workload_type=("workload_type", "max"),
-                    avg_cpu_utilization_pct=("avg_cpu_utilization_pct", "mean"),
-                    avg_memory_utilization_pct=("avg_memory_utilization_pct", "mean"),
+                    workload_type=("job_type", "max"),
+                    avg_cpu_utilization_pct=("avg_worker_cpu_utilization_pct", "mean"),
+                    avg_memory_utilization_pct=("avg_worker_memory_utilization_pct", "mean"),
                     total_runs=("job_id", "count"),
-                    avg_duration_seconds=("job_duration_seconds", "mean"),
-                    current_node_type=("current_node_type", "max"),
-                    current_min_workers=("current_min_workers", "max"),
-                    current_max_workers=("current_max_workers", "max"),
-                    last_run_date=("date", "max"),
+                    avg_duration_seconds=("job_run_duration_seconds", "mean"),
+                    current_node_type=("azure_worker_vm_size", "max"),
+                    current_max_workers=("max_worker_nodes_provisioned", "max"),
+                    last_run_date=(date_col, "max"),
                 )
                 .reset_index()
                 .sort_values(by=["job_name", "job_id"], ascending=[True, True])
@@ -372,15 +385,14 @@ class LocalDataCollector:
                     "workspace_id": str(workspace_id),
                     "job_id": str(row["job_id"]),
                     "job_name": row["job_name"],
-                    "workload_type": row["workload_type"],
-                    "avg_cpu_utilization_pct": float(row["avg_cpu_utilization_pct"]),
-                    "avg_memory_utilization_pct": float(row["avg_memory_utilization_pct"]),
+                    "job_type": row["workload_type"],
+                    "avg_worker_cpu_utilization_pct": float(row["avg_cpu_utilization_pct"]),
+                    "avg_worker_memory_utilization_pct": float(row["avg_memory_utilization_pct"]),
                     "total_runs": int(row["total_runs"]),
-                    "avg_duration_seconds": float(row["avg_duration_seconds"]),
-                    "current_node_type": row["current_node_type"],
-                    "current_min_workers": int(row["current_min_workers"]),
-                    "current_max_workers": int(row["current_max_workers"]),
-                    "last_run_date": row["last_run_date"].strftime("%Y-%m-%d"),
+                    "avg_job_run_duration_seconds": float(row["avg_duration_seconds"]),
+                    "azure_worker_vm_size": row["current_node_type"],
+                    "max_worker_nodes_provisioned": int(row["current_max_workers"]),
+                    "last_job_run_date": row["last_run_date"].strftime("%Y-%m-%d"),
                 }
                 for _, row in grouped.iterrows()
             ]
@@ -405,56 +417,63 @@ class LocalDataCollector:
         )
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
-            if "job_run_id" not in df.columns:
+            run_col = "cluster_id" if "cluster_id" in df.columns else "job_run_id"
+            date_col = "job_run_date" if "job_run_date" in df.columns else "date"
+            if run_col not in df.columns:
                 return []
 
             df["workspace_id"] = df["workspace_id"].astype(str)
             df["job_id"] = df["job_id"].astype(str)
-            df["job_run_id"] = df["job_run_id"].astype(str)
-            df["date"] = pd.to_datetime(df["date"])
+            df[run_col] = df[run_col].astype(str)
+            df[date_col] = pd.to_datetime(df[date_col])
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
             df_filtered = df[
                 (df["workspace_id"] == str(workspace_id))
                 & (df["job_id"] == str(job_id))
-                & (df["date"] >= start_dt)
-                & (df["date"] <= end_dt)
+                & (df[date_col] >= start_dt)
+                & (df[date_col] <= end_dt)
             ].copy()
             if df_filtered.empty:
                 return []
 
             runs: List[Dict[str, Any]] = []
-            for run_id, group in df_filtered.groupby("job_run_id", sort=False):
+            for run_id, group in df_filtered.groupby(run_col, sort=False):
                 first = group.iloc[0]
-                last_date = group["date"].max()
+                last_date = group[date_col].max()
                 runs.append(
                     {
-                        "job_run_id": str(run_id),
-                        "run_date": last_date.strftime("%Y-%m-%d") if pd.notna(last_date) else None,
-                        "job_duration_seconds": float(group["job_duration_seconds"].iloc[0]),
-                        "avg_cpu_utilization_pct": float(group["avg_cpu_utilization_pct"].mean()),
-                        "avg_memory_utilization_pct": float(
-                            group["avg_memory_utilization_pct"].mean()
+                        "cluster_id": str(run_id),
+                        "job_run_date": (
+                            last_date.strftime("%Y-%m-%d") if pd.notna(last_date) else None
                         ),
-                        "avg_nodes_consumed": float(group["avg_nodes_consumed"].mean()),
-                        "peak_cpu_utilization_pct": float(group["peak_cpu_utilization_pct"].max()),
-                        "peak_memory_utilization_pct": float(
-                            group["peak_memory_utilization_pct"].max()
+                        "job_run_duration_seconds": float(
+                            group["job_run_duration_seconds"].iloc[0]
                         ),
-                        "total_cost_usd": float(group["total_cost_usd"].sum()),
-                        "current_node_type": first.get("current_node_type"),
-                        "current_min_workers": int(first.get("current_min_workers", 1)),
-                        "current_max_workers": int(first.get("current_max_workers", 16)),
-                        "workload_type": first.get("workload_type"),
-                        "task_count": (
-                            int(first.get("task_count", 0))
-                            if pd.notna(first.get("task_count"))
-                            else None
+                        "avg_worker_cpu_utilization_pct": float(
+                            group["avg_worker_cpu_utilization_pct"].mean()
                         ),
+                        "avg_worker_memory_utilization_pct": float(
+                            group["avg_worker_memory_utilization_pct"].mean()
+                        ),
+                        "total_worker_nodes_consumed": float(
+                            group["total_worker_nodes_consumed"].mean()
+                        ),
+                        "peak_worker_cpu_utilization_pct": float(
+                            group["peak_worker_cpu_utilization_pct"].max()
+                        ),
+                        "peak_worker_memory_utilization_pct": float(
+                            group["peak_worker_memory_utilization_pct"].max()
+                        ),
+                        "azure_worker_vm_size": first.get("azure_worker_vm_size"),
+                        "max_worker_nodes_provisioned": int(
+                            first.get("max_worker_nodes_provisioned", 16)
+                        ),
+                        "job_type": first.get("job_type"),
                     }
                 )
 
-            runs.sort(key=lambda r: (r.get("run_date") or "", r["job_run_id"]), reverse=True)
+            runs.sort(key=lambda r: (r.get("job_run_date") or "", r["cluster_id"]), reverse=True)
             return runs
         except Exception as e:
             logger.error(
@@ -478,78 +497,88 @@ class LocalDataCollector:
         )
         try:
             df = pd.read_csv(self.csv_path, **_READ_CSV_KWARGS)
+            date_col = "job_run_date" if "job_run_date" in df.columns else "date"
             required_cols = {
                 "workspace_id",
                 "job_id",
-                "date",
-                "job_duration_seconds",
-                "total_cost_usd",
-                "avg_cpu_utilization_pct",
-                "avg_memory_utilization_pct",
-                "peak_cpu_utilization_pct",
-                "peak_memory_utilization_pct",
-                "avg_nodes_consumed",
-                "p95_nodes_consumed",
-                "p99_nodes_consumed",
-                "current_node_type",
-                "current_min_workers",
-                "current_max_workers",
+                date_col,
+                "job_run_duration_seconds",
+                "avg_worker_cpu_utilization_pct",
+                "avg_worker_memory_utilization_pct",
+                "peak_worker_cpu_utilization_pct",
+                "peak_worker_memory_utilization_pct",
+                "total_worker_nodes_consumed",
+                "p99_worker_nodes_consumed",
+                "azure_worker_vm_size",
+                "max_worker_nodes_provisioned",
             }
             if not required_cols.issubset(set(df.columns)):
                 return None
 
             df["workspace_id"] = df["workspace_id"].astype(str)
             df["job_id"] = df["job_id"].astype(str)
-            df["date"] = pd.to_datetime(df["date"])
+            df[date_col] = pd.to_datetime(df[date_col])
             start_dt = pd.to_datetime(start_date)
             end_dt = pd.to_datetime(end_date)
             df_filtered = df[
                 (df["workspace_id"] == str(workspace_id))
                 & (df["job_id"] == str(job_id))
-                & (df["date"] >= start_dt)
-                & (df["date"] <= end_dt)
+                & (df[date_col] >= start_dt)
+                & (df[date_col] <= end_dt)
             ].copy()
             if df_filtered.empty:
                 return None
 
             first = df_filtered.iloc[0]
-            last_run = df_filtered["date"].max()
+            last_run = df_filtered[date_col].max()
             result: Dict[str, Any] = {
-                "avg_duration_seconds": float(df_filtered["job_duration_seconds"].mean()),
-                "avg_cost_usd": float(df_filtered["total_cost_usd"].mean()),
-                "avg_cpu_utilization": float(df_filtered["avg_cpu_utilization_pct"].mean()),
-                "avg_memory_utilization": float(df_filtered["avg_memory_utilization_pct"].mean()),
-                "peak_cpu_utilization": float(df_filtered["peak_cpu_utilization_pct"].max()),
-                "peak_memory_utilization": float(df_filtered["peak_memory_utilization_pct"].max()),
-                "peak_cpu_utilization_pct": float(df_filtered["peak_cpu_utilization_pct"].max()),
-                "peak_memory_utilization_pct": float(
-                    df_filtered["peak_memory_utilization_pct"].max()
+                "avg_job_run_duration_seconds": float(
+                    df_filtered["job_run_duration_seconds"].mean()
                 ),
-                "avg_nodes_consumed": float(df_filtered["avg_nodes_consumed"].mean()),
-                "p95_nodes_consumed": float(df_filtered["p95_nodes_consumed"].quantile(0.95)),
-                "p99_nodes_consumed": float(df_filtered["p99_nodes_consumed"].quantile(0.99)),
+                "avg_worker_cpu_utilization_pct": float(
+                    df_filtered["avg_worker_cpu_utilization_pct"].mean()
+                ),
+                "avg_worker_memory_utilization_pct": float(
+                    df_filtered["avg_worker_memory_utilization_pct"].mean()
+                ),
+                "peak_worker_cpu_utilization_pct": float(
+                    df_filtered["peak_worker_cpu_utilization_pct"].max()
+                ),
+                "peak_worker_memory_utilization_pct": float(
+                    df_filtered["peak_worker_memory_utilization_pct"].max()
+                ),
+                "avg_total_worker_nodes_consumed": float(
+                    df_filtered["total_worker_nodes_consumed"].mean()
+                ),
+                "p95_worker_nodes_consumed": float(
+                    df_filtered["total_worker_nodes_consumed"].quantile(0.95)
+                ),
+                "p99_worker_nodes_consumed": float(
+                    df_filtered["p99_worker_nodes_consumed"].quantile(0.99)
+                ),
                 "total_runs": int(len(df_filtered)),
-                "current_node_type": first.get("current_node_type"),
-                "current_min_workers": int(first.get("current_min_workers", 1)),
-                "current_max_workers": int(first.get("current_max_workers", 16)),
-                "last_run_date": last_run.strftime("%Y-%m-%d") if pd.notna(last_run) else None,
+                "azure_worker_vm_size": first.get("azure_worker_vm_size"),
+                "max_worker_nodes_provisioned": int(first.get("max_worker_nodes_provisioned", 16)),
+                "last_job_run_date": last_run.strftime("%Y-%m-%d") if pd.notna(last_run) else None,
             }
 
             optional_map = (
                 "job_name",
                 "workspace_name",
-                "job_date",
+                "job_run_date",
                 "cluster_id",
-                "start_time",
-                "end_time",
-                "delta_tables",
-                "provisioning_efficiency_pct",
-                "cpu_utilization_efficiency_pct",
-                "memory_utilization_efficiency_pct",
-                "max_nodes_provisioned",
-                "total_cpus_provisioned",
-                "total_memory_gb_provisioned",
-                "workload_type",
+                "job_run_start_time_utc",
+                "job_run_end_time_utc",
+                "delta_tables_ingested",
+                "worker_node_provisioning_efficency_pct",
+                "worker_cpu_utilization_efficiency_pct",
+                "worker_memory_utilization_efficency_pct",
+                "max_worker_nodes_provisioned",
+                "avg_worker_vcpus_consumed",
+                "avg_worker_memory_gb_consumed",
+                "job_type",
+                "processed_row_count",
+                "processed_bytes",
             )
             for key in optional_map:
                 if key in df_filtered.columns and pd.notna(first.get(key)):
@@ -599,33 +628,19 @@ class LocalDataCollector:
                         "avg_cost_per_run": 0.0,
                     }
 
-                cost_by_job[job_id]["total_cost_usd"] += metric.total_cost_usd
-                cost_by_job[job_id]["cost_per_hour_usd"].append(metric.cost_per_hour_usd)
                 cost_by_job[job_id]["total_runs"] += 1
 
             # Calculate averages
             result = []
             for job_id, data in cost_by_job.items():
-                avg_cost_per_hour = (
-                    sum(data["cost_per_hour_usd"]) / len(data["cost_per_hour_usd"])
-                    if data["cost_per_hour_usd"]
-                    else 0.0
-                )
-                avg_cost_per_run = (
-                    data["total_cost_usd"] / data["total_runs"] if data["total_runs"] > 0 else 0.0
-                )
-
-                # Estimate monthly cost (assuming 30 days, 24 hours)
-                monthly_cost = avg_cost_per_hour * 30 * 24
-
                 result.append(
                     {
                         "job_id": job_id,
-                        "total_cost_usd": data["total_cost_usd"],
-                        "avg_cost_per_hour_usd": avg_cost_per_hour,
-                        "avg_cost_per_run_usd": avg_cost_per_run,
+                        "total_cost_usd": 0.0,
+                        "avg_cost_per_hour_usd": 0.0,
+                        "avg_cost_per_run_usd": 0.0,
                         "total_runs": data["total_runs"],
-                        "monthly_cost": monthly_cost,
+                        "monthly_cost": 0.0,
                     }
                 )
 

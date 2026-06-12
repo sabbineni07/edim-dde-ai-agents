@@ -12,6 +12,15 @@ CONNECTION_TYPES = (
     "faiss",
 )
 
+# Internal purpose derived from connection type (not shown in UI).
+CONNECTION_TYPE_PURPOSE: Dict[str, str] = {
+    "databricks": "metrics",
+    "local_dataset": "metrics",
+    "ai_foundry": "llm",
+    "ai_search": "rag",
+    "faiss": "rag",
+}
+
 _AUTH_MI = (
     "Authentication uses your Azure identity (az login or Managed Identity). "
     "No passwords or tokens are stored in this app — the API obtains them at runtime."
@@ -20,7 +29,7 @@ _AUTH_MI = (
 CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
     "databricks": {
         "label": "Databricks",
-        "description": "Read job metrics from a Databricks SQL warehouse.",
+        "description": "Query data from a Databricks SQL warehouse and default table.",
         "fields": [
             {
                 "key": "databricks_server_hostname",
@@ -40,11 +49,11 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
             },
             {
                 "key": "databricks_job_cluster_metrics_table",
-                "label": "Metrics table",
+                "label": "Default table",
                 "type": "string",
                 "required": True,
-                "placeholder": "catalog.schema.job_cluster_metrics",
-                "help": "Fully qualified table with pre-aggregated job run metrics.",
+                "placeholder": "catalog.schema.table_name",
+                "help": "Fully qualified Unity Catalog table used for browse and agents.",
             },
         ],
         "auth_note": _AUTH_MI,
@@ -150,6 +159,14 @@ def list_connection_types() -> List[Dict[str, Any]]:
             }
         )
     return out
+
+
+def purpose_for_connection_type(connection_type: str) -> str:
+    """Map connection type to internal purpose (metrics, llm, rag)."""
+    purpose = CONNECTION_TYPE_PURPOSE.get(connection_type)
+    if not purpose:
+        raise ValueError(f"Unknown connection_type: {connection_type}")
+    return purpose
 
 
 def validate_connection_config(connection_type: str, config: Dict[str, Any]) -> Dict[str, Any]:

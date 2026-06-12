@@ -12,36 +12,85 @@ export interface Workspace {
   last_seen_date?: string;
 }
 
+export interface LocalDatasetInfo {
+  source: 'upload' | 'sample';
+  filename: string;
+  uploaded_at?: string | null;
+  row_count?: number | null;
+  file_size_bytes?: number | null;
+  using_sample: boolean;
+}
+
+export interface PlatformEnvironment {
+  id: string;
+  code: string;
+  display_name: string;
+  description: string;
+  environment_tier: string;
+  source_type: 'databricks_uc' | 'local_csv';
+  catalog_name?: string | null;
+  schema_name?: string | null;
+  table_name?: string | null;
+  table_fqn?: string | null;
+  databricks_server_hostname?: string | null;
+  databricks_http_path?: string | null;
+  default_metrics_connection_id?: string | null;
+  default_llm_connection_id?: string | null;
+  metrics_connection_count?: number;
+  sort_order: number;
+  icon: string;
+  is_enabled?: boolean;
+  readiness: 'ready' | 'needs_connection' | 'needs_upload' | 'unknown';
+  local_dataset?: LocalDatasetInfo | null;
+}
+
+export interface PlatformEnvironmentUpdate {
+  display_name?: string;
+  description?: string;
+  environment_tier?: string;
+  sort_order?: number;
+  icon?: string;
+  is_enabled?: boolean;
+}
+
+export interface EnvironmentConnection {
+  id: string;
+  environment_id: string;
+  name: string;
+  connection_type: string;
+  purpose: 'metrics' | 'llm' | 'rag';
+  config: Record<string, unknown>;
+  is_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface JobSummary {
   workspace_id: string;
   job_id: string;
   job_name?: string;
-  workload_type?: string;
-  avg_cpu_utilization_pct?: number;
-  avg_memory_utilization_pct?: number;
+  job_type?: string;
+  avg_worker_cpu_utilization_pct?: number;
+  avg_worker_memory_utilization_pct?: number;
   total_runs?: number;
-  avg_duration_seconds?: number;
-  current_node_type?: string;
-  current_min_workers?: number;
-  current_max_workers?: number;
-  last_run_date?: string;
+  avg_job_run_duration_seconds?: number;
+  azure_worker_vm_size?: string;
+  max_worker_nodes_provisioned?: number;
+  last_job_run_date?: string;
 }
 
 export interface JobRunSummary {
-  job_run_id: string;
-  run_date?: string;
-  job_duration_seconds?: number;
-  avg_cpu_utilization_pct?: number;
-  avg_memory_utilization_pct?: number;
-  avg_nodes_consumed?: number;
-  peak_cpu_utilization_pct?: number;
-  peak_memory_utilization_pct?: number;
-  total_cost_usd?: number;
-  current_node_type?: string;
-  current_min_workers?: number;
-  current_max_workers?: number;
-  workload_type?: string;
-  task_count?: number;
+  cluster_id: string;
+  job_run_date?: string;
+  job_run_duration_seconds?: number;
+  avg_worker_cpu_utilization_pct?: number;
+  avg_worker_memory_utilization_pct?: number;
+  total_worker_nodes_consumed?: number;
+  peak_worker_cpu_utilization_pct?: number;
+  peak_worker_memory_utilization_pct?: number;
+  azure_worker_vm_size?: string;
+  max_worker_nodes_provisioned?: number;
+  job_type?: string;
 }
 
 export interface JobMetricsResponse {
@@ -110,6 +159,7 @@ export interface UiHints {
   sample_data_start_date: string;
   sample_data_end_date: string;
   default_agent_id: string;
+  admin_usernames?: string[];
 }
 
 export interface ConnectionTypeField {
@@ -172,7 +222,8 @@ export interface GenerateRecommendationRequest {
   agent_id?: string;
   workspace_agent_id?: string | null;
   job_id: string;
-  job_run_id: string;
+  cluster_id: string;
+  job_run_id?: string;
   start_date?: string;
   end_date?: string;
   include_explanation?: boolean;
@@ -180,6 +231,7 @@ export interface GenerateRecommendationRequest {
 
 export interface GenerateRecommendationResponse {
   request_id?: string;
+  cluster_id?: string;
   job_run_id?: string;
   current_configuration?: Record<string, unknown>;
   recommendation: Record<string, unknown>;
@@ -187,6 +239,7 @@ export interface GenerateRecommendationResponse {
   pattern_analysis?: string;
   risk_assessment?: Record<string, unknown>;
   reason_codes?: string[];
+  job_cluster_metrics?: Record<string, unknown>;
   job_run_ingest?: Record<string, unknown>;
   sizing_hints?: Record<string, unknown>;
   llm_recommendation?: Record<string, unknown>;
@@ -240,8 +293,141 @@ export class ApiService {
     );
   }
 
-  getWorkspaces(): Observable<Workspace[]> {
-    return this.http.get<Workspace[]>(`${API_BASE}/workspaces`).pipe(
+  getEnvironments(): Observable<PlatformEnvironment[]> {
+    return this.http.get<PlatformEnvironment[]>(`${API_BASE}/environments`).pipe(
+      catchError((err) => {
+        console.error('getEnvironments error', err);
+        return of([]);
+      })
+    );
+  }
+
+  updateEnvironment(
+    environmentId: string,
+    body: PlatformEnvironmentUpdate
+  ): Observable<PlatformEnvironment> {
+    return this.http.put<PlatformEnvironment>(`${API_BASE}/environments/${environmentId}`, body);
+  }
+
+  getLocalDataset(): Observable<LocalDatasetInfo> {
+    return this.http.get<LocalDatasetInfo>(`${API_BASE}/environments/local/dataset`);
+  }
+
+  uploadLocalCsv(file: File): Observable<LocalDatasetInfo> {
+    const form = new FormData();
+    form.append('file', file, file.name);
+    return this.http.post<LocalDatasetInfo>(`${API_BASE}/environments/local/upload`, form);
+  }
+
+  resetLocalDataset(): Observable<LocalDatasetInfo> {
+    return this.http.delete<LocalDatasetInfo>(`${API_BASE}/environments/local/dataset`);
+  }
+
+  downloadLocalTemplate(): void {
+    window.open(`${API_BASE}/environments/local/template`, '_blank');
+  }
+
+  private withEnvironmentParams(
+    params: HttpParams,
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): HttpParams {
+    const envId = (environmentId ?? '').trim();
+    let out = envId ? params.set('environment_id', envId) : params;
+    const connId = (connectionId ?? '').trim();
+    if (connId) out = out.set('connection_id', connId);
+    return out;
+  }
+
+  getEnvironmentConnections(
+    environmentId: string,
+    purpose?: string
+  ): Observable<EnvironmentConnection[]> {
+    let params = new HttpParams();
+    if (purpose) params = params.set('purpose', purpose);
+    return this.http.get<EnvironmentConnection[]>(
+      `${API_BASE}/environments/${environmentId}/connections`,
+      { params }
+    );
+  }
+
+  createEnvironmentConnection(
+    environmentId: string,
+    body: {
+      name: string;
+      connection_type: string;
+      purpose?: string;
+      config: Record<string, unknown>;
+      set_default?: boolean;
+    }
+  ): Observable<EnvironmentConnection> {
+    return this.http.post<EnvironmentConnection>(
+      `${API_BASE}/environments/${environmentId}/connections`,
+      body
+    );
+  }
+
+  updateEnvironmentConnection(
+    environmentId: string,
+    connectionId: string,
+    body: { name?: string; config?: Record<string, unknown> }
+  ): Observable<EnvironmentConnection> {
+    return this.http.put<EnvironmentConnection>(
+      `${API_BASE}/environments/${environmentId}/connections/${connectionId}`,
+      body
+    );
+  }
+
+  deleteEnvironmentConnection(
+    environmentId: string,
+    connectionId: string
+  ): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(
+      `${API_BASE}/environments/${environmentId}/connections/${connectionId}`
+    );
+  }
+
+  setDefaultEnvironmentConnection(
+    environmentId: string,
+    connectionId: string,
+    purpose?: string
+  ): Observable<EnvironmentConnection> {
+    let params = new HttpParams();
+    if (purpose) params = params.set('purpose', purpose);
+    return this.http.post<EnvironmentConnection>(
+      `${API_BASE}/environments/${environmentId}/connections/${connectionId}/set-default`,
+      {},
+      { params }
+    );
+  }
+
+  getEnvironmentConnectionsByType(
+    environmentId: string,
+    connectionType: string
+  ): Observable<EnvironmentConnection[]> {
+    let params = new HttpParams().set('connection_type', connectionType);
+    return this.http.get<EnvironmentConnection[]>(
+      `${API_BASE}/environments/${environmentId}/connections`,
+      { params }
+    );
+  }
+
+  /** Browse workspaces; errors propagate (use in Workspaces UI). */
+  browseWorkspaces(
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): Observable<Workspace[]> {
+    let params = new HttpParams();
+    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    return this.http.get<Workspace[]>(`${API_BASE}/workspaces`, { params });
+  }
+
+  /** @deprecated Prefer browseWorkspaces when errors should surface in the UI. */
+  getWorkspaces(
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): Observable<Workspace[]> {
+    return this.browseWorkspaces(environmentId, connectionId).pipe(
       catchError((err) => {
         console.error('getWorkspaces error', err);
         return of([]);
@@ -249,10 +435,17 @@ export class ApiService {
     );
   }
 
-  getJobs(workspaceId: string, start_date?: string, end_date?: string): Observable<JobSummary[]> {
+  getJobs(
+    workspaceId: string,
+    start_date?: string,
+    end_date?: string,
+    environmentId?: string | null,
+    connectionId?: string | null
+  ): Observable<JobSummary[]> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
+    params = this.withEnvironmentParams(params, environmentId, connectionId);
     return this.http
       .get<JobSummary[]>(`${API_BASE}/workspaces/${workspaceId}/jobs`, { params })
       .pipe(
@@ -267,11 +460,14 @@ export class ApiService {
     workspaceId: string,
     jobId: string,
     start_date?: string,
-    end_date?: string
+    end_date?: string,
+    environmentId?: string | null,
+    connectionId?: string | null
   ): Observable<JobRunSummary[]> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
+    params = this.withEnvironmentParams(params, environmentId, connectionId);
     return this.http
       .get<JobRunSummary[]>(
         `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/runs`,
@@ -289,11 +485,14 @@ export class ApiService {
     workspaceId: string,
     jobId: string,
     start_date?: string,
-    end_date?: string
+    end_date?: string,
+    environmentId?: string | null,
+    connectionId?: string | null
   ): Observable<JobMetricsResponse | null> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
+    params = this.withEnvironmentParams(params, environmentId, connectionId);
     return this.http
       .get<JobMetricsResponse>(
         `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/metrics`,
@@ -330,7 +529,7 @@ export class ApiService {
               agent_id: 'dbx_cluster_tuning_agent',
               name: 'DBX Cluster Tuning Agent',
               description: 'Per-run cluster right-sizing.',
-              get_started_route: '/app/workspaces',
+              get_started_route: '/app/environments',
             },
           ],
         });

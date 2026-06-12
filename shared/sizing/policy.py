@@ -24,22 +24,19 @@ def recommended_min_max_workers(
     *,
     buffer_pct: float = 10.0,
 ) -> Tuple[int, int]:
-    """Floor/ceiling hint for max_workers from observed **worker nodes** only.
-
-    workflow_task_count is Databricks job-task orchestration count, not cluster
-    worker demand — do not use it to size max_workers.
-    """
+    """Floor/ceiling hint for max_workers from observed worker nodes."""
     p95 = float(ingest.get("p95_worker_nodes_consumed") or 0)
     p99 = float(ingest.get("p99_worker_nodes_consumed") or p95)
-    ceiling = int(ingest.get("max_worker_nodes_cluster_ceiling") or 1)
-    min_w = int(ingest.get("current_min_workers") or 0)
+    ceiling = int(ingest.get("max_worker_nodes_provisioned") or 1)
+    min_w = int(ingest.get("driver_node_count") or 1) - 1
+    min_w = max(min_w, 0)
 
     if p95 > 0:
         base_nodes = p95
     elif p99 > 0:
         base_nodes = p99
     else:
-        base_nodes = max(float(ingest.get("avg_worker_nodes_consumed") or 1), 1.0)
+        base_nodes = max(float(ingest.get("total_worker_nodes_consumed") or 1), 1.0)
     buffered = math.ceil(base_nodes * (1.0 + buffer_pct / 100.0))
     max_w = max(int(buffered), 1)
     max_w = min(max_w, ceiling) if ceiling > 0 else max_w
@@ -55,10 +52,10 @@ def compute_sizing_hints(
     target = float(policy.get("target_utilization_pct", 90.0))
     buffer = float(policy.get("capacity_buffer_pct", 10.0))
 
-    peak_cpu = float(ingest.get("peak_cpu_utilization_pct") or 0)
-    peak_mem = float(ingest.get("peak_memory_utilization_pct") or 0)
-    avg_cpu = float(ingest.get("cluster_avg_cpu_utilization_pct_of_ceiling_capacity") or 0)
-    avg_mem = float(ingest.get("cluster_avg_memory_utilization_pct_of_ceiling_capacity") or 0)
+    peak_cpu = float(ingest.get("peak_worker_cpu_utilization_pct") or 0)
+    peak_mem = float(ingest.get("peak_worker_memory_utilization_pct") or 0)
+    avg_cpu = float(ingest.get("avg_worker_cpu_utilization_pct") or 0)
+    avg_mem = float(ingest.get("avg_worker_memory_utilization_pct") or 0)
 
     cpu_headroom = peak_cpu / target if target > 0 else 0
     mem_headroom = peak_mem / target if target > 0 else 0
@@ -66,10 +63,10 @@ def compute_sizing_hints(
     if peak_cpu < 1 and peak_mem < 1:
         limiting = "unknown"
 
-    alloc_vcpu = float(ingest.get("avg_vcpus_allocated_active_cluster") or 0)
-    util_vcpu = float(ingest.get("avg_vcpus_utilized_by_workload") or 0)
-    alloc_mem = float(ingest.get("avg_memory_gb_allocated_active_cluster") or 0)
-    util_mem = float(ingest.get("avg_memory_gb_utilized_by_workload") or 0)
+    alloc_vcpu = float(ingest.get("avg_worker_vcpus_consumed") or 0)
+    util_vcpu = float(ingest.get("avg_worker_vcpus_utilized") or 0)
+    alloc_mem = float(ingest.get("avg_worker_memory_gb_consumed") or 0)
+    util_mem = float(ingest.get("avg_worker_memory_gb_utilized") or 0)
 
     vcpu_util_pct = (util_vcpu / alloc_vcpu * 100.0) if alloc_vcpu > 0 else avg_cpu
     mem_util_pct = (util_mem / alloc_mem * 100.0) if alloc_mem > 0 else avg_mem
@@ -81,7 +78,7 @@ def compute_sizing_hints(
         suggested_family = "E"
 
     min_w, max_w = recommended_min_max_workers(ingest, buffer_pct=buffer)
-    ceiling = int(ingest.get("max_worker_nodes_cluster_ceiling") or max_w)
+    ceiling = int(ingest.get("max_worker_nodes_provisioned") or max_w)
     p95 = float(ingest.get("p95_worker_nodes_consumed") or 0)
     over_autoscale = ceiling > max(max_w * 2, 2) and p95 > 0
 
@@ -120,11 +117,11 @@ def infer_reason_codes(
     *,
     change_required: bool = True,
 ) -> List[str]:
-    """Emit Copilot-style reason codes from ingest and recommendation."""
+    """Emit reason codes from job-run ingest and recommendation."""
     hints = compute_sizing_hints(ingest)
     codes: List[str] = []
 
-    if not ingest.get("job_run_id") and not ingest.get("job_id"):
+    if not ingest.get("cluster_id") and not ingest.get("job_id"):
         return ["INSUFFICIENT_EVIDENCE"]
 
     if hints.get("overprovisioned_autoscale"):
@@ -141,12 +138,8 @@ def infer_reason_codes(
     if rec_family and current_family and rec_family != current_family:
         codes.append("VM_FAMILY_MISMATCH")
 
-    tasks = int(ingest.get("workflow_task_count") or 0)
-    if tasks <= 1 and int(ingest.get("max_worker_nodes_cluster_ceiling") or 0) <= 1:
+    if int(ingest.get("max_worker_nodes_provisioned") or 0) <= 1:
         codes.append("SINGLE_NODE_ELIGIBLE")
-
-    if tasks >= 2 and float(ingest.get("parallelism_ratio") or 1) < 1.2:
-        codes.append("LOW_PARALLELISM")
 
     if not change_required:
         codes.append("NO_CHANGE_RECOMMENDED")

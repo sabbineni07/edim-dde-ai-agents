@@ -76,3 +76,11 @@ def init_database():
     engine = get_database_engine()
     Base.metadata.create_all(bind=engine)
     logger.info("database_tables_initialized")
+    try:
+        from shared.services.platform_environment_service import seed_platform_environments_if_empty
+
+        inserted = seed_platform_environments_if_empty()
+        if inserted:
+            logger.info("platform_environments_seeded_on_init", count=inserted)
+    except Exception as e:
+        logger.warning("platform_environments_seed_skipped", error=str(e))

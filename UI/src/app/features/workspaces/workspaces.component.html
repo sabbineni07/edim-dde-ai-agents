@@ -1,23 +1,47 @@
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-  <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
-  <button class="btn btn-outline-primary btn-sm" (click)="load()" [disabled]="loading">
-    <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
-  </button>
+  <div>
+    <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
+    <p class="text-muted small mb-0" *ngIf="environmentName">
+      Environment: <strong>{{ environmentName }}</strong>
+    </p>
+  </div>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <div *ngIf="showConnectionPicker" class="d-flex align-items-center gap-2">
+      <label class="form-label small mb-0 text-muted">Connection</label>
+      <select
+        class="form-select form-select-sm"
+        style="min-width: 12rem;"
+        [ngModel]="selectedConnectionId"
+        (ngModelChange)="onConnectionChange($event)"
+      >
+        <option *ngFor="let c of databricksConnections" [value]="c.id">
+          {{ c.name }}{{ c.is_default ? ' (default)' : '' }}
+        </option>
+      </select>
+    </div>
+    <button class="btn btn-outline-primary btn-sm" (click)="refreshWorkspaces()" [disabled]="loading">
+      <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
+    </button>
+  </div>
+</div>
+
+<div class="alert alert-info" *ngIf="!environmentId && !loading">
+  Select an environment from the header to browse workspaces.
 </div>
 
 <div class="alert alert-warning" *ngIf="error">{{ error }}</div>
 
-<div class="card" *ngIf="loading && !workspaces.length">
+<div class="card" *ngIf="loading">
   <div class="card-body text-center py-5">
     <div class="spinner-border text-primary"></div>
-    <p class="mt-2 mb-0 text-muted">Loading workspaces...</p>
+    <p class="mt-2 mb-0 text-muted">Loading workspaces…</p>
   </div>
 </div>
 
-<div class="card" *ngIf="!loading && workspaces.length === 0 && !error">
+<div class="card" *ngIf="!loading && workspaces.length === 0 && !error && environmentId">
   <div class="card-body text-center py-5 text-muted">
     <i class="bi bi-inbox display-4"></i>
-    <p class="mt-2 mb-0">No workspaces found. Ensure the data source (CSV or Delta) has job metrics.</p>
+    <p class="mt-2 mb-0">No workspaces found. Configure a Databricks connection in <a routerLink="/app/connections">Connections</a>.</p>
   </div>
 </div>
 
