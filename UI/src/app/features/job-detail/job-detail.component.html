@@ -34,6 +34,14 @@
       </div>
       <div>
         <button
+          class="btn btn-outline-primary btn-sm"
+          (click)="refreshJobData()"
+          [disabled]="loadingMetrics || loadingRuns || loadingRecs">
+          <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+      </div>
+      <div>
+        <button
           class="btn btn-primary btn-sm"
           (click)="runRecommendation()"
           [disabled]="runningRecommendation || !selectedClusterId">

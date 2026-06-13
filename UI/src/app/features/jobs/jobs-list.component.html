@@ -46,6 +46,13 @@
         [disabled]="loading || !workspaceId">
         Apply
       </button>
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        (click)="refreshJobs()"
+        [disabled]="loading || !workspaceId">
+        <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
+      </button>
     </div>
   </div>
   <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">

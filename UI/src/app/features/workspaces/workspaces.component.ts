@@ -8,6 +8,7 @@ import { ApiService, EnvironmentConnection, Workspace } from '../../services/api
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
+import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
 import { parseApiError } from '../../core/api-error.util';
 
 interface WorkspacesLoadResult {
@@ -33,7 +34,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   selectedConnectionId = '';
   showConnectionPicker = false;
   private subs = new Subscription();
-  private readonly loadWorkspaces$ = new Subject<void>();
+  private readonly loadWorkspaces$ = new Subject<boolean>();
   private lastLoadedEnvId = '';
 
   constructor(
@@ -41,13 +42,14 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
     private router: Router,
     private workspaceSelection: WorkspaceSelectionService,
     private environmentSelection: EnvironmentSelectionService,
-    private connectionCache: EnvironmentConnectionCacheService
+    private connectionCache: EnvironmentConnectionCacheService,
+    private browseCache: BrowseDataCacheService
   ) {}
 
   ngOnInit(): void {
     this.subs.add(
       this.loadWorkspaces$.pipe(
-        switchMap(() => this.runWorkspacesFetch())
+        switchMap((force) => this.runWorkspacesFetch(force))
       ).subscribe((result) => {
         this.workspaces = result.workspaces;
         this.error = result.error;
@@ -160,14 +162,14 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   }
 
   refreshWorkspaces(): void {
-    this.requestWorkspacesLoad();
+    this.requestWorkspacesLoad(true);
   }
 
-  private requestWorkspacesLoad(): void {
-    this.loadWorkspaces$.next();
+  private requestWorkspacesLoad(force = false): void {
+    this.loadWorkspaces$.next(force);
   }
 
-  private runWorkspacesFetch() {
+  private runWorkspacesFetch(force = false) {
     const envId = this.environmentId || this.environmentSelection.getSelectedId();
     if (!envId) {
       this.loading = false;
@@ -178,11 +180,17 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
       ? null
       : this.selectedConnectionId || this.environmentSelection.getSelectedConnectionId();
 
-    this.loading = true;
+    const cacheKey = this.browseCache.workspacesKey(envId, connId);
+    const cached = !force && this.browseCache.peek<Workspace[]>(cacheKey);
+    this.loading = !cached;
     this.error = '';
-    this.workspaces = [];
+    if (!cached) {
+      this.workspaces = [];
+    }
 
-    return this.api.browseWorkspaces(envId, connId).pipe(
+    return this.browseCache
+      .get(cacheKey, () => this.api.browseWorkspaces(envId, connId), force)
+      .pipe(
       timeout(30_000),
       switchMap((list) => of({ workspaces: list, error: '' })),
       catchError((err) =>

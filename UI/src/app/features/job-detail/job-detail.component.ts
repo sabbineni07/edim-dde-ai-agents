@@ -17,6 +17,7 @@ import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-ra
 import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
+import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
 import { UiHints } from '../../services/api.service';
 
 @Component({
@@ -64,7 +65,8 @@ export class JobDetailComponent implements OnInit {
     private api: ApiService,
     private route: ActivatedRoute,
     private auth: AuthService,
-    private environmentSelection: EnvironmentSelectionService
+    private environmentSelection: EnvironmentSelectionService,
+    private browseCache: BrowseDataCacheService
   ) {}
 
   /** Signed-in user for lifecycle audit (from login session). */
@@ -112,6 +114,13 @@ export class JobDetailComponent implements OnInit {
     this.loadMetrics();
     this.loadRuns();
     this.loadRecommendations();
+  }
+
+  refreshJobData(): void {
+    this.loadError = '';
+    this.loadMetrics(true);
+    this.loadRuns(true);
+    this.loadRecommendations(true);
   }
 
   loadLifecycleMeta(): void {
@@ -187,7 +196,7 @@ export class JobDetailComponent implements OnInit {
             type: 'success',
             message: `Updated to ${label}.`,
           };
-          this.loadRecommendations();
+          this.loadRecommendations(true);
         },
         error: (err) => {
           const next = { ...this.updatingLifecycle };
@@ -229,18 +238,34 @@ export class JobDetailComponent implements OnInit {
     return this.uiHints?.default_agent_id || 'dbx_cluster_tuning_agent';
   }
 
-  loadMetrics(): void {
+  loadMetrics(force = false): void {
     const ws = this.workspaceId();
     const j = this.jobId();
-    this.loadingMetrics = true;
-    this.api
-      .browseJobMetrics(
-        ws,
-        j,
-        this.startDate || undefined,
-        this.endDate || undefined,
-        this.environmentSelection.getSelectedId(),
-        this.environmentSelection.getSelectedConnectionId()
+    const envId = this.environmentSelection.getSelectedId();
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    const cacheKey = this.browseCache.jobMetricsKey(
+      envId,
+      connId,
+      ws,
+      j,
+      this.startDate,
+      this.endDate
+    );
+    const cached = !force && this.browseCache.peek<JobMetricsResponse>(cacheKey);
+    this.loadingMetrics = !cached;
+    this.browseCache
+      .get(
+        cacheKey,
+        () =>
+          this.api.browseJobMetrics(
+            ws,
+            j,
+            this.startDate || undefined,
+            this.endDate || undefined,
+            envId,
+            connId
+          ),
+        force
       )
       .subscribe({
         next: (data) => {
@@ -255,18 +280,34 @@ export class JobDetailComponent implements OnInit {
       });
   }
 
-  loadRuns(): void {
+  loadRuns(force = false): void {
     const ws = this.workspaceId();
     const j = this.jobId();
-    this.loadingRuns = true;
-    this.api
-      .browseJobRuns(
-        ws,
-        j,
-        this.startDate || undefined,
-        this.endDate || undefined,
-        this.environmentSelection.getSelectedId(),
-        this.environmentSelection.getSelectedConnectionId()
+    const envId = this.environmentSelection.getSelectedId();
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    const cacheKey = this.browseCache.jobRunsKey(
+      envId,
+      connId,
+      ws,
+      j,
+      this.startDate,
+      this.endDate
+    );
+    const cached = !force && this.browseCache.peek<JobRunSummary[]>(cacheKey);
+    this.loadingRuns = !cached;
+    this.browseCache
+      .get(
+        cacheKey,
+        () =>
+          this.api.browseJobRuns(
+            ws,
+            j,
+            this.startDate || undefined,
+            this.endDate || undefined,
+            envId,
+            connId
+          ),
+        force
       )
       .subscribe({
         next: (list) => {
@@ -286,20 +327,25 @@ export class JobDetailComponent implements OnInit {
       });
   }
 
-  loadRecommendations(): void {
+  loadRecommendations(force = false): void {
     const ws = this.workspaceId();
     const j = this.jobId();
-    this.loadingRecs = true;
-    this.api.getRecommendations(ws, j, 5).subscribe({
-      next: (list) => {
-        this.recommendations = list;
-        this.loadingRecs = false;
-      },
-      error: () => {
-        this.loadingRecs = false;
-        this.recommendations = [];
-      },
-    });
+    const limit = 5;
+    const cacheKey = this.browseCache.recommendationsKey(ws, j, limit);
+    const cached = !force && this.browseCache.peek<RecommendationHistoryEntry[]>(cacheKey);
+    this.loadingRecs = !cached;
+    this.browseCache
+      .get(cacheKey, () => this.api.getRecommendations(ws, j, limit), force)
+      .subscribe({
+        next: (list) => {
+          this.recommendations = list;
+          this.loadingRecs = false;
+        },
+        error: () => {
+          this.loadingRecs = false;
+          this.recommendations = [];
+        },
+      });
   }
 
   selectRun(clusterId: string): void {
@@ -348,7 +394,7 @@ export class JobDetailComponent implements OnInit {
         next: (res) => {
           this.runningRecommendation = false;
           this.lastResult = res;
-          this.loadRecommendations();
+          this.loadRecommendations(true);
         },
         error: (err) => {
           this.runningRecommendation = false;

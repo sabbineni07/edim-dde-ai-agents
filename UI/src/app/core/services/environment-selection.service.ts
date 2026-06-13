@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 import { ApiService, EnvironmentConnection, PlatformEnvironment } from '../../services/api.service';
+import { BrowseDataCacheService } from './browse-data-cache.service';
 import { EnvironmentConnectionCacheService } from './environment-connection-cache.service';
 
 const ENV_KEY = 'edim_selected_environment_id';
@@ -40,7 +41,8 @@ export class EnvironmentSelectionService {
 
   constructor(
     private api: ApiService,
-    private connectionCache: EnvironmentConnectionCacheService
+    private connectionCache: EnvironmentConnectionCacheService,
+    private browseCache: BrowseDataCacheService
   ) {}
 
   watchEnvironments(): Observable<PlatformEnvironment[]> {
@@ -103,6 +105,10 @@ export class EnvironmentSelectionService {
       if (prevId !== nextId) {
         this.connectionCache.clearSelectedConnection();
         this.persistConnectionId(null);
+        if (prevId) {
+          this.browseCache.invalidateEnvironment(prevId);
+        }
+        this.browseCache.invalidateEnvironment(nextId);
       }
     } catch {
       // ignore storage errors
@@ -110,8 +116,14 @@ export class EnvironmentSelectionService {
   }
 
   setSelectedConnection(connection: EnvironmentConnection | null): void {
+    const prevConnId = this.getSelectedConnectionId();
+    const nextConnId = connection?.id?.trim() || null;
     this.connectionCache.setSelectedConnection(connection);
     this.persistConnectionId(connection?.id ?? null);
+    const envId = this.getSelectedId();
+    if (envId && prevConnId !== nextConnId) {
+      this.browseCache.invalidateEnvironment(envId);
+    }
   }
 
   private persistConnectionId(connectionId: string | null): void {
@@ -130,6 +142,11 @@ export class EnvironmentSelectionService {
 
   invalidateConnectionCache(environmentId?: string): void {
     this.connectionCache.invalidate(environmentId);
+    if (environmentId) {
+      this.browseCache.invalidateEnvironment(environmentId);
+    } else {
+      this.browseCache.clear();
+    }
   }
 
   clearSelected(): void {
@@ -142,6 +159,7 @@ export class EnvironmentSelectionService {
       this.selectedConnectionId$.next(null);
       this.connectionCache.clearSelectedConnection();
       this.connectionCache.invalidate();
+      this.browseCache.clear();
     } catch {
       // ignore
     }

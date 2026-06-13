@@ -10,6 +10,7 @@ import {
 } from '../../core/date-range.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
+import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
 
 @Component({
   selector: 'app-jobs-list',
@@ -33,13 +34,15 @@ export class JobsListComponent implements OnInit {
   readonly pageSizeOptions = [10, 25, 50, 100];
   pageSize = 25;
   currentPage = 1;
+  private forceNextLoad = false;
 
   constructor(
     private api: ApiService,
     private router: Router,
     private route: ActivatedRoute,
     private workspaceSelection: WorkspaceSelectionService,
-    private environmentSelection: EnvironmentSelectionService
+    private environmentSelection: EnvironmentSelectionService,
+    private browseCache: BrowseDataCacheService
   ) {}
 
   ngOnInit(): void {
@@ -60,20 +63,37 @@ export class JobsListComponent implements OnInit {
     this.route.queryParams.subscribe((qp) => this.syncFromQueryParams(qp));
   }
 
-  private loadWorkspaces(): void {
+  private loadWorkspaces(force = false): void {
     const envId = this.environmentSelection.getSelectedId();
-    this.workspacesLoading = true;
-    this.api.getWorkspaces(envId, this.environmentSelection.getSelectedConnectionId()).subscribe({
-      next: (list) => {
-        this.workspaces = list;
-        this.workspacesLoading = false;
-        this.syncFromQueryParams(this.route.snapshot.queryParams);
-      },
-      error: () => {
-        this.workspacesLoading = false;
-        this.syncFromQueryParams(this.route.snapshot.queryParams);
-      },
-    });
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    if (!envId) {
+      this.workspaces = [];
+      this.workspacesLoading = false;
+      return;
+    }
+
+    const cacheKey = this.browseCache.workspacesKey(envId, connId);
+    const cached = !force && this.browseCache.peek<Workspace[]>(cacheKey);
+    this.workspacesLoading = !cached;
+    if (cached) {
+      this.workspaces = cached;
+      this.syncFromQueryParams(this.route.snapshot.queryParams);
+      return;
+    }
+
+    this.browseCache
+      .get(cacheKey, () => this.api.browseWorkspaces(envId, connId), force)
+      .subscribe({
+        next: (list) => {
+          this.workspaces = list;
+          this.workspacesLoading = false;
+          this.syncFromQueryParams(this.route.snapshot.queryParams);
+        },
+        error: () => {
+          this.workspacesLoading = false;
+          this.syncFromQueryParams(this.route.snapshot.queryParams);
+        },
+      });
   }
 
   private syncFromQueryParams(qp: Record<string, unknown>): void {
@@ -143,7 +163,9 @@ export class JobsListComponent implements OnInit {
     this.startDate = s;
     this.endDate = e;
     this.updateDateRangeWarning();
-    this.load();
+    const force = this.forceNextLoad;
+    this.forceNextLoad = false;
+    this.load(force);
   }
 
   private updateDateRangeWarning(): void {
@@ -190,6 +212,7 @@ export class JobsListComponent implements OnInit {
     if (!this.workspaceId) return;
     this.updateDateRangeWarning();
     if (this.dateRangeWarning) return;
+    this.forceNextLoad = true;
     void this.router.navigate([], {
       relativeTo: this.route,
       queryParams: {
@@ -201,29 +224,56 @@ export class JobsListComponent implements OnInit {
     });
   }
 
-  load(): void {
+  refreshJobs(): void {
     if (!this.workspaceId) return;
-    this.loading = true;
+    this.forceNextLoad = true;
+    this.load(true);
+  }
+
+  load(force = false): void {
+    if (!this.workspaceId) return;
+    const envId = this.environmentSelection.getSelectedId();
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    const cacheKey = this.browseCache.jobsKey(
+      envId,
+      connId,
+      this.workspaceId,
+      this.startDate,
+      this.endDate
+    );
+    const cached = !force && this.browseCache.peek<JobSummary[]>(cacheKey);
+    this.loading = !cached;
     this.error = '';
-    this.currentPage = 1;
-    this.api
-      .getJobs(
-        this.workspaceId,
-        this.startDate,
-        this.endDate,
-        this.environmentSelection.getSelectedId(),
-        this.environmentSelection.getSelectedConnectionId()
+    if (!force) {
+      this.currentPage = 1;
+    }
+    if (!cached) {
+      this.jobs = [];
+    }
+
+    this.browseCache
+      .get(
+        cacheKey,
+        () =>
+          this.api.getJobs(
+            this.workspaceId!,
+            this.startDate,
+            this.endDate,
+            envId,
+            connId
+          ),
+        force
       )
       .subscribe({
-      next: (list) => {
-        this.jobs = list;
-        this.loading = false;
-      },
-      error: (err) => {
-        this.error = err?.message || 'Failed to load jobs';
-        this.loading = false;
-      },
-    });
+        next: (list) => {
+          this.jobs = list;
+          this.loading = false;
+        },
+        error: (err) => {
+          this.error = err?.message || 'Failed to load jobs';
+          this.loading = false;
+        },
+      });
   }
 
   get filteredJobs(): JobSummary[] {
