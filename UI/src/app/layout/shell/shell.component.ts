@@ -30,6 +30,7 @@ export class ShellComponent implements OnInit {
   sidebarOpen = true;
   menuItems: MenuItem[] = [
     { label: 'Connections', route: '/app/connections', icon: 'plug' },
+    { label: 'Datasets', route: '/app/datasets', icon: 'table' },
     { label: 'Workspaces', route: '/app/workspaces', icon: 'building' },
     { label: 'Jobs', route: '/app/jobs', icon: 'list-task' },
     { label: 'Agents', route: '/app/agents', icon: 'robot' },

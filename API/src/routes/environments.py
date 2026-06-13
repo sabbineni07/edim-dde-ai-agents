@@ -17,6 +17,7 @@ from DE.src.datasets.job_cluster_metrics_csv import (
 )
 from shared.auth.admin import is_admin
 from shared.services.environment_connection_service import EnvironmentConnectionService
+from shared.services.environment_dataset_service import EnvironmentDatasetService
 from shared.services.environment_service import environment_readiness
 from shared.services.local_dataset_service import (
     clear_upload,
@@ -58,6 +59,7 @@ def _local_dataset_info(user: str) -> Dict[str, Any]:
 
 
 _conn_svc = EnvironmentConnectionService()
+_dataset_svc = EnvironmentDatasetService()
 
 
 def _env_payload(env, user: str, *, admin_view: bool = False) -> Dict[str, Any]:
@@ -70,11 +72,16 @@ def _env_payload(env, user: str, *, admin_view: bool = False) -> Dict[str, Any]:
     )
     local_dataset = _local_dataset_info(user) if env.source_type == "local_csv" else None
     metrics_count = len(_conn_svc.list_connections(environment_id=env.id, purpose="metrics"))
+    dataset_count = len(_dataset_svc.list_datasets(environment_id=env.id))
+    default_ds = _dataset_svc.get_default_dataset(env.id)
     return env.to_dict(
         readiness=readiness,
         local_dataset=local_dataset,
         is_admin=admin_view,
         metrics_connection_count=metrics_count,
+        metrics_dataset_count=dataset_count,
+        default_dataset_name=default_ds.name if default_ds else None,
+        default_dataset_ref=default_ds.table_ref if default_ds else env.table_fqn,
     )
 
 

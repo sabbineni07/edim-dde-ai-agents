@@ -9,6 +9,18 @@ os.environ.setdefault("USE_LOCAL_DATA", "true")
 
 from API.src.main import app
 from API.src.routes.jobs import JobRunSummary
+from shared.services.environment_connection_service import (
+    reset_environment_connection_store_for_tests,
+)
+from shared.services.environment_dataset_service import reset_environment_dataset_store_for_tests
+from shared.services.platform_environment_service import reset_platform_environment_store_for_tests
+
+
+@pytest.fixture(autouse=True)
+def _reset_stores():
+    reset_platform_environment_store_for_tests()
+    reset_environment_connection_store_for_tests()
+    reset_environment_dataset_store_for_tests()
 
 
 def test_job_run_summary_coerces_date_field():
@@ -18,6 +30,21 @@ def test_job_run_summary_coerces_date_field():
         job_run_date=date(2026, 6, 2),
     )
     assert summary.job_run_date == "2026-06-02"
+
+
+@pytest.mark.asyncio
+async def test_list_workspaces_rejects_dataset_from_other_environment():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        local_resp = await ac.get("/api/environments/local/datasets")
+        assert local_resp.status_code == 200, local_resp.text
+        local_ds_id = local_resp.json()[0]["id"]
+
+        resp = await ac.get(
+            "/api/workspaces",
+            params={"environment_id": "dim_dev", "dataset_id": local_ds_id},
+        )
+        assert resp.status_code == 400
+        assert "does not belong" in resp.json()["detail"]
 
 
 @pytest.mark.asyncio

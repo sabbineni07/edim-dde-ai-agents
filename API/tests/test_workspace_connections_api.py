@@ -1,3 +1,5 @@
+"""Workspace agent API — bindings reference environment datasets and connections."""
+
 import os
 
 import pytest
@@ -6,137 +8,169 @@ from httpx import ASGITransport, AsyncClient
 os.environ.setdefault("USE_POSTGRES", "false")
 
 from API.src.main import app
+from shared.services.environment_connection_service import (
+    reset_environment_connection_store_for_tests,
+)
+from shared.services.environment_dataset_service import reset_environment_dataset_store_for_tests
+from shared.services.platform_environment_service import reset_platform_environment_store_for_tests
+from shared.services.workspace_agent_service import reset_workspace_agent_store_for_tests
 
 WS = "1234567890123456"
+ENV = "dim_dev"
+ADMIN_HEADERS = {"X-User-Name": "admin"}
+
+
+@pytest.fixture(autouse=True)
+def _reset_stores():
+    reset_platform_environment_store_for_tests()
+    reset_environment_connection_store_for_tests()
+    reset_environment_dataset_store_for_tests()
+    reset_workspace_agent_store_for_tests()
+
+
+async def _create_env_connection(ac: AsyncClient, **kwargs) -> str:
+    resp = await ac.post(
+        f"/api/environments/{ENV}/connections",
+        json=kwargs,
+        headers=ADMIN_HEADERS,
+    )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["id"]
+
+
+async def _default_metrics_dataset_id(ac: AsyncClient) -> str:
+    resp = await ac.get(f"/api/environments/{ENV}/datasets")
+    assert resp.status_code == 200, resp.text
+    datasets = resp.json()
+    default = next(d for d in datasets if d["is_default"])
+    return default["id"]
 
 
 @pytest.mark.asyncio
-async def test_workspace_connections_and_agents_crud():
+async def test_workspace_agents_with_dataset_and_llm_bindings():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        # connection types catalog
-        resp = await ac.get("/api/platform/connection-types")
-        assert resp.status_code == 200
-        payload = resp.json()["connection_types"]
-        types = {t["connection_type"] for t in payload}
-        assert "databricks" in types
-        dbx = next(t for t in payload if t["connection_type"] == "databricks")
-        field_keys = {f["key"] for f in dbx["fields"]}
-        assert "credential_env_prefix" not in field_keys
-        assert dbx.get("auth_note")
-        assert "credential_hints" not in dbx
-
-        # create local_dataset connection
-        resp = await ac.post(
-            f"/api/workspaces/{WS}/connections",
-            json={
-                "connection_type": "local_dataset",
-                "name": "Sample CSV",
-                "config": {"local_data_path": "data/sample_job_metrics.csv"},
+        metrics_ds_id = await _default_metrics_dataset_id(ac)
+        llm_conn_id = await _create_env_connection(
+            ac,
+            connection_type="ai_foundry",
+            name="Dev OpenAI",
+            config={
+                "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                "azure_openai_deployment_name": "gpt-4o",
             },
         )
-        assert resp.status_code == 200, resp.text
-        metrics_conn_id = resp.json()["id"]
 
-        resp = await ac.post(
-            f"/api/workspaces/{WS}/connections",
-            json={
-                "connection_type": "ai_foundry",
-                "name": "Dev OpenAI",
-                "config": {
-                    "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
-                    "azure_openai_deployment_name": "gpt-4o",
-                },
-            },
-        )
-        assert resp.status_code == 200, resp.text
-        llm_conn_id = resp.json()["id"]
-
-        # create workspace agent
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
+                "environment_id": ENV,
                 "agent_id": "dbx_cluster_tuning_agent",
                 "name": "Sizing default",
-                "bindings": {"metrics": metrics_conn_id, "llm": llm_conn_id},
+                "bindings": {"metrics": metrics_ds_id, "llm": llm_conn_id},
             },
         )
         assert resp.status_code == 200, resp.text
         wa_id = resp.json()["id"]
 
-        # manifest endpoint
         resp = await ac.get("/api/agents/dbx_cluster_tuning_agent/connection-manifest")
         assert resp.status_code == 200
         manifest = resp.json()
-        assert "metrics" in manifest["roles"]
+        assert manifest["roles"]["metrics"]["kind"] == "dataset"
         assert "llm" in manifest["required_roles"]
 
-        # list
         resp = await ac.get(f"/api/workspaces/{WS}/agents")
         assert resp.status_code == 200
         assert any(a["id"] == wa_id for a in resp.json())
 
-        # delete agent then connection
         resp = await ac.delete(f"/api/workspaces/{WS}/agents/{wa_id}")
-        assert resp.status_code == 200
-        resp = await ac.delete(f"/api/workspaces/{WS}/connections/{metrics_conn_id}")
-        assert resp.status_code == 200
-        resp = await ac.delete(f"/api/workspaces/{WS}/connections/{llm_conn_id}")
         assert resp.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_databricks_connection_exclusive_per_workspace_agent():
+async def test_same_dataset_can_bind_multiple_workspace_agents():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-        resp = await ac.post(
-            f"/api/workspaces/{WS}/connections",
-            json={
-                "connection_type": "databricks",
-                "name": "DBX A",
-                "config": {
-                    "databricks_server_hostname": "adb-1.azuredatabricks.net",
-                    "databricks_http_path": "/sql/1.0/warehouses/abc",
-                    "databricks_job_cluster_metrics_table": "catalog.schema.metrics",
-                },
+        metrics_ds_id = await _default_metrics_dataset_id(ac)
+        llm_id = await _create_env_connection(
+            ac,
+            connection_type="ai_foundry",
+            name="Shared LLM",
+            config={
+                "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                "azure_openai_deployment_name": "gpt-4o",
             },
         )
-        assert resp.status_code == 200, resp.text
-        dbx_id = resp.json()["id"]
 
-        resp = await ac.post(
-            f"/api/workspaces/{WS}/connections",
-            json={
-                "connection_type": "ai_foundry",
-                "name": "DBX LLM",
-                "config": {
-                    "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
-                    "azure_openai_deployment_name": "gpt-4o",
+        bindings = {"metrics": metrics_ds_id, "llm": llm_id}
+        for name in ("Agent 1", "Agent 2"):
+            resp = await ac.post(
+                f"/api/workspaces/{WS}/agents",
+                json={
+                    "environment_id": ENV,
+                    "agent_id": "dbx_cluster_tuning_agent",
+                    "name": name,
+                    "bindings": bindings,
                 },
+            )
+            assert resp.status_code == 200, resp.text
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_dataset_from_wrong_environment():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get("/api/environments/local/datasets")
+        assert resp.status_code == 200, resp.text
+        local_ds_id = resp.json()[0]["id"]
+
+        llm_id = await _create_env_connection(
+            ac,
+            connection_type="ai_foundry",
+            name="Dev LLM",
+            config={
+                "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                "azure_openai_deployment_name": "gpt-4o",
             },
         )
-        assert resp.status_code == 200, resp.text
-        llm_id = resp.json()["id"]
 
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
+                "environment_id": ENV,
                 "agent_id": "dbx_cluster_tuning_agent",
-                "name": "Agent 1",
-                "bindings": {"metrics": dbx_id, "llm": llm_id},
+                "name": "Bad binding",
+                "bindings": {"metrics": local_ds_id, "llm": llm_id},
             },
         )
-        assert resp.status_code == 200, resp.text
-        wa1 = resp.json()["id"]
+        assert resp.status_code == 400, resp.text
+        assert "does not belong to environment" in resp.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_agent_rejects_connection_used_as_metrics_when_dataset_expected():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        metrics_conn_id = await _create_env_connection(
+            ac,
+            connection_type="local_dataset",
+            name="Sample CSV",
+            config={"local_data_path": "data/sample_job_metrics.csv"},
+        )
+        llm_id = await _create_env_connection(
+            ac,
+            connection_type="ai_foundry",
+            name="Dev LLM",
+            config={
+                "azure_openai_endpoint": "https://my-openai.openai.azure.com/",
+                "azure_openai_deployment_name": "gpt-4o",
+            },
+        )
 
         resp = await ac.post(
             f"/api/workspaces/{WS}/agents",
             json={
+                "environment_id": ENV,
                 "agent_id": "dbx_cluster_tuning_agent",
-                "name": "Agent 2",
-                "bindings": {"metrics": dbx_id, "llm": llm_id},
+                "name": "Legacy binding",
+                "bindings": {"metrics": metrics_conn_id, "llm": llm_id},
             },
         )
-        assert resp.status_code == 409, resp.text
-
-        await ac.delete(f"/api/workspaces/{WS}/agents/{wa1}")
-        await ac.delete(f"/api/workspaces/{WS}/connections/{llm_id}")
-        await ac.delete(f"/api/workspaces/{WS}/connections/{dbx_id}")
+        assert resp.status_code == 400, resp.text
+        assert "Dataset not found" in resp.json()["detail"]

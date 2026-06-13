@@ -1,0 +1,120 @@
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-table me-2"></i>Datasets</h2>
+    <p class="text-muted small mb-0" *ngIf="environmentName">
+      Environment: <strong>{{ environmentName }}</strong> — logical data products (Delta tables or CSV paths).
+      Use <a routerLink="/app/connections">Connections</a> for SQL warehouses and Azure endpoints.
+    </p>
+    <p class="text-muted small mb-0" *ngIf="!environmentName">
+      Select an environment from the header to manage its datasets.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" type="button" (click)="loadDatasets()" [disabled]="loading || !environmentId">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+    <button *ngIf="isAdmin" class="btn btn-primary btn-sm" type="button" (click)="startCreate()" [disabled]="!environmentId">
+      <i class="bi bi-plus-lg me-1"></i>New dataset
+    </button>
+  </div>
+</div>
+
+<div class="alert alert-success" *ngIf="message">{{ message }}</div>
+<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+
+<div class="card mb-3" *ngIf="showForm && isAdmin">
+  <div class="card-header">{{ editingId ? 'Edit dataset' : 'New dataset' }}</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Name</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formName" />
+      </div>
+      <div class="col-md-4" *ngIf="!editingId">
+        <label class="form-label">Schema profile</label>
+        <select class="form-select form-select-sm" [(ngModel)]="formSchemaProfile" (ngModelChange)="onSchemaProfileChange()">
+          <option *ngFor="let p of schemaProfiles" [value]="p.schema_profile">{{ p.label }}</option>
+        </select>
+      </div>
+      <div class="col-md-4" *ngIf="!editingId">
+        <label class="form-label">Source type</label>
+        <select class="form-select form-select-sm" [(ngModel)]="formSourceType">
+          <option *ngFor="let st of allowedSourceTypes()" [value]="st">{{ sourceTypeLabel(st) }}</option>
+        </select>
+      </div>
+      <div class="col-md-8">
+        <label class="form-label">Description</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formDescription" />
+      </div>
+      <div class="col-md-8" *ngIf="formSourceType === 'databricks_delta'">
+        <label class="form-label">Table (catalog.schema.table)</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formTableFqn" placeholder="dim_dev.dde_metrics.job_cluster_metrics" />
+      </div>
+      <div class="col-md-8" *ngIf="formSourceType === 'local_csv'">
+        <label class="form-label">CSV path</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formLocalPath" placeholder="/app/data/sample_job_metrics.csv" />
+      </div>
+      <div class="col-md-4 d-flex align-items-end" *ngIf="!editingId">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="setDefaultDataset" [(ngModel)]="formSetDefault" />
+          <label class="form-check-label small" for="setDefaultDataset">Set as default</label>
+        </div>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button class="btn btn-primary btn-sm" type="button" (click)="save()" [disabled]="saving">
+        {{ saving ? 'Saving…' : 'Save' }}
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" (click)="cancelForm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" *ngIf="loading">
+  <div class="card-body text-center py-4">
+    <div class="spinner-border text-primary spinner-border-sm"></div>
+  </div>
+</div>
+
+<div class="table-responsive" *ngIf="!loading && datasets.length">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Profile</th>
+        <th>Source</th>
+        <th>Reference</th>
+        <th>Default</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let d of datasets">
+        <td>{{ d.name }}</td>
+        <td>{{ profileLabel(d.schema_profile) }}</td>
+        <td>{{ sourceTypeLabel(d.source_type) }}</td>
+        <td class="small"><code>{{ datasetRef(d) }}</code></td>
+        <td>
+          <span class="badge bg-success" *ngIf="d.is_default">Default</span>
+          <button
+            *ngIf="isAdmin && !d.is_default"
+            class="btn btn-link btn-sm p-0"
+            type="button"
+            (click)="setDefault(d)"
+          >Set default</button>
+        </td>
+        <td class="text-end text-nowrap">
+          <button *ngIf="isAdmin" class="btn btn-outline-secondary btn-sm me-1" type="button" (click)="startEdit(d)">Edit</button>
+          <button *ngIf="isAdmin" class="btn btn-outline-danger btn-sm" type="button" (click)="deleteDataset(d)">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" *ngIf="!loading && !datasets.length && environmentId">
+  <div class="card-body text-center text-muted py-4">
+    No datasets for {{ environmentName }}.
+    <span *ngIf="isAdmin"> Click <strong>New dataset</strong> to add one.</span>
+  </div>
+</div>

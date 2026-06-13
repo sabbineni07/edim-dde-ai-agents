@@ -36,7 +36,11 @@ export interface PlatformEnvironment {
   databricks_http_path?: string | null;
   default_metrics_connection_id?: string | null;
   default_llm_connection_id?: string | null;
+  default_dataset_id?: string | null;
   metrics_connection_count?: number;
+  metrics_dataset_count?: number;
+  default_dataset_name?: string | null;
+  default_dataset_ref?: string | null;
   sort_order: number;
   icon: string;
   is_enabled?: boolean;
@@ -63,6 +67,28 @@ export interface EnvironmentConnection {
   is_default: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface EnvironmentDataset {
+  id: string;
+  environment_id: string;
+  name: string;
+  description?: string | null;
+  source_type: 'databricks_delta' | 'local_csv';
+  table_fqn?: string | null;
+  local_path?: string | null;
+  schema_profile: string;
+  is_default: boolean;
+  table_ref?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SchemaProfileMeta {
+  schema_profile: string;
+  label: string;
+  description: string;
+  source_types: string[];
 }
 
 export interface JobSummary {
@@ -216,9 +242,15 @@ export interface WorkspaceAgent {
   updated_at: string;
 }
 
+export interface AgentRoleSpec {
+  kind: 'connection' | 'dataset';
+  connection_types?: string[];
+  schema_profile?: string;
+}
+
 export interface AgentConnectionManifest {
   agent_id: string;
-  roles: Record<string, string[]>;
+  roles: Record<string, string[] | AgentRoleSpec>;
   role_ui?: Record<string, AgentRoleUi>;
   required_roles: string[];
   optional_roles: string[];
@@ -234,6 +266,7 @@ export interface GenerateRecommendationRequest {
   job_run_id?: string;
   environment_id?: string;
   connection_id?: string;
+  dataset_id?: string;
   start_date?: string;
   end_date?: string;
   include_explanation?: boolean;
@@ -335,12 +368,15 @@ export class ApiService {
   private withEnvironmentParams(
     params: HttpParams,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): HttpParams {
     const envId = (environmentId ?? '').trim();
     let out = envId ? params.set('environment_id', envId) : params;
     const connId = (connectionId ?? '').trim();
     if (connId) out = out.set('connection_id', connId);
+    const dsId = (datasetId ?? '').trim();
+    if (dsId) out = out.set('dataset_id', dsId);
     return out;
   }
 
@@ -406,6 +442,71 @@ export class ApiService {
     );
   }
 
+  getEnvironmentDatasets(
+    environmentId: string,
+    schemaProfile?: string
+  ): Observable<EnvironmentDataset[]> {
+    let params = new HttpParams();
+    if (schemaProfile) params = params.set('schema_profile', schemaProfile);
+    return this.http.get<EnvironmentDataset[]>(
+      `${API_BASE}/environments/${environmentId}/datasets`,
+      { params }
+    );
+  }
+
+  createEnvironmentDataset(
+    environmentId: string,
+    body: {
+      name: string;
+      description?: string;
+      source_type: string;
+      schema_profile: string;
+      table_fqn?: string;
+      local_path?: string;
+      set_default?: boolean;
+    }
+  ): Observable<EnvironmentDataset> {
+    return this.http.post<EnvironmentDataset>(
+      `${API_BASE}/environments/${environmentId}/datasets`,
+      body
+    );
+  }
+
+  updateEnvironmentDataset(
+    environmentId: string,
+    datasetId: string,
+    body: {
+      name?: string;
+      description?: string;
+      table_fqn?: string;
+      local_path?: string;
+    }
+  ): Observable<EnvironmentDataset> {
+    return this.http.put<EnvironmentDataset>(
+      `${API_BASE}/environments/${environmentId}/datasets/${datasetId}`,
+      body
+    );
+  }
+
+  deleteEnvironmentDataset(
+    environmentId: string,
+    datasetId: string
+  ): Observable<{ deleted: boolean }> {
+    return this.http.delete<{ deleted: boolean }>(
+      `${API_BASE}/environments/${environmentId}/datasets/${datasetId}`
+    );
+  }
+
+  setDefaultEnvironmentDataset(
+    environmentId: string,
+    datasetId: string
+  ): Observable<EnvironmentDataset> {
+    return this.http.post<EnvironmentDataset>(
+      `${API_BASE}/environments/${environmentId}/datasets/${datasetId}/set-default`,
+      {}
+    );
+  }
+
   getEnvironmentConnectionsByType(
     environmentId: string,
     connectionType: string
@@ -420,19 +521,21 @@ export class ApiService {
   /** Browse workspaces; errors propagate (use in Workspaces UI). */
   browseWorkspaces(
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<Workspace[]> {
     let params = new HttpParams();
-    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    params = this.withEnvironmentParams(params, environmentId, connectionId, datasetId);
     return this.http.get<Workspace[]>(`${API_BASE}/workspaces`, { params });
   }
 
   /** @deprecated Prefer browseWorkspaces when errors should surface in the UI. */
   getWorkspaces(
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<Workspace[]> {
-    return this.browseWorkspaces(environmentId, connectionId).pipe(
+    return this.browseWorkspaces(environmentId, connectionId, datasetId).pipe(
       catchError((err) => {
         console.error('getWorkspaces error', err);
         return of([]);
@@ -445,12 +548,13 @@ export class ApiService {
     start_date?: string,
     end_date?: string,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<JobSummary[]> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
-    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    params = this.withEnvironmentParams(params, environmentId, connectionId, datasetId);
     return this.http
       .get<JobSummary[]>(`${API_BASE}/workspaces/${workspaceId}/jobs`, { params })
       .pipe(
@@ -468,12 +572,13 @@ export class ApiService {
     start_date?: string,
     end_date?: string,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<JobRunSummary[]> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
-    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    params = this.withEnvironmentParams(params, environmentId, connectionId, datasetId);
     return this.http.get<JobRunSummary[]>(
       `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/runs`,
       { params }
@@ -487,7 +592,8 @@ export class ApiService {
     start_date?: string,
     end_date?: string,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<JobRunSummary[]> {
     return this.browseJobRuns(
       workspaceId,
@@ -495,7 +601,8 @@ export class ApiService {
       start_date,
       end_date,
       environmentId,
-      connectionId
+      connectionId,
+      datasetId
     ).pipe(
       catchError((err) => {
         console.error('getJobRuns error', err);
@@ -511,12 +618,13 @@ export class ApiService {
     start_date?: string,
     end_date?: string,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<JobMetricsResponse> {
     let params = new HttpParams();
     if (start_date) params = params.set('start_date', start_date);
     if (end_date) params = params.set('end_date', end_date);
-    params = this.withEnvironmentParams(params, environmentId, connectionId);
+    params = this.withEnvironmentParams(params, environmentId, connectionId, datasetId);
     return this.http.get<JobMetricsResponse>(
       `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/metrics`,
       { params }
@@ -530,7 +638,8 @@ export class ApiService {
     start_date?: string,
     end_date?: string,
     environmentId?: string | null,
-    connectionId?: string | null
+    connectionId?: string | null,
+    datasetId?: string | null
   ): Observable<JobMetricsResponse | null> {
     return this.browseJobMetrics(
       workspaceId,
@@ -538,7 +647,8 @@ export class ApiService {
       start_date,
       end_date,
       environmentId,
-      connectionId
+      connectionId,
+      datasetId
     ).pipe(catchError(() => of(null)));
   }
 
@@ -601,6 +711,17 @@ export class ApiService {
         catchError((err) => {
           console.error('getConnectionTypes error', err);
           return of({ connection_types: [] });
+        })
+      );
+  }
+
+  getSchemaProfiles(): Observable<{ schema_profiles: SchemaProfileMeta[] }> {
+    return this.http
+      .get<{ schema_profiles: SchemaProfileMeta[] }>(`${API_BASE}/platform/dataset-profiles`)
+      .pipe(
+        catchError((err) => {
+          console.error('getSchemaProfiles error', err);
+          return of({ schema_profiles: [] });
         })
       );
   }
@@ -678,6 +799,7 @@ export class ApiService {
   createWorkspaceAgent(
     workspaceId: string,
     body: {
+      environment_id: string;
       agent_id: string;
       name: string;
       bindings: Record<string, string>;
@@ -692,6 +814,7 @@ export class ApiService {
     workspaceId: string,
     workspaceAgentId: string,
     body: {
+      environment_id: string;
       name?: string;
       bindings?: Record<string, string>;
       agent_settings?: Record<string, unknown>;

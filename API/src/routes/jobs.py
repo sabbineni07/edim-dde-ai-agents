@@ -31,11 +31,17 @@ def _resolve_collector(
     x_user_name: Optional[str],
     x_user_id: Optional[str],
     connection_id: Optional[str] = None,
+    dataset_id: Optional[str] = None,
 ):
     if environment_id:
         user = (x_user_id or x_user_name or "anonymous").strip() or "anonymous"
         try:
-            return get_job_metrics_collector(environment_id, user, connection_id=connection_id)
+            return get_job_metrics_collector(
+                environment_id,
+                user,
+                connection_id=connection_id,
+                dataset_id=dataset_id,
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
     return get_data_collector()
@@ -75,6 +81,10 @@ def list_workspaces(
         None,
         description="Optional metrics connection override (UUID).",
     ),
+    dataset_id: Optional[str] = Query(
+        None,
+        description="Optional metrics dataset override (UUID).",
+    ),
     x_user_name: Optional[str] = Header(default=None),
     x_user_id: Optional[str] = Header(default=None),
 ) -> List[Dict[str, Any]]:
@@ -84,7 +94,11 @@ def list_workspaces(
     unique workspaces with job counts and overall first/last seen dates (no date filter).
     """
     collector = _resolve_collector(
-        environment_id, x_user_name, x_user_id, connection_id=connection_id
+        environment_id,
+        x_user_name,
+        x_user_id,
+        connection_id=connection_id,
+        dataset_id=dataset_id,
     )
     try:
         return collector.list_workspaces()
@@ -106,13 +120,18 @@ def list_jobs_for_workspace(
     ),
     environment_id: Optional[str] = Query(default=None),
     connection_id: Optional[str] = Query(default=None),
+    dataset_id: Optional[str] = Query(default=None),
     x_user_name: Optional[str] = Header(default=None),
     x_user_id: Optional[str] = Header(default=None),
 ) -> List[Dict[str, Any]]:
     """List jobs for a workspace with aggregated metrics summary."""
     dr = _default_date_range(start_date, end_date)
     collector = _resolve_collector(
-        environment_id, x_user_name, x_user_id, connection_id=connection_id
+        environment_id,
+        x_user_name,
+        x_user_id,
+        connection_id=connection_id,
+        dataset_id=dataset_id,
     )
     try:
         return collector.list_jobs_for_workspace(
@@ -175,13 +194,18 @@ def list_job_runs(
     ),
     environment_id: Optional[str] = Query(default=None),
     connection_id: Optional[str] = Query(default=None),
+    dataset_id: Optional[str] = Query(default=None),
     x_user_name: Optional[str] = Header(default=None),
     x_user_id: Optional[str] = Header(default=None),
 ) -> List[JobRunSummary]:
     """List job runs for a job in a workspace (for run picker in UI)."""
     dr = _default_date_range(start_date, end_date)
     collector = _resolve_collector(
-        environment_id, x_user_name, x_user_id, connection_id=connection_id
+        environment_id,
+        x_user_name,
+        x_user_id,
+        connection_id=connection_id,
+        dataset_id=dataset_id,
     )
     if not hasattr(collector, "list_job_runs"):
         raise HTTPException(status_code=501, detail="Job run listing not supported by collector")
@@ -217,6 +241,7 @@ def get_job_metrics(
     ),
     environment_id: Optional[str] = Query(default=None),
     connection_id: Optional[str] = Query(default=None),
+    dataset_id: Optional[str] = Query(default=None),
     x_user_name: Optional[str] = Header(default=None),
     x_user_id: Optional[str] = Header(default=None),
 ) -> Dict[str, Any]:
@@ -227,7 +252,11 @@ def get_job_metrics(
     """
     dr = _default_date_range(start_date, end_date)
     collector = _resolve_collector(
-        environment_id, x_user_name, x_user_id, connection_id=connection_id
+        environment_id,
+        x_user_name,
+        x_user_id,
+        connection_id=connection_id,
+        dataset_id=dataset_id,
     )
     try:
         agg = collector.get_job_metrics(

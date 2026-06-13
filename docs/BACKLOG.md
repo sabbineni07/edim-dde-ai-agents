@@ -2,6 +2,8 @@
 
 Captured from product and engineering discussions. Not committed to priority or sprint; adjust as needed.
 
+**Platform data model (connections → datasets):** see [BACKLOG_CONNECTIONS_AND_DATASETS.md](./BACKLOG_CONNECTIONS_AND_DATASETS.md) for phased design, flows, and checkboxes (Phases 0–5 done; Phase 6 pending).
+
 ---
 
 ## AI platform & data (Postgres-first)

@@ -1,4 +1,4 @@
-"""Workspace agent CRUD and Databricks connection exclusivity."""
+"""Workspace agent CRUD; bindings reference environment-scoped connections."""
 
 from __future__ import annotations
 
@@ -7,11 +7,16 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from shared.config.agent_manifest import get_agent_manifest, validate_bindings
+from shared.config.agent_manifest import get_agent_manifest, role_kind, validate_bindings
 from shared.config.profile_field_meta import PROFILE_ALLOWED_FIELDS
 from shared.config.profile_overrides import flatten_overrides, validate_profile_overrides
 from shared.config.settings import settings
-from shared.services.workspace_connection_service import WorkspaceConnectionService
+from shared.services.environment_connection_service import EnvironmentConnectionService
+from shared.services.environment_dataset_service import (
+    EnvironmentDatasetService,
+    get_environment_dataset,
+)
+from shared.services.environment_service import resolve_metrics_connection_id
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,16 +24,23 @@ logger = get_logger(__name__)
 _MEM_AGENTS: Dict[UUID, Dict[str, Any]] = {}
 
 
+def reset_workspace_agent_store_for_tests() -> None:
+    """Clear in-memory workspace agents (unit tests only)."""
+    global _MEM_AGENTS
+    _MEM_AGENTS = {}
+
+
 def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
 def _db_enabled() -> bool:
+    import os
+
+    raw = os.environ.get("USE_POSTGRES")
+    if raw is not None:
+        return raw.strip().lower() in ("1", "true", "yes")
     return bool(getattr(settings, "use_postgres", False))
-
-
-class DatabricksConnectionInUseError(ValueError):
-    """Raised when a Databricks connection is already bound to another workspace agent."""
 
 
 @dataclass(frozen=True)
@@ -59,7 +71,8 @@ class WorkspaceAgentRecord:
 
 class WorkspaceAgentService:
     def __init__(self) -> None:
-        self._connections = WorkspaceConnectionService()
+        self._connections = EnvironmentConnectionService()
+        self._datasets = EnvironmentDatasetService()
 
     def list_agents(
         self, *, workspace_id: str, agent_id: Optional[str] = None
@@ -122,65 +135,77 @@ class WorkspaceAgentService:
         flat = flatten_overrides(agent_settings)
         return validate_profile_overrides(flat, allowed_fields=PROFILE_ALLOWED_FIELDS)
 
+    def _binding_metadata_for_validation(
+        self, environment_id: str, agent_id: str, bindings: Dict[str, Any]
+    ) -> tuple[Dict[str, str], Dict[str, str]]:
+        """Return (connection_types_by_id, dataset_profiles_by_id) for validate_bindings."""
+        manifest = get_agent_manifest(agent_id)
+        if not manifest:
+            raise ValueError(f"Unknown agent_id: {agent_id}")
+
+        eid = (environment_id or "").strip()
+        if not eid:
+            raise ValueError("environment_id is required to validate agent bindings")
+
+        conn_types: Dict[str, str] = {}
+        ds_profiles: Dict[str, str] = {}
+        roles_spec = manifest.get("roles", {})
+
+        for role, binding_id in (bindings or {}).items():
+            if role == "agent_settings" or not binding_id:
+                continue
+            bid = str(binding_id)
+            spec = roles_spec.get(role)
+
+            if role_kind(spec) == "dataset":
+                rec = self._datasets.get_dataset(UUID(bid))
+                if not rec:
+                    raise ValueError(f"Dataset not found for role {role}: {bid}")
+                if rec.environment_id != eid:
+                    raise ValueError(f"Dataset {bid} does not belong to environment {eid}")
+                ds_profiles[bid] = rec.schema_profile
+            else:
+                rec = self._connections.get_connection(UUID(bid))
+                if not rec:
+                    raise ValueError(f"Connection not found for role {role}: {bid}")
+                if rec.environment_id != eid:
+                    raise ValueError(f"Connection {bid} does not belong to environment {eid}")
+                conn_types[bid] = rec.connection_type
+
+        return conn_types, ds_profiles
+
     def _connection_types_for_bindings(
-        self, workspace_id: str, bindings: Dict[str, Any]
+        self, environment_id: str, agent_id: str, bindings: Dict[str, Any]
     ) -> Dict[str, str]:
-        types_by_id: Dict[str, str] = {}
-        for role, cid in (bindings or {}).items():
-            if not cid:
-                continue
-            rec = self._connections.get_connection(UUID(str(cid)))
-            if not rec:
-                raise ValueError(f"Connection not found for role {role}: {cid}")
-            if rec.workspace_id != workspace_id:
-                raise ValueError(f"Connection {cid} does not belong to workspace {workspace_id}")
-            types_by_id[str(cid)] = rec.connection_type
-        return types_by_id
+        conn_types, _ = self._binding_metadata_for_validation(environment_id, agent_id, bindings)
+        return conn_types
 
-    def _assert_databricks_exclusivity(
-        self,
-        bindings: Dict[str, Any],
-        types_by_id: Dict[str, str],
-        *,
-        exclude_workspace_agent_id: Optional[UUID] = None,
-    ) -> None:
-        metrics_id = bindings.get("metrics")
-        if not metrics_id:
-            return
-        if types_by_id.get(str(metrics_id)) != "databricks":
-            return
+    def _validate_bindings(
+        self, environment_id: str, agent_id: str, bindings: Dict[str, Any]
+    ) -> Dict[str, str]:
+        conn_types, ds_profiles = self._binding_metadata_for_validation(
+            environment_id, agent_id, bindings
+        )
+        return validate_bindings(agent_id, bindings, conn_types, ds_profiles)
 
-        all_agents = self._list_all_agents_for_exclusivity_check()
-        for wa in all_agents:
-            if exclude_workspace_agent_id and wa.id == exclude_workspace_agent_id:
-                continue
-            other_metrics = (wa.bindings or {}).get("metrics")
-            if other_metrics and str(other_metrics) == str(metrics_id):
-                raise DatabricksConnectionInUseError(
-                    f"Databricks connection {metrics_id} is already bound to workspace agent {wa.id}"
-                )
-
-    def _list_all_agents_for_exclusivity_check(self) -> List[WorkspaceAgentRecord]:
-        if not _db_enabled():
-            return [self._mem_to_record(r) for r in _MEM_AGENTS.values()]
-
-        from shared.database.connection import get_database_session
-        from shared.database.models import WorkspaceAgent
-
-        try:
-            session = get_database_session()
-            try:
-                rows = session.query(WorkspaceAgent).all()
-                return [self._row_to_record(r) for r in rows]
-            finally:
-                session.close()
-        except Exception as e:
-            logger.warning("workspace_agent_exclusivity_scan_failed", error=str(e))
-            return [self._mem_to_record(r) for r in _MEM_AGENTS.values()]
+    def get_metrics_dataset_id(self, workspace_agent_id: UUID) -> Optional[str]:
+        """Return metrics dataset UUID from agent bindings, if configured."""
+        rec = self.get_agent(workspace_agent_id)
+        if not rec:
+            return None
+        manifest = get_agent_manifest(rec.agent_id)
+        if not manifest:
+            return None
+        metrics_spec = manifest.get("roles", {}).get("metrics")
+        if role_kind(metrics_spec) != "dataset":
+            return None
+        metrics_id = (rec.bindings or {}).get("metrics")
+        return str(metrics_id).strip() if metrics_id else None
 
     def create_agent(
         self,
         *,
+        environment_id: str,
         workspace_id: str,
         workspace_name: Optional[str],
         agent_id: str,
@@ -191,11 +216,9 @@ class WorkspaceAgentService:
         if not get_agent_manifest(agent_id):
             raise ValueError(f"Unknown agent_id: {agent_id}")
 
-        types_by_id = self._connection_types_for_bindings(workspace_id, bindings)
-        normalized = validate_bindings(agent_id, bindings, types_by_id)
+        normalized = self._validate_bindings(environment_id, agent_id, bindings)
         bindings_out = dict(normalized)
         clean_settings = self._validate_agent_settings(agent_settings or {})
-        self._assert_databricks_exclusivity(bindings_out, types_by_id)
 
         if not _db_enabled():
             now = _utcnow()
@@ -233,8 +256,6 @@ class WorkspaceAgentService:
                 return self._row_to_record(row)
             finally:
                 session.close()
-        except DatabricksConnectionInUseError:
-            raise
         except Exception as e:
             logger.warning("workspace_agent_create_failed", error=str(e))
             now = _utcnow()
@@ -256,6 +277,7 @@ class WorkspaceAgentService:
         self,
         workspace_agent_id: UUID,
         *,
+        environment_id: str,
         name: Optional[str] = None,
         bindings: Optional[Dict[str, Any]] = None,
         agent_settings: Optional[Dict[str, Any]] = None,
@@ -267,13 +289,7 @@ class WorkspaceAgentService:
 
         bindings_out = existing.bindings
         if bindings is not None:
-            types_by_id = self._connection_types_for_bindings(existing.workspace_id, bindings)
-            bindings_out = validate_bindings(existing.agent_id, bindings, types_by_id)
-            self._assert_databricks_exclusivity(
-                bindings_out,
-                types_by_id,
-                exclude_workspace_agent_id=workspace_agent_id,
-            )
+            bindings_out = self._validate_bindings(environment_id, existing.agent_id, bindings)
 
         clean_settings = existing.agent_settings
         if agent_settings is not None:
@@ -320,8 +336,6 @@ class WorkspaceAgentService:
                 return self._row_to_record(row)
             finally:
                 session.close()
-        except DatabricksConnectionInUseError:
-            raise
         except Exception as e:
             logger.warning("workspace_agent_update_failed", error=str(e))
             row = _MEM_AGENTS.get(workspace_agent_id)
@@ -372,13 +386,49 @@ class WorkspaceAgentService:
         if not rec:
             raise LookupError("Workspace agent not found")
 
-        conn_ids = [UUID(v) for v in (rec.bindings or {}).values() if v]
+        manifest = get_agent_manifest(rec.agent_id) or {}
+        roles_spec = manifest.get("roles", {})
+        bindings = rec.bindings or {}
+
+        metrics_dataset: Optional[Dict[str, Any]] = None
+        environment_id: Optional[str] = None
+        metrics_ds_id = bindings.get("metrics")
+        if metrics_ds_id and role_kind(roles_spec.get("metrics")) == "dataset":
+            ds_rec = get_environment_dataset(UUID(str(metrics_ds_id)))
+            if ds_rec:
+                metrics_dataset = ds_rec.to_dict()
+                environment_id = ds_rec.environment_id
+
+        conn_ids = [
+            UUID(str(v))
+            for role, v in bindings.items()
+            if v and role_kind(roles_spec.get(role)) == "connection"
+        ]
         connections = self._connections.get_connections_by_ids(conn_ids)
+        if not environment_id:
+            environment_id = next(
+                (c.get("environment_id") for c in connections if c.get("environment_id")),
+                None,
+            )
+
+        metrics_wh_config: Optional[Dict[str, Any]] = None
+        if (
+            environment_id
+            and metrics_dataset
+            and metrics_dataset.get("source_type") == "databricks_delta"
+        ):
+            wh_id = resolve_metrics_connection_id(environment_id, None)
+            if wh_id:
+                wh = self._connections.get_connection(wh_id)
+                metrics_wh_config = dict(wh.config or {}) if wh else None
+
         flat, secrets = resolve_workspace_agent_settings(
             agent_id=rec.agent_id,
-            bindings=rec.bindings,
+            bindings=bindings,
             agent_settings=rec.agent_settings,
             connections=connections,
+            metrics_dataset=metrics_dataset,
+            metrics_wh_config=metrics_wh_config,
         )
         return rec.agent_id, flat, secrets
 

@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 from shared.auth.admin import list_admin_usernames
 from shared.config.connection_types import list_connection_types
+from shared.config.dataset_profiles import list_schema_profiles
 from shared.config.settings import settings
 
 router = APIRouter()
@@ -23,6 +24,12 @@ class UiHintsResponse(BaseModel):
 async def get_connection_types():
     """Connection type catalog and form field metadata for the UI."""
     return {"connection_types": list_connection_types()}
+
+
+@router.get("/dataset-profiles")
+async def get_dataset_profiles():
+    """Schema profile catalog for environment datasets."""
+    return {"schema_profiles": list_schema_profiles()}
 
 
 @router.get("/ui-hints", response_model=UiHintsResponse)

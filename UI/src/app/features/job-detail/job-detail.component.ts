@@ -244,9 +244,11 @@ export class JobDetailComponent implements OnInit {
     const j = this.jobId();
     const envId = this.environmentSelection.getSelectedId();
     const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
     const cacheKey = this.browseCache.jobMetricsKey(
       envId,
       connId,
+      datasetId,
       ws,
       j,
       this.startDate,
@@ -264,7 +266,8 @@ export class JobDetailComponent implements OnInit {
             this.startDate || undefined,
             this.endDate || undefined,
             envId,
-            connId
+            connId,
+            datasetId
           ),
         force
       )
@@ -286,9 +289,11 @@ export class JobDetailComponent implements OnInit {
     const j = this.jobId();
     const envId = this.environmentSelection.getSelectedId();
     const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
     const cacheKey = this.browseCache.jobRunsKey(
       envId,
       connId,
+      datasetId,
       ws,
       j,
       this.startDate,
@@ -306,7 +311,8 @@ export class JobDetailComponent implements OnInit {
             this.startDate || undefined,
             this.endDate || undefined,
             envId,
-            connId
+            connId,
+            datasetId
           ),
         force
       )
@@ -383,6 +389,7 @@ export class JobDetailComponent implements OnInit {
       include_explanation: this.includeExplanation,
       environment_id: this.environmentSelection.getSelectedId() || undefined,
       connection_id: this.environmentSelection.getSelectedConnectionId() || undefined,
+      dataset_id: this.environmentSelection.getSelectedDatasetId() || undefined,
     };
     if (selectedRun?.job_run_id) {
       body.job_run_id = selectedRun.job_run_id;

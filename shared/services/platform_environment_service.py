@@ -46,6 +46,7 @@ class PlatformEnvironment:
     databricks_http_path: Optional[str] = None
     default_metrics_connection_id: Optional[str] = None
     default_llm_connection_id: Optional[str] = None
+    default_dataset_id: Optional[str] = None
     sort_order: int = 0
     icon: str = "cloud"
     is_enabled: bool = True
@@ -64,6 +65,9 @@ class PlatformEnvironment:
         local_dataset: Optional[Dict[str, Any]] = None,
         is_admin: bool = False,
         metrics_connection_count: int = 0,
+        metrics_dataset_count: int = 0,
+        default_dataset_name: Optional[str] = None,
+        default_dataset_ref: Optional[str] = None,
     ) -> Dict[str, Any]:
         out: Dict[str, Any] = {
             "id": self.id,
@@ -80,7 +84,11 @@ class PlatformEnvironment:
             "databricks_http_path": self.databricks_http_path,
             "default_metrics_connection_id": self.default_metrics_connection_id,
             "default_llm_connection_id": self.default_llm_connection_id,
+            "default_dataset_id": self.default_dataset_id,
             "metrics_connection_count": metrics_connection_count,
+            "metrics_dataset_count": metrics_dataset_count,
+            "default_dataset_name": default_dataset_name,
+            "default_dataset_ref": default_dataset_ref,
             "sort_order": self.sort_order,
             "icon": self.icon,
             "is_enabled": self.is_enabled,
@@ -96,6 +104,7 @@ class PlatformEnvironment:
 def _row_to_env(row: Any) -> PlatformEnvironment:
     metrics_id = getattr(row, "default_metrics_connection_id", None)
     llm_id = getattr(row, "default_llm_connection_id", None)
+    dataset_id = getattr(row, "default_dataset_id", None)
     return PlatformEnvironment(
         id=row.id,
         code=row.code,
@@ -110,6 +119,7 @@ def _row_to_env(row: Any) -> PlatformEnvironment:
         databricks_http_path=row.databricks_http_path,
         default_metrics_connection_id=str(metrics_id) if metrics_id else None,
         default_llm_connection_id=str(llm_id) if llm_id else None,
+        default_dataset_id=str(dataset_id) if dataset_id else None,
         sort_order=int(row.sort_order or 0),
         icon=row.icon or "cloud",
         is_enabled=bool(row.is_enabled),
@@ -131,6 +141,7 @@ def _mem_to_env(data: Dict[str, Any]) -> PlatformEnvironment:
         databricks_http_path=data.get("databricks_http_path"),
         default_metrics_connection_id=data.get("default_metrics_connection_id"),
         default_llm_connection_id=data.get("default_llm_connection_id"),
+        default_dataset_id=data.get("default_dataset_id"),
         sort_order=int(data.get("sort_order") or 0),
         icon=data.get("icon") or "cloud",
         is_enabled=bool(data.get("is_enabled", True)),
@@ -170,6 +181,7 @@ class PlatformEnvironmentService:
                 return len(_MEM)
             _init_mem_from_seed()
             self._seed_default_connections()
+            self._seed_default_datasets()
             return len(_MEM)
         if _SEED_CHECKED:
             return 0
@@ -208,6 +220,7 @@ class PlatformEnvironmentService:
             session.commit()
             logger.info("platform_environments_seeded", count=len(PLATFORM_ENVIRONMENT_SEED))
             self._seed_default_connections()
+            self._seed_default_datasets()
             _SEED_CHECKED = True
             return len(PLATFORM_ENVIRONMENT_SEED)
         except Exception as e:
@@ -255,10 +268,50 @@ class PlatformEnvironmentService:
                 finally:
                     session.close()
 
+    def _seed_default_datasets(self) -> None:
+        from shared.services.environment_dataset_service import (
+            seed_default_datasets_for_environment,
+        )
+
+        for item in PLATFORM_ENVIRONMENT_SEED:
+            source = item.get("source_type")
+            if source not in ("databricks_uc", "local_csv"):
+                continue
+            dataset_id = seed_default_datasets_for_environment(
+                item["id"],
+                display_name=item["display_name"],
+                source_type=source,
+                seed_item=item,
+            )
+            if dataset_id and not _db_enabled():
+                row = _MEM.get(item["id"])
+                if row:
+                    row["default_dataset_id"] = str(dataset_id)
+            elif dataset_id and _db_enabled():
+                from shared.database.connection import get_database_session
+                from shared.database.models import PlatformEnvironmentRow
+
+                session = get_database_session()
+                try:
+                    env_row = (
+                        session.query(PlatformEnvironmentRow)
+                        .filter(PlatformEnvironmentRow.id == item["id"])
+                        .first()
+                    )
+                    if env_row and not env_row.default_dataset_id:
+                        env_row.default_dataset_id = dataset_id
+                        session.commit()
+                except Exception:
+                    session.rollback()
+                    raise
+                finally:
+                    session.close()
+
     def list_environments(self, *, include_disabled: bool = False) -> List[PlatformEnvironment]:
         self.seed_if_empty()
         if not _db_enabled():
             self._seed_default_connections()
+            self._seed_default_datasets()
             rows = list(_MEM.values())
             if not include_disabled:
                 rows = [r for r in rows if r.get("is_enabled", True)]

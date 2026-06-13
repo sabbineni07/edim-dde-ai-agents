@@ -18,6 +18,12 @@
   </div>
 </div>
 
+<div class="alert alert-info small mb-3" *ngIf="environmentId && metricsTableFqn && environmentId !== 'local'">
+  Default metrics dataset table:
+  <code class="ms-1">{{ metricsTableFqn }}</code>
+  <span class="text-muted ms-1">— manage datasets on the <a routerLink="/app/datasets">Datasets</a> page.</span>
+</div>
+
 <div class="alert alert-success" *ngIf="message">{{ message }}</div>
 <div class="alert alert-warning" *ngIf="error">{{ error }}</div>
 

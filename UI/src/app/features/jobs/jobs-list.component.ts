@@ -66,13 +66,14 @@ export class JobsListComponent implements OnInit {
   private loadWorkspaces(force = false): void {
     const envId = this.environmentSelection.getSelectedId();
     const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
     if (!envId) {
       this.workspaces = [];
       this.workspacesLoading = false;
       return;
     }
 
-    const cacheKey = this.browseCache.workspacesKey(envId, connId);
+    const cacheKey = this.browseCache.workspacesKey(envId, connId, datasetId);
     const cached = !force && this.browseCache.peek<Workspace[]>(cacheKey);
     this.workspacesLoading = !cached;
     if (cached) {
@@ -82,7 +83,7 @@ export class JobsListComponent implements OnInit {
     }
 
     this.browseCache
-      .get(cacheKey, () => this.api.browseWorkspaces(envId, connId), force)
+      .get(cacheKey, () => this.api.browseWorkspaces(envId, connId, datasetId), force)
       .subscribe({
         next: (list) => {
           this.workspaces = list;
@@ -234,9 +235,11 @@ export class JobsListComponent implements OnInit {
     if (!this.workspaceId) return;
     const envId = this.environmentSelection.getSelectedId();
     const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
     const cacheKey = this.browseCache.jobsKey(
       envId,
       connId,
+      datasetId,
       this.workspaceId,
       this.startDate,
       this.endDate
@@ -260,7 +263,8 @@ export class JobsListComponent implements OnInit {
             this.startDate,
             this.endDate,
             envId,
-            connId
+            connId,
+            datasetId
           ),
         force
       )

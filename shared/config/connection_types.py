@@ -29,7 +29,7 @@ _AUTH_MI = (
 CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
     "databricks": {
         "label": "Databricks",
-        "description": "Query data from a Databricks SQL warehouse and default table.",
+        "description": "SQL warehouse endpoint for querying Unity Catalog tables in this environment.",
         "fields": [
             {
                 "key": "databricks_server_hostname",
@@ -46,14 +46,6 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
                 "required": True,
                 "placeholder": "/sql/1.0/warehouses/xxxxxxxxxxxx",
                 "help": "Connection details → HTTP path for your SQL warehouse.",
-            },
-            {
-                "key": "databricks_job_cluster_metrics_table",
-                "label": "Default table",
-                "type": "string",
-                "required": True,
-                "placeholder": "catalog.schema.table_name",
-                "help": "Fully qualified Unity Catalog table used for browse and agents.",
             },
         ],
         "auth_note": _AUTH_MI,

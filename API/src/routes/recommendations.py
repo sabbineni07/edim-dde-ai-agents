@@ -61,6 +61,10 @@ class GenerateRecommendationRequest(BaseModel):
         default=None,
         description="Optional metrics connection override (UUID).",
     )
+    dataset_id: Optional[str] = Field(
+        default=None,
+        description="Optional metrics dataset override (UUID).",
+    )
     start_date: Optional[str] = Field(
         default=None,
         description="Optional browse window start (YYYY-MM-DD). Omitted = resolve metrics by cluster_id/job_run_id only.",
@@ -253,6 +257,30 @@ async def generate_recommendation(
             environment_id=request.environment_id,
         )
 
+        workspace_agent_svc = WorkspaceAgentService()
+        agent_id = request.agent_id
+        settings_override = None
+        settings_secrets = None
+        effective_dataset_id = request.dataset_id
+
+        if request.workspace_agent_id:
+            from uuid import UUID as _UUID
+
+            try:
+                wa_uuid = _UUID(request.workspace_agent_id)
+                resolved_agent_id, settings_override, settings_secrets = (
+                    workspace_agent_svc.resolve_settings_for_agent(wa_uuid)
+                )
+            except LookupError:
+                raise HTTPException(status_code=404, detail="Workspace agent not found") from None
+            if resolved_agent_id != agent_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="workspace_agent_id does not match agent_id",
+                )
+            if not effective_dataset_id:
+                effective_dataset_id = workspace_agent_svc.get_metrics_dataset_id(wa_uuid)
+
         metrics_override = request.job_cluster_metrics
         if not metrics_override:
             if request.environment_id:
@@ -264,6 +292,7 @@ async def generate_recommendation(
                     request.environment_id,
                     (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
                     connection_id=request.connection_id,
+                    dataset_id=effective_dataset_id,
                 )
                 collector_token = set_metrics_collector(collector)
 
@@ -271,6 +300,7 @@ async def generate_recommendation(
                 environment_id=request.environment_id,
                 user_id=x_user_id or x_user_name,
                 connection_id=request.connection_id,
+                dataset_id=effective_dataset_id,
                 job_id=request.job_id,
                 cluster_id=request.cluster_id,
                 job_run_id=request.job_run_id,
@@ -284,26 +314,6 @@ async def generate_recommendation(
                     end_date=request.end_date or "",
                     cluster_id=request.cluster_id,
                     job_run_id=request.job_run_id,
-                )
-
-        workspace_agent_svc = WorkspaceAgentService()
-        agent_id = request.agent_id
-        settings_override = None
-        settings_secrets = None
-
-        if request.workspace_agent_id:
-            from uuid import UUID
-
-            try:
-                resolved_agent_id, settings_override, settings_secrets = (
-                    workspace_agent_svc.resolve_settings_for_agent(UUID(request.workspace_agent_id))
-                )
-            except LookupError:
-                raise HTTPException(status_code=404, detail="Workspace agent not found") from None
-            if resolved_agent_id != agent_id:
-                raise HTTPException(
-                    status_code=400,
-                    detail="workspace_agent_id does not match agent_id",
                 )
 
         effective_settings = get_agent_settings(

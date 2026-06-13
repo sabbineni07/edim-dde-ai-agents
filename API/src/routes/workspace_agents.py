@@ -1,4 +1,4 @@
-"""Workspace-scoped agent installs (bindings to connections)."""
+"""Workspace-scoped agent installs (bindings to environment connections)."""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from shared.services.workspace_agent_service import (
-    DatabricksConnectionInUseError,
-    WorkspaceAgentService,
-)
+from shared.services.workspace_agent_service import WorkspaceAgentService
 
 router = APIRouter()
 svc = WorkspaceAgentService()
 
 
 class WorkspaceAgentCreateRequest(BaseModel):
+    environment_id: str = Field(
+        ..., min_length=1, description="Platform environment for connection bindings"
+    )
     agent_id: str = Field(..., min_length=1)
     name: str = Field(..., min_length=1)
     bindings: Dict[str, Any] = Field(default_factory=dict)
@@ -26,6 +26,9 @@ class WorkspaceAgentCreateRequest(BaseModel):
 
 
 class WorkspaceAgentUpdateRequest(BaseModel):
+    environment_id: str = Field(
+        ..., min_length=1, description="Platform environment for connection bindings"
+    )
     name: Optional[str] = Field(default=None, min_length=1)
     bindings: Optional[Dict[str, Any]] = None
     agent_settings: Optional[Dict[str, Any]] = None
@@ -57,6 +60,7 @@ async def list_workspace_agents(
 async def create_workspace_agent(workspace_id: str, body: WorkspaceAgentCreateRequest):
     try:
         rec = svc.create_agent(
+            environment_id=body.environment_id,
             workspace_id=workspace_id,
             workspace_name=body.workspace_name,
             agent_id=body.agent_id,
@@ -64,8 +68,6 @@ async def create_workspace_agent(workspace_id: str, body: WorkspaceAgentCreateRe
             bindings=body.bindings,
             agent_settings=body.agent_settings,
         )
-    except DatabricksConnectionInUseError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     return WorkspaceAgentResponse(**rec.to_dict())
@@ -91,13 +93,12 @@ async def update_workspace_agent(
     try:
         rec = svc.update_agent(
             workspace_agent_id,
+            environment_id=body.environment_id,
             name=body.name,
             bindings=body.bindings,
             agent_settings=body.agent_settings,
             workspace_name=body.workspace_name,
         )
-    except DatabricksConnectionInUseError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from e
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
     if not rec:

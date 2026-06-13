@@ -8,6 +8,7 @@ import { EnvironmentConnectionCacheService } from './environment-connection-cach
 const ENV_KEY = 'edim_selected_environment_id';
 const ENV_NAME_KEY = 'edim_selected_environment_name';
 const CONN_KEY = 'edim_selected_connection_id';
+const DATASET_KEY = 'edim_selected_dataset_id';
 const LEGACY_CONN_KEY = 'edim_selected_metrics_connection_id';
 
 export interface SelectedEnvironment {
@@ -27,6 +28,14 @@ function readStoredConnectionId(): string | null {
   }
 }
 
+function readStoredDatasetId(): string | null {
+  try {
+    return localStorage.getItem(DATASET_KEY)?.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Session context: environment slug (e.g. dim_dev) and selected Databricks connection UUID.
  *
@@ -38,6 +47,7 @@ export class EnvironmentSelectionService {
   private environments$ = new BehaviorSubject<PlatformEnvironment[]>([]);
   private selected$ = new BehaviorSubject<SelectedEnvironment | null>(this.getSelected());
   private selectedConnectionId$ = new BehaviorSubject<string | null>(readStoredConnectionId());
+  private selectedDatasetId$ = new BehaviorSubject<string | null>(readStoredDatasetId());
 
   constructor(
     private api: ApiService,
@@ -65,8 +75,19 @@ export class EnvironmentSelectionService {
     return this.selectedConnectionId$.asObservable();
   }
 
+  watchSelectedDatasetId(): Observable<string | null> {
+    return this.selectedDatasetId$.asObservable();
+  }
+
   watchSelectedConnection(): Observable<EnvironmentConnection | null> {
     return this.connectionCache.watchSelectedConnection();
+  }
+
+  /** Latest loaded environment row for the given id (from header env list). */
+  getEnvironmentRecord(environmentId: string): PlatformEnvironment | null {
+    const id = environmentId?.trim();
+    if (!id) return null;
+    return this.environments$.value.find((e) => e.id === id) ?? null;
   }
 
   getSelected(): SelectedEnvironment | null {
@@ -95,6 +116,10 @@ export class EnvironmentSelectionService {
     return this.connectionCache.getSelectedConnection();
   }
 
+  getSelectedDatasetId(): string | null {
+    return readStoredDatasetId();
+  }
+
   setSelected(environment: SelectedEnvironment): void {
     const prevId = this.getSelectedId();
     const nextId = environment.id.trim();
@@ -105,6 +130,7 @@ export class EnvironmentSelectionService {
       if (prevId !== nextId) {
         this.connectionCache.clearSelectedConnection();
         this.persistConnectionId(null);
+        this.persistDatasetId(null);
         if (prevId) {
           this.browseCache.invalidateEnvironment(prevId);
         }
@@ -126,6 +152,16 @@ export class EnvironmentSelectionService {
     }
   }
 
+  setSelectedDataset(datasetId: string | null): void {
+    const prevDatasetId = this.getSelectedDatasetId();
+    const nextDatasetId = datasetId?.trim() || null;
+    this.persistDatasetId(nextDatasetId);
+    const envId = this.getSelectedId();
+    if (envId && prevDatasetId !== nextDatasetId) {
+      this.browseCache.invalidateEnvironment(envId);
+    }
+  }
+
   private persistConnectionId(connectionId: string | null): void {
     try {
       if (connectionId?.trim()) {
@@ -135,6 +171,19 @@ export class EnvironmentSelectionService {
       }
       localStorage.removeItem(LEGACY_CONN_KEY);
       this.selectedConnectionId$.next(connectionId?.trim() || null);
+    } catch {
+      // ignore
+    }
+  }
+
+  private persistDatasetId(datasetId: string | null): void {
+    try {
+      if (datasetId?.trim()) {
+        localStorage.setItem(DATASET_KEY, datasetId.trim());
+      } else {
+        localStorage.removeItem(DATASET_KEY);
+      }
+      this.selectedDatasetId$.next(datasetId?.trim() || null);
     } catch {
       // ignore
     }
@@ -154,9 +203,11 @@ export class EnvironmentSelectionService {
       localStorage.removeItem(ENV_KEY);
       localStorage.removeItem(ENV_NAME_KEY);
       localStorage.removeItem(CONN_KEY);
+      localStorage.removeItem(DATASET_KEY);
       localStorage.removeItem(LEGACY_CONN_KEY);
       this.selected$.next(null);
       this.selectedConnectionId$.next(null);
+      this.selectedDatasetId$.next(null);
       this.connectionCache.clearSelectedConnection();
       this.connectionCache.invalidate();
       this.browseCache.clear();

@@ -13,6 +13,7 @@ export const routes: Routes = [
       { path: 'environments', loadComponent: () => import('./features/environments/environments.component').then(m => m.EnvironmentsComponent) },
       { path: 'admin/environments', loadComponent: () => import('./features/manage-environments/manage-environments.component').then(m => m.ManageEnvironmentsComponent) },
       { path: 'connections', loadComponent: () => import('./features/connections/connections.component').then(m => m.ConnectionsComponent) },
+      { path: 'datasets', loadComponent: () => import('./features/datasets/datasets.component').then(m => m.DatasetsComponent) },
       { path: 'workspaces', loadComponent: () => import('./features/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
       { path: 'workspaces/:workspaceId', loadComponent: () => import('./features/workspace-detail/workspace-detail.component').then(m => m.WorkspaceDetailComponent) },
       { path: 'jobs', loadComponent: () => import('./features/jobs/jobs-list.component').then(m => m.JobsListComponent) },

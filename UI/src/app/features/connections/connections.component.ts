@@ -1,6 +1,7 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import {
   ApiService,
@@ -15,13 +16,14 @@ import { parseApiError } from '../../core/api-error.util';
 @Component({
   selector: 'app-connections',
   standalone: true,
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, RouterLink],
   templateUrl: './connections.component.html',
   styleUrls: ['./connections.component.css'],
 })
 export class ConnectionsComponent implements OnInit, OnDestroy {
   environmentId = '';
   environmentName = '';
+  metricsTableFqn = '';
   connections: EnvironmentConnection[] = [];
   connectionTypes: ConnectionTypeMeta[] = [];
   loading = true;
@@ -56,6 +58,15 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     });
 
     this.subs.add(
+      this.environmentSelection.watchEnvironments().subscribe(() => {
+        if (this.environmentId) {
+          const env = this.environmentSelection.getEnvironmentRecord(this.environmentId);
+          this.metricsTableFqn = env?.table_fqn?.trim() || '';
+        }
+      })
+    );
+
+    this.subs.add(
       this.environmentSelection.watchSelectedId().subscribe((envId) => {
         if (!envId) {
           this.environmentId = '';
@@ -67,6 +78,8 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         const sel = this.environmentSelection.getSelected();
         this.environmentId = envId;
         this.environmentName = sel?.displayName || envId;
+        const env = this.environmentSelection.getEnvironmentRecord(envId);
+        this.metricsTableFqn = env?.table_fqn?.trim() || '';
         this.loadConnections();
       })
     );

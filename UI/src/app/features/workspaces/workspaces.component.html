@@ -3,9 +3,29 @@
     <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
     <p class="text-muted small mb-0" *ngIf="environmentName">
       Environment: <strong>{{ environmentName }}</strong>
+      <span *ngIf="metricsDatasetName" class="ms-2">
+        · Dataset: <strong>{{ metricsDatasetName }}</strong>
+        <span *ngIf="metricsDatasetRef" class="ms-1">
+          (<code>{{ metricsDatasetRef }}</code>)
+        </span>
+        <a routerLink="/app/datasets" class="ms-1 small">Manage</a>
+      </span>
     </p>
   </div>
   <div class="d-flex gap-2 align-items-center flex-wrap">
+    <div *ngIf="showDatasetPicker" class="d-flex align-items-center gap-2">
+      <label class="form-label small mb-0 text-muted">Dataset</label>
+      <select
+        class="form-select form-select-sm"
+        style="min-width: 12rem;"
+        [ngModel]="selectedDatasetId"
+        (ngModelChange)="onDatasetChange($event)"
+      >
+        <option *ngFor="let d of datasets" [value]="d.id">
+          {{ d.name }}{{ d.is_default ? ' (default)' : '' }}
+        </option>
+      </select>
+    </div>
     <div *ngIf="showConnectionPicker" class="d-flex align-items-center gap-2">
       <label class="form-label small mb-0 text-muted">Connection</label>
       <select

@@ -12,6 +12,7 @@ from API.src.routes import (
     chat,
     cost_analytics,
     environment_connections,
+    environment_datasets,
     environments,
     health,
     jobs,
@@ -115,6 +116,9 @@ app.include_router(jobs.router, prefix="/api", tags=["jobs"])
 app.include_router(environments.router, prefix="/api/environments", tags=["environments"])
 app.include_router(
     environment_connections.router, prefix="/api/environments", tags=["environment-connections"]
+)
+app.include_router(
+    environment_datasets.router, prefix="/api/environments", tags=["environment-datasets"]
 )
 app.include_router(
     workspace_connections.router, prefix="/api/workspaces", tags=["workspace-connections"]

@@ -3,46 +3,57 @@ import { Observable, of, tap } from 'rxjs';
 
 /**
  * In-memory cache for Databricks browse API responses (workspaces, jobs, metrics).
- * Survives route navigation; cleared on env/connection change or explicit refresh/apply.
+ * Survives route navigation; cleared on env/connection/dataset change or explicit refresh/apply.
  */
 @Injectable({ providedIn: 'root' })
 export class BrowseDataCacheService {
   private store = new Map<string, unknown>();
 
-  workspacesKey(environmentId: string, connectionId: string | null | undefined): string {
-    return `workspaces:${environmentId}:${connectionId?.trim() || '_'}`;
+  private datasetToken(datasetId: string | null | undefined): string {
+    return datasetId?.trim() || '_';
+  }
+
+  workspacesKey(
+    environmentId: string,
+    connectionId: string | null | undefined,
+    datasetId?: string | null
+  ): string {
+    return `workspaces:${environmentId}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}`;
   }
 
   jobsKey(
     environmentId: string | null | undefined,
     connectionId: string | null | undefined,
+    datasetId: string | null | undefined,
     workspaceId: string,
     startDate: string,
     endDate: string
   ): string {
-    return `jobs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${workspaceId}:${startDate}:${endDate}`;
+    return `jobs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${startDate}:${endDate}`;
   }
 
   jobMetricsKey(
     environmentId: string | null | undefined,
     connectionId: string | null | undefined,
+    datasetId: string | null | undefined,
     workspaceId: string,
     jobId: string,
     startDate: string,
     endDate: string
   ): string {
-    return `metrics:${environmentId || '_'}:${connectionId?.trim() || '_'}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
+    return `metrics:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
   }
 
   jobRunsKey(
     environmentId: string | null | undefined,
     connectionId: string | null | undefined,
+    datasetId: string | null | undefined,
     workspaceId: string,
     jobId: string,
     startDate: string,
     endDate: string
   ): string {
-    return `runs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
+    return `runs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
   }
 
   recommendationsKey(workspaceId: string, jobId: string, limit: number): string {
@@ -64,7 +75,7 @@ export class BrowseDataCacheService {
     this.store.delete(key);
   }
 
-  /** Drop cached browse rows for one environment (all connections). */
+  /** Drop cached browse rows for one environment (all connections/datasets). */
   invalidateEnvironment(environmentId: string): void {
     const token = `:${environmentId}:`;
     for (const key of [...this.store.keys()]) {

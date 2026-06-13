@@ -12,6 +12,7 @@ from API.src.main import app
 from shared.services.environment_connection_service import (
     reset_environment_connection_store_for_tests,
 )
+from shared.services.environment_dataset_service import reset_environment_dataset_store_for_tests
 from shared.services.platform_environment_service import reset_platform_environment_store_for_tests
 
 _SAMPLE_CSV = Path(__file__).resolve().parents[2] / "data" / "sample_job_metrics.csv"
@@ -21,6 +22,7 @@ _SAMPLE_CSV = Path(__file__).resolve().parents[2] / "data" / "sample_job_metrics
 def _reset_stores():
     reset_platform_environment_store_for_tests()
     reset_environment_connection_store_for_tests()
+    reset_environment_dataset_store_for_tests()
 
 
 @pytest.mark.asyncio
@@ -66,7 +68,6 @@ async def test_admin_can_create_and_set_default_metrics_connection():
                 "config": {
                     "databricks_server_hostname": "adb-test.azuredatabricks.net",
                     "databricks_http_path": "/sql/1.0/warehouses/test",
-                    "databricks_job_cluster_metrics_table": "dim_dev.metrics.cluster_jobs",
                 },
                 "set_default": True,
             },

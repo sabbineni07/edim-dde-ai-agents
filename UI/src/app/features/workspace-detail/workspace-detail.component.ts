@@ -1,18 +1,22 @@
-import { Component, OnInit, input } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, input } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import {
   AgentConnectionManifest,
   AgentInfo,
+  AgentRoleSpec,
   ApiService,
   ConnectionTypeMeta,
   EditableSettingsField,
+  EnvironmentConnection,
+  EnvironmentDataset,
   WorkspaceAgent,
-  WorkspaceConnection,
 } from '../../services/api.service';
 import { parseApiError } from '../../core/api-error.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
+import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 
 @Component({
   selector: 'app-workspace-detail',
@@ -22,13 +26,17 @@ import { WorkspaceSelectionService } from '../../core/services/workspace-selecti
   styleUrls: ['./workspace-detail.component.css'],
 })
 export class WorkspaceDetailComponent implements OnInit {
+  private destroyRef = inject(DestroyRef);
+
   workspaceId = input.required<string>();
 
-  activeTab: 'connections' | 'agents' = 'connections';
+  environmentId = '';
+  environmentDisplayName = '';
   workspaceName = '';
 
   connectionTypes: ConnectionTypeMeta[] = [];
-  connections: WorkspaceConnection[] = [];
+  envConnections: EnvironmentConnection[] = [];
+  envDatasets: EnvironmentDataset[] = [];
   workspaceAgents: WorkspaceAgent[] = [];
   agentsCatalog: AgentInfo[] = [];
 
@@ -37,12 +45,6 @@ export class WorkspaceDetailComponent implements OnInit {
   saving = false;
   message = '';
   error = '';
-
-  showConnectionForm = false;
-  editingConnectionId: string | null = null;
-  connType = '';
-  connName = '';
-  connConfig: Record<string, string> = {};
 
   showAgentWizard = false;
   wizardAgentId = '';
@@ -56,20 +58,24 @@ export class WorkspaceDetailComponent implements OnInit {
     private api: ApiService,
     private route: ActivatedRoute,
     private router: Router,
-    private workspaceSelection: WorkspaceSelectionService
+    private workspaceSelection: WorkspaceSelectionService,
+    private environmentSelection: EnvironmentSelectionService
   ) {}
 
   ngOnInit(): void {
-    this.route.queryParamMap.subscribe((qp) => {
-      const tab = qp.get('tab');
-      if (tab === 'agents' || tab === 'connections') {
-        this.activeTab = tab;
-      }
-    });
+    this.environmentSelection
+      .watchSelectedId()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((envId) => {
+        this.environmentId = envId || '';
+        const sel = this.environmentSelection.getSelected();
+        this.environmentDisplayName = sel?.displayName || envId || '';
+        this.refresh();
+      });
+
     this.api.getConnectionTypes().subscribe({
       next: (res) => {
         this.connectionTypes = res.connection_types || [];
-        this.applyDefaultConnectionType();
       },
     });
     this.api.getAgents().subscribe({
@@ -78,34 +84,35 @@ export class WorkspaceDetailComponent implements OnInit {
         this.applyDefaultWizardAgentId();
       },
     });
-    this.refresh();
-  }
-
-  setTab(tab: 'connections' | 'agents'): void {
-    this.activeTab = tab;
-    void this.router.navigate([], {
-      relativeTo: this.route,
-      queryParams: { tab },
-      queryParamsHandling: 'merge',
-      replaceUrl: true,
-    });
   }
 
   refresh(): void {
     const ws = this.workspaceId();
-    this.loadingConnections = true;
     this.loadingAgents = true;
     this.error = '';
-    this.api.getWorkspaceConnections(ws).subscribe({
+    if (!this.environmentId) {
+      this.envConnections = [];
+      this.envDatasets = [];
+      this.loadingConnections = false;
+      this.loadingAgents = false;
+      return;
+    }
+    this.loadingConnections = true;
+    this.api.getEnvironmentConnections(this.environmentId).subscribe({
       next: (list) => {
-        this.connections = list;
-        if (list.length && list[0].workspace_name) {
-          this.workspaceName = list[0].workspace_name!;
-        }
+        this.envConnections = list;
         this.loadingConnections = false;
       },
       error: () => {
         this.loadingConnections = false;
+      },
+    });
+    this.api.getEnvironmentDatasets(this.environmentId).subscribe({
+      next: (list) => {
+        this.envDatasets = list;
+      },
+      error: () => {
+        this.envDatasets = [];
       },
     });
     this.api.getWorkspaceAgents(ws).subscribe({
@@ -126,122 +133,38 @@ export class WorkspaceDetailComponent implements OnInit {
     return this.connectionTypes.find((t) => t.connection_type === type);
   }
 
-  connectionsForTypes(allowed: string[]): WorkspaceConnection[] {
+  connectionsForTypes(allowed: string[]): EnvironmentConnection[] {
     const set = new Set(allowed);
-    return this.connections.filter((c) => set.has(c.connection_type));
+    return this.envConnections.filter((c) => set.has(c.connection_type));
   }
 
-  startCreateConnection(): void {
-    this.showConnectionForm = true;
-    this.editingConnectionId = null;
-    this.connName = '';
-    this.connConfig = {};
-    this.connType = '';
-    this.message = '';
-    this.error = '';
-    this.applyDefaultConnectionType();
+  roleSpec(role: string): AgentRoleSpec | null {
+    const spec = this.wizardManifest?.roles[role];
+    if (!spec || Array.isArray(spec)) return null;
+    return spec;
   }
 
-  private applyDefaultConnectionType(): void {
-    if (!this.showConnectionForm || this.editingConnectionId || this.connType) return;
-    if (this.connectionTypes.length === 1) {
-      this.connType = this.connectionTypes[0].connection_type;
-    }
+  isDatasetRole(role: string): boolean {
+    return this.roleSpec(role)?.kind === 'dataset';
   }
 
-  canSaveConnection(): boolean {
-    const nameOk = !!this.connName.trim();
-    const typeOk = this.connectionTypes.some((t) => t.connection_type === this.connType);
-    return nameOk && typeOk;
+  isConnectionRole(role: string): boolean {
+    const spec = this.wizardManifest?.roles[role];
+    if (!spec) return false;
+    if (Array.isArray(spec)) return true;
+    return spec.kind === 'connection';
   }
 
-  startEditConnection(c: WorkspaceConnection): void {
-    this.showConnectionForm = true;
-    this.editingConnectionId = c.id;
-    this.connType = c.connection_type;
-    this.connName = c.name;
-    this.connConfig = {};
-    const meta = this.connectionTypeMeta(c.connection_type);
-    for (const f of meta?.fields || []) {
-      const v = c.config[f.key];
-      if (v != null) this.connConfig[f.key] = String(v);
-    }
-    this.message = '';
-    this.error = '';
+  datasetsForRole(role: string): EnvironmentDataset[] {
+    const spec = this.roleSpec(role);
+    const profile = spec?.schema_profile?.trim();
+    if (!profile) return [];
+    return this.envDatasets.filter((d) => d.schema_profile === profile);
   }
 
-  cancelConnectionForm(): void {
-    this.showConnectionForm = false;
-    this.editingConnectionId = null;
-  }
-
-  onConnectionTypeChange(): void {
-    if (!this.editingConnectionId) {
-      this.connConfig = {};
-    }
-  }
-
-  buildConnectionConfig(): Record<string, unknown> {
-    const out: Record<string, unknown> = {};
-    const meta = this.connectionTypeMeta(this.connType);
-    for (const f of meta?.fields || []) {
-      const v = this.connConfig[f.key]?.trim();
-      if (v) out[f.key] = v;
-    }
-    return out;
-  }
-
-  saveConnection(): void {
-    if (!this.connName.trim()) {
-      this.error = 'Connection name is required.';
-      return;
-    }
-    if (!this.connType || !this.connectionTypes.some((t) => t.connection_type === this.connType)) {
-      this.error = 'Connection type is required.';
-      return;
-    }
-    this.saving = true;
-    this.error = '';
-    const ws = this.workspaceId();
-    const config = this.buildConnectionConfig();
-    const body = {
-      connection_type: this.connType,
-      name: this.connName.trim(),
-      config,
-      workspace_name: this.workspaceName || ws,
-    };
-    const obs = this.editingConnectionId
-      ? this.api.updateWorkspaceConnection(ws, this.editingConnectionId, {
-          name: body.name,
-          config: body.config,
-          workspace_name: body.workspace_name,
-        })
-      : this.api.createWorkspaceConnection(ws, body);
-    obs.subscribe({
-      next: () => {
-        this.saving = false;
-        this.message = this.editingConnectionId ? 'Connection updated.' : 'Connection created.';
-        this.cancelConnectionForm();
-        this.refresh();
-      },
-      error: (err) => {
-        this.saving = false;
-        this.error = parseApiError(err, 'Save connection failed');
-      },
-    });
-  }
-
-  deleteConnection(c: WorkspaceConnection): void {
-    if (!confirm(`Delete connection "${c.name}"?`)) return;
-    this.api.deleteWorkspaceConnection(this.workspaceId(), c.id).subscribe({
-      next: () => {
-        this.message = 'Connection deleted.';
-        this.refresh();
-      },
-      error: (err) => {
-        this.error = parseApiError(err, 'Delete failed');
-      },
-    });
+  datasetLabel(ds: EnvironmentDataset): string {
+    const ref = ds.table_ref || ds.table_fqn || ds.local_path || '';
+    return ref ? `${ds.name} (${ref})` : ds.name;
   }
 
   startAddAgent(): void {
@@ -275,7 +198,7 @@ export class WorkspaceDetailComponent implements OnInit {
     const bindingsOk = this.wizardManifest.required_roles.every(
       (role) => !!this.wizardBindings[role]
     );
-    return nameOk && typeOk && bindingsOk;
+    return nameOk && typeOk && bindingsOk && !!this.environmentId;
   }
 
   cancelAgentWizard(): void {
@@ -341,38 +264,14 @@ export class WorkspaceDetailComponent implements OnInit {
   }
 
   allowedTypesForRole(role: string): string[] {
-    return this.wizardManifest?.roles[role] || [];
+    const spec = this.wizardManifest?.roles[role];
+    if (Array.isArray(spec)) return spec;
+    if (spec?.kind === 'connection') return spec.connection_types || [];
+    return [];
   }
 
   connectionTypeLabel(type: string): string {
     return this.connectionTypeMeta(type)?.label || type;
-  }
-
-  connectionSummary(c: WorkspaceConnection): string {
-    const cfg = c.config || {};
-    const type = c.connection_type;
-    if (type === 'databricks') {
-      const host = cfg['databricks_server_hostname'];
-      const table = cfg['databricks_job_cluster_metrics_table'];
-      return [host, table].filter(Boolean).join(' · ') || '—';
-    }
-    if (type === 'local_dataset') {
-      return String(cfg['local_data_path'] || '—');
-    }
-    if (type === 'ai_foundry') {
-      return String(cfg['azure_openai_endpoint'] || '—');
-    }
-    if (type === 'ai_search') {
-      const ep = cfg['azure_search_endpoint'];
-      const idx = cfg['azure_search_index_name'];
-      return [ep, idx].filter(Boolean).join(' / ') || '—';
-    }
-    if (type === 'faiss') {
-      return String(cfg['faiss_index_path'] || '—');
-    }
-    return Object.entries(cfg)
-      .map(([k, v]) => `${k}: ${v}`)
-      .join('; ') || '—';
   }
 
   agentCatalogName(agentId: string): string {
@@ -406,6 +305,10 @@ export class WorkspaceDetailComponent implements OnInit {
   }
 
   saveWorkspaceAgent(): void {
+    if (!this.environmentId) {
+      this.error = 'Select an environment in the header first.';
+      return;
+    }
     if (!this.wizardName.trim()) {
       this.error = 'Agent name is required.';
       return;
@@ -420,7 +323,9 @@ export class WorkspaceDetailComponent implements OnInit {
     }
     for (const role of this.wizardManifest.required_roles) {
       if (!this.wizardBindings[role]) {
-        this.error = `Select a connection for ${this.roleLabel(role)}.`;
+        this.error = this.isDatasetRole(role)
+          ? `Select a dataset for ${this.roleLabel(role)}.`
+          : `Select a connection for ${this.roleLabel(role)}.`;
         return;
       }
     }
@@ -433,6 +338,7 @@ export class WorkspaceDetailComponent implements OnInit {
     }
     this.api
       .createWorkspaceAgent(this.workspaceId(), {
+        environment_id: this.environmentId,
         agent_id: this.wizardAgentId,
         name: this.wizardName.trim(),
         bindings,
@@ -473,11 +379,20 @@ export class WorkspaceDetailComponent implements OnInit {
       rag: 'Knowledge search',
     };
     const parts: string[] = [];
-    for (const [role, cid] of Object.entries(wa.bindings || {})) {
-      const conn = this.connections.find((c) => c.id === cid);
-      parts.push(`${roleLabels[role] || role}: ${conn?.name || cid}`);
+    for (const [role, id] of Object.entries(wa.bindings || {})) {
+      const ds = this.envDatasets.find((d) => d.id === id);
+      if (ds) {
+        parts.push(`${roleLabels[role] || role}: ${ds.name}`);
+        continue;
+      }
+      const conn = this.envConnections.find((c) => c.id === id);
+      parts.push(`${roleLabels[role] || role}: ${conn?.name || id}`);
     }
     return parts.length ? parts.join(' · ') : '—';
+  }
+
+  canAddAgent(): boolean {
+    return !!this.environmentId && (this.envConnections.length > 0 || this.envDatasets.length > 0);
   }
 
   openJobs(): void {

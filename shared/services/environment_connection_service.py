@@ -89,19 +89,11 @@ def reset_environment_connection_store_for_tests() -> None:
 
 
 def _databricks_config_from_env_row(item: Dict[str, Any]) -> Dict[str, Any]:
-    parts = [
-        item.get("catalog_name"),
-        item.get("schema_name"),
-        item.get("table_name"),
-    ]
-    table_fqn = ".".join(p for p in parts if p) if all(parts) else ""
     cfg: Dict[str, Any] = {}
     if item.get("databricks_server_hostname"):
         cfg["databricks_server_hostname"] = item["databricks_server_hostname"]
     if item.get("databricks_http_path"):
         cfg["databricks_http_path"] = item["databricks_http_path"]
-    if table_fqn:
-        cfg["databricks_job_cluster_metrics_table"] = table_fqn
     return cfg
 
 
@@ -191,6 +183,22 @@ class EnvironmentConnectionService:
             return self._row_to_record(row) if row else None
         finally:
             session.close()
+
+    def get_connections_by_ids(self, ids: List[UUID]) -> List[Dict[str, Any]]:
+        """Fetch connection rows for workspace agent binding resolution."""
+        out: List[Dict[str, Any]] = []
+        for cid in ids:
+            rec = self.get_connection(cid)
+            if rec:
+                out.append(
+                    {
+                        "id": str(rec.id),
+                        "connection_type": rec.connection_type,
+                        "config": rec.config,
+                        "environment_id": rec.environment_id,
+                    }
+                )
+        return out
 
     def get_default_connection(
         self, environment_id: str, purpose: Purpose

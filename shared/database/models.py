@@ -167,6 +167,34 @@ class EnvironmentConnectionRow(Base):
     )
 
 
+class EnvironmentDatasetRow(Base):
+    """Environment-scoped logical dataset (Delta table or local CSV)."""
+
+    __tablename__ = "environment_datasets"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    environment_id = Column(
+        String(64),
+        ForeignKey("platform_environments.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    source_type = Column(String(32), nullable=False, index=True)
+    table_fqn = Column(String(512), nullable=True)
+    local_path = Column(String(1024), nullable=True)
+    schema_profile = Column(String(64), nullable=False, index=True)
+    is_default = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )
+
+
 class PlatformEnvironmentRow(Base):
     """Platform environment tier / UC scope.
 
@@ -194,6 +222,11 @@ class PlatformEnvironmentRow(Base):
     default_llm_connection_id = Column(
         UUID(as_uuid=True),
         ForeignKey("environment_connections.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    default_dataset_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("environment_datasets.id", ondelete="SET NULL"),
         nullable=True,
     )
     sort_order = Column(Integer, nullable=False, default=0)

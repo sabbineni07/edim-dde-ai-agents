@@ -17,6 +17,7 @@ def _resolve_collector(
     environment_id: Optional[str],
     user_id: Optional[str],
     connection_id: Optional[str],
+    dataset_id: Optional[str] = None,
 ):
     if environment_id:
         from DE.src.access.environment_job_metrics_collector import get_collector
@@ -25,6 +26,7 @@ def _resolve_collector(
             environment_id,
             (user_id or "anonymous").strip() or "anonymous",
             connection_id=connection_id,
+            dataset_id=dataset_id,
         )
     return get_data_collector()
 
@@ -34,6 +36,7 @@ def fetch_job_run_metrics_for_recommendation(
     environment_id: Optional[str],
     user_id: Optional[str],
     connection_id: Optional[str],
+    dataset_id: Optional[str] = None,
     job_id: str,
     cluster_id: Optional[str] = None,
     job_run_id: Optional[str] = None,
@@ -50,11 +53,13 @@ def fetch_job_run_metrics_for_recommendation(
         environment_id=environment_id,
         user_id=user_id,
         connection_id=connection_id,
+        dataset_id=dataset_id,
     )
     logger.info(
         "fetch_job_run_metrics_for_recommendation",
         collector=type(collector).__name__,
         environment_id=environment_id,
+        dataset_id=dataset_id,
         job_id=job_id,
         cluster_id=cluster,
         job_run_id=workflow if not cluster else None,
