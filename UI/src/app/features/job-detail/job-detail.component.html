@@ -237,7 +237,7 @@
 
   <div *ngIf="lastResult.explanation">
     <strong class="small text-muted">Explanation</strong>
-    <p class="small mb-0 mt-1">{{ lastResult.explanation }}</p>
+    <app-markdown-content class="d-block mt-1" [content]="lastResult.explanation"></app-markdown-content>
   </div>
 
   <div class="mt-2 small text-muted" *ngIf="lastResult.recommendation_attempts">
@@ -374,7 +374,10 @@
                 <strong>Applied recommendation:</strong>
                 <pre class="bg-light p-2 rounded mt-1 mb-0 small">{{ rec.recommendation | json }}</pre>
               </div>
-              <div class="mb-2" *ngIf="rec.explanation"><strong>Explanation:</strong><p class="mb-0 mt-1">{{ rec.explanation }}</p></div>
+              <div class="mb-2" *ngIf="rec.explanation">
+                <strong>Explanation:</strong>
+                <app-markdown-content class="d-block mt-1" [content]="rec.explanation"></app-markdown-content>
+              </div>
               <div class="mb-2" *ngIf="rec.pattern_analysis"><strong>Pattern analysis:</strong><pre class="mt-1 mb-0 bg-light p-2 rounded small">{{ rec.pattern_analysis }}</pre></div>
               <div *ngIf="rec.cost_usage_summary"><strong>Cost summary:</strong> {{ formatCost(rec.cost_usage_summary) }}</div>
             </div>

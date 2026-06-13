@@ -18,12 +18,13 @@ import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
+import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
 import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent],
   templateUrl: './job-detail.component.html',
   styleUrls: ['./job-detail.component.css'],
 })
