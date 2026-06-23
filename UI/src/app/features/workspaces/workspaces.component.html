@@ -49,7 +49,17 @@
   Select an environment from the header to browse workspaces.
 </div>
 
-<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+<div
+  class="alert alert-warning alert-dismissible fade show"
+  role="alert"
+  *ngIf="error && !errorDismissed"
+>
+  {{ error }}
+  <span *ngIf="error.includes('connection')" class="ms-1">
+    <a routerLink="/app/connections">Configure in Connections</a>
+  </span>
+  <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismissError()"></button>
+</div>
 
 <div class="card" *ngIf="loading">
   <div class="card-body text-center py-5">

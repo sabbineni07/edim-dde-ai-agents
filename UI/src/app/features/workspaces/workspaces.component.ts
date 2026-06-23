@@ -33,6 +33,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   workspaces: Workspace[] = [];
   loading = false;
   error = '';
+  errorDismissed = false;
   environmentName = '';
   environmentId = '';
   metricsDatasetName = '';
@@ -65,6 +66,9 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
       ).subscribe((result) => {
         this.workspaces = result.workspaces;
         this.error = result.error;
+        if (result.error) {
+          this.errorDismissed = false;
+        }
       })
     );
 
@@ -206,6 +210,10 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   private applyDatabricksConnections(list: EnvironmentConnection[]): void {
     this.databricksConnections = list;
     this.showConnectionPicker = list.length > 1;
+  }
+
+  dismissError(): void {
+    this.errorDismissed = true;
   }
 
   onConnectionChange(connectionId: string): void {

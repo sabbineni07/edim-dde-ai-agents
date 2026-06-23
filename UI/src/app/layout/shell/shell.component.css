@@ -50,6 +50,12 @@
   white-space: nowrap;
 }
 
+.shell-banner {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  padding-right: 2.5rem;
+}
+
 .shell-body {
   display: flex;
   flex: 1;

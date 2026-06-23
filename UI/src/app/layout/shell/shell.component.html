@@ -55,14 +55,23 @@
     </div>
   </header>
 
+  <div
+    class="shell-banner alert alert-dismissible fade show mb-0 rounded-0 border-0 border-bottom small"
+    [ngClass]="environmentsLoadFailed ? 'alert-danger' : 'alert-warning'"
+    role="alert"
+    *ngIf="environmentsLoadError && !environmentsLoadErrorDismissed"
+  >
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    {{ environmentsLoadError }}
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Dismiss"
+      (click)="dismissEnvironmentsLoadError()"
+    ></button>
+  </div>
+
   <div class="shell-body">
-    <div
-      class="alert mx-3 mt-2 mb-0 py-2 small"
-      [ngClass]="environmentsLoadFailed ? 'alert-danger' : 'alert-warning'"
-      *ngIf="environmentsLoadError"
-    >
-      {{ environmentsLoadError }}
-    </div>
     <app-sidebar
       [menuItems]="menuItems"
       [activeMenuItem]="activeMenuItem"

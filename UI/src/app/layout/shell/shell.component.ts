@@ -27,6 +27,7 @@ export class ShellComponent implements OnInit {
   showEnvPicker = false;
   environmentsLoadError = '';
   environmentsLoadFailed = false;
+  environmentsLoadErrorDismissed = false;
   sidebarOpen = true;
   menuItems: MenuItem[] = [
     { label: 'Connections', route: '/app/connections', icon: 'plug' },
@@ -67,6 +68,7 @@ export class ShellComponent implements OnInit {
       next: (list) => {
         this.environmentsLoadError = '';
         this.environmentsLoadFailed = false;
+        this.environmentsLoadErrorDismissed = false;
         this.environments = list.filter((e) => e.is_enabled !== false);
         const selected = this.environmentSelection.getSelected();
         if (selected && selected.id !== 'local') {
@@ -111,6 +113,10 @@ export class ShellComponent implements OnInit {
     if (env.id !== 'local') {
       this.connectionCache.getDatabricksConnections(env.id).subscribe();
     }
+  }
+
+  dismissEnvironmentsLoadError(): void {
+    this.environmentsLoadErrorDismissed = true;
   }
 
   manageEnvironments(): void {
