@@ -60,7 +60,7 @@ class Settings(BaseSettings):
     use_local_data: bool = True
     local_data_path: Optional[str] = None
 
-    vector_retrieval_backend: str = "azure_search"
+    vector_retrieval_backend: str = "none"
     faiss_index_path: Optional[str] = None
 
     default_monthly_budget: float = 500.0

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from shared.config.agent_manifest import WORKSPACE_AGENT_SETTINGS_KEYS, role_kind, validate_bindings
+from shared.config.agent_manifest import role_kind, validate_bindings
 from shared.config.connection_credentials import resolve_connection_secrets
 from shared.config.profile_field_meta import PROFILE_ALLOWED_FIELDS
 from shared.config.profile_overrides import flatten_overrides, validate_profile_overrides
@@ -99,7 +99,17 @@ def resolve_workspace_agent_settings(
         flat_agent = {k: v for k, v in flatten_overrides(agent_settings).items() if k in allowed}
         flat.update(validate_profile_overrides(flat_agent, allowed_fields=allowed))
 
+    # Optional rag role: omit from bindings => no knowledge search for this install.
+    if "rag" not in normalized_bindings:
+        flat["vector_retrieval_backend"] = "none"
+
     return flat, secrets
+
+
+def rag_binding_present(bindings: Dict[str, Any]) -> bool:
+    """True when workspace agent bindings include an explicit rag connection/dataset id."""
+    rag_id = (bindings or {}).get("rag")
+    return bool(rag_id and str(rag_id).strip())
 
 
 def load_connections_for_workspace_agent(

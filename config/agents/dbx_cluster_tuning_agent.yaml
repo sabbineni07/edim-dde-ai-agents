@@ -6,8 +6,8 @@ llm:
   default_model_name: gpt-4o
 
 rag:
-  enabled: true
-  backend: azure_search
+  enabled: false
+  backend: none
 
 sizing:
   recommendation_auto_termination_minutes: 0

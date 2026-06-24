@@ -280,6 +280,9 @@ async def generate_recommendation(
                 )
             if not effective_dataset_id:
                 effective_dataset_id = workspace_agent_svc.get_metrics_dataset_id(wa_uuid)
+        else:
+            # Option 2: no workspace agent install => RAG/search off unless explicitly bound.
+            settings_override = {"vector_retrieval_backend": "none"}
 
         metrics_override = request.job_cluster_metrics
         if not metrics_override:
@@ -321,7 +324,15 @@ async def generate_recommendation(
             overrides=settings_override,
             secrets=settings_secrets,
         )
-        agent = get_agent(agent_id, overrides={"settings": effective_settings})
+        from AI.src.agents.dbx_cluster_tuning_agent.deps import build_agent_runtime_deps
+
+        agent = get_agent(
+            agent_id,
+            overrides={
+                "settings": effective_settings,
+                **build_agent_runtime_deps(effective_settings, agent_id),
+            },
+        )
 
         result = await agent.generate_recommendation(
             job_id=request.job_id,

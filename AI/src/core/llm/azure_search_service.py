@@ -8,16 +8,29 @@ from azure.search.documents import SearchClient
 
 from AI.src.core.llm.azure_openai_service import AzureOpenAIService
 from shared.auth.azure_tokens import get_default_azure_credential
-from shared.config.settings import settings
+from shared.config.settings import Settings, settings
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def _build_search_credential() -> tuple[Union[AzureKeyCredential, TokenCredential], str]:
+def create_search_service(config: Optional[Settings] = None) -> Optional["AzureSearchService"]:
+    """Build Search client when backend is azure_search and endpoint is configured."""
+    from shared.config.rag_settings import is_rag_enabled, rag_backend
+
+    cfg = config or settings
+    if not is_rag_enabled(cfg) or rag_backend(cfg) != "azure_search":
+        return None
+    svc = AzureSearchService(config=cfg)
+    return svc if svc.client is not None else None
+
+
+def _build_search_credential(
+    cfg: Settings,
+) -> tuple[Union[AzureKeyCredential, TokenCredential], str]:
     """Resolve Search auth: API key when set, otherwise Azure identity (Managed Identity, az login)."""
-    api_key = (settings.azure_search_api_key or "").strip()
+    api_key = (cfg.azure_search_api_key or "").strip()
     if api_key:
         return AzureKeyCredential(api_key), "api_key"
     return get_default_azure_credential(), "azure_ad"
@@ -26,22 +39,26 @@ def _build_search_credential() -> tuple[Union[AzureKeyCredential, TokenCredentia
 class AzureSearchService:
     """Service for Azure AI Search integration."""
 
-    def __init__(self):
+    def __init__(self, config: Optional[Settings] = None):
         """Initialize Azure AI Search service.
 
         Auth order: (1) API key when ``AZURE_SEARCH_API_KEY`` is set,
         (2) DefaultAzureCredential (Managed Identity, az login, etc.) when only endpoint is set.
+
+        Args:
+            config: Settings bundle (workspace agent or platform). Defaults to module settings proxy.
         """
-        endpoint = (settings.azure_search_endpoint or "").strip()
+        cfg = config or settings
+        endpoint = (cfg.azure_search_endpoint or "").strip()
         if not endpoint:
             logger.warning("azure_search_not_configured")
             self.client = None
             self.openai_service = None
             return
 
-        index_name = settings.azure_search_index_name or "recommendations-index"
+        index_name = cfg.azure_search_index_name or "recommendations-index"
         try:
-            credential, auth = _build_search_credential()
+            credential, auth = _build_search_credential(cfg)
             self.client = SearchClient(
                 endpoint=endpoint,
                 index_name=index_name,

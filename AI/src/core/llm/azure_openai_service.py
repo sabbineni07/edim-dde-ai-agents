@@ -73,7 +73,7 @@ class AzureOpenAIService:
                     api_key=settings.azure_openai_api_key,
                     api_version=api_version,
                     azure_deployment=deployment,
-                    temperature=0.7,
+                    temperature=0,
                 )
                 self.embeddings = AzureOpenAIEmbeddings(
                     azure_endpoint=endpoint,
@@ -89,7 +89,7 @@ class AzureOpenAIService:
                     api_version=api_version,
                     azure_deployment=deployment,
                     azure_ad_token_provider=token_provider,
-                    temperature=0.7,
+                    temperature=0,
                 )
                 self.embeddings = AzureOpenAIEmbeddings(
                     azure_endpoint=endpoint,

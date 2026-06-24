@@ -3,10 +3,11 @@
 from typing import Any, Optional
 
 from AI.src.core.llm.azure_openai_service import AzureOpenAIService
-from AI.src.core.llm.azure_search_service import AzureSearchService
+from AI.src.core.llm.azure_search_service import AzureSearchService, create_search_service
 from AI.src.core.llm.mock_llm_service import MockLLMService
 from AI.src.core.retrieval import create_rag_context_provider
 from shared.config.loader import get_platform_settings
+from shared.config.rag_settings import is_rag_enabled
 from shared.services.observability_service import ObservabilityService
 from shared.utils.logging import get_logger
 
@@ -35,9 +36,11 @@ def get_llm_provider():
 def get_search_service() -> Optional[AzureSearchService]:
     global _search_service
     if _search_service is None:
+        plat = get_platform_settings()
+        if not is_rag_enabled(plat):
+            return None
         try:
-            svc = AzureSearchService()
-            _search_service = svc if svc.client is not None else None
+            _search_service = create_search_service(plat)
         except Exception as e:
             logger.warning("search_service_unavailable", error=str(e))
             _search_service = None
