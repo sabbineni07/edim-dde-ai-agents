@@ -38,9 +38,14 @@ def get_sizing_chain(
     )
 
 
-def get_explanation_chain(llm_provider=None) -> RecommendationExplanationChain:
+def get_explanation_chain(
+    llm_provider=None,
+    settings: Optional[Settings] = None,
+    agent_id: str = AGENT_ID,
+) -> RecommendationExplanationChain:
     llm = llm_provider or get_llm_provider()
-    return RecommendationExplanationChain(llm_provider=llm)
+    agent_settings = settings or get_agent_settings(agent_id)
+    return RecommendationExplanationChain(llm_provider=llm, settings=agent_settings)
 
 
 def build_agent_runtime_deps(
@@ -50,6 +55,7 @@ def build_agent_runtime_deps(
     """Per-request agent parts that depend on effective settings (RAG on/off, Search endpoint)."""
     return {
         "sizing_chain": get_sizing_chain(agent_id=agent_id, settings=settings),
+        "explanation_chain": get_explanation_chain(agent_id=agent_id, settings=settings),
         "search_service": create_search_service(settings),
     }
 
@@ -59,7 +65,6 @@ def get_dbx_cluster_tuning_agent_deps(agent_id: str = AGENT_ID) -> dict:
     agent_settings = get_agent_settings(agent_id)
     return {
         **build_agent_runtime_deps(agent_settings, agent_id=agent_id),
-        "explanation_chain": get_explanation_chain(),
         "cost_logger": get_cost_logger(),
         "settings": agent_settings,
     }

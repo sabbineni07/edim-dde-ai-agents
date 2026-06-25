@@ -36,6 +36,14 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
 WORKSPACE_AGENT_SETTINGS_KEYS = [
     "recommendation_auto_termination_minutes",
     "recommendation_cost_retry_enabled",
+    "llm_temperature",
+    "llm_top_p",
+    "sizing_llm_temperature",
+    "sizing_llm_top_p",
+    "explanation_llm_temperature",
+    "explanation_llm_top_p",
+    "rag_top_k_recommendations",
+    "rag_top_k_jobs",
 ]
 
 

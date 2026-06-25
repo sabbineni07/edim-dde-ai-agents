@@ -185,6 +185,7 @@ export interface EditableSettingsField {
   min?: number;
   max?: number;
   step?: number;
+  group?: string;
 }
 
 export interface UiHints {

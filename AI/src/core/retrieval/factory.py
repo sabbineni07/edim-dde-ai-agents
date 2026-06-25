@@ -6,6 +6,7 @@ from AI.src.core.retrieval.azure_provider import AzureSearchRagProvider
 from AI.src.core.retrieval.faiss_cache import load_cached_faiss_vectorstore
 from AI.src.core.retrieval.faiss_provider import FaissRagProvider
 from AI.src.core.retrieval.protocol import RagContextProvider
+from shared.config.llm_sampling import resolve_rag_top_k
 from shared.config.rag_settings import is_rag_enabled, rag_backend
 from shared.config.settings import Settings
 from shared.utils.logging import get_logger
@@ -25,6 +26,8 @@ def create_rag_context_provider(
         logger.info("rag_context_provider_disabled", backend=backend)
         return None
 
+    top_rec, top_jobs = resolve_rag_top_k(settings)
+
     if backend == "azure_search":
         try:
             svc = get_search_service()
@@ -34,7 +37,7 @@ def create_rag_context_provider(
         if svc is None:
             logger.info("rag_context_provider_skipped", reason="azure_search_not_configured")
             return None
-        return AzureSearchRagProvider(svc)
+        return AzureSearchRagProvider(svc, top_k_recommendations=top_rec, top_k_jobs=top_jobs)
 
     if backend == "faiss":
         path = (settings.faiss_index_path or "").strip()
@@ -49,7 +52,7 @@ def create_rag_context_provider(
                 return None
             vs = load_cached_faiss_vectorstore(path, emb)
             logger.info("rag_context_provider_ready", backend="faiss", path=path)
-            return FaissRagProvider(vs)
+            return FaissRagProvider(vs, top_k_recommendations=top_rec, top_k_jobs=top_jobs)
         except Exception as e:
             logger.warning("rag_faiss_load_failed", path=path, error=str(e))
             return None

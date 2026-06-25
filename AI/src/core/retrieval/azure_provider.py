@@ -19,14 +19,21 @@ logger = get_logger(__name__)
 class AzureSearchRagProvider:
     """Delegates to SearchService.list/search methods."""
 
-    def __init__(self, search_service: "SearchService"):
+    def __init__(
+        self,
+        search_service: "SearchService",
+        top_k_recommendations: int = 3,
+        top_k_jobs: int = 5,
+    ):
         self._search = search_service
+        self._top_rec = top_k_recommendations
+        self._top_jobs = top_k_jobs
 
     def sizing_chain_historical_context(self, job_cluster_metrics: Dict) -> str:
         query = str(job_cluster_metrics)
         try:
             similar_recommendations = self._search.search_similar(
-                query, top_k=3, filter_quality=True
+                query, top_k=self._top_rec, filter_quality=True
             )
             recommendations = [
                 r
@@ -37,7 +44,7 @@ class AzureSearchRagProvider:
                 return format_recommendation_hits(recommendations)
 
             similar_jobs = self._search.search_similar_jobs(
-                job_cluster_metrics, top_k=5, filter_recommendations=False
+                job_cluster_metrics, top_k=self._top_jobs, filter_recommendations=False
             )
             hits = _normalize_job_hits(similar_jobs)
             if hits:
