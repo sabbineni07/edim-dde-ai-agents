@@ -193,13 +193,27 @@ export class WorkspaceDetailComponent implements OnInit {
     this.wizardAgentId = wa.agent_id;
     this.wizardName = wa.name;
     this.wizardBindings = { ...(wa.bindings || {}) };
-    this.wizardSettings = { ...(wa.agent_settings || {}) };
+    this.wizardSettings = this.normalizeWizardSettings(wa.agent_settings);
     this.wizardManifest = null;
     this.wizardEditableFields = [];
     this.error = '';
     this.message = '';
     this.loadWizardManifest();
     this.loadWizardEditableFields();
+  }
+
+  /** Coerce API agent_settings JSON into form-friendly scalar values. */
+  private normalizeWizardSettings(
+    raw: Record<string, unknown> | undefined
+  ): Record<string, string | number | boolean> {
+    const out: Record<string, string | number | boolean> = {};
+    if (!raw) return out;
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        out[key] = value;
+      }
+    }
+    return out;
   }
 
   private applyDefaultWizardAgentId(): void {
