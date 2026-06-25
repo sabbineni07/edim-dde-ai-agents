@@ -38,7 +38,7 @@ def api_client():
 
 
 @pytest.mark.asyncio
-async def test_generate_requires_job_run_id(api_client):
+async def test_generate_requires_cluster_id(api_client):
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/recommendations/generate",
@@ -58,13 +58,30 @@ async def test_generate_unknown_run_returns_404(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "nonexistent-run",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
+                "cluster_id": "nonexistent-run",
             },
         )
     assert response.status_code == 404
     assert response.json().get("error_code") == "NO_JOB_METRICS"
+
+
+@pytest.mark.asyncio
+async def test_generate_success_per_run_without_dates(api_client):
+    """Run-centric recommend: metrics resolved by job_run_id only."""
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/recommendations/generate",
+            json={
+                "job_id": "job-001",
+                "cluster_id": "run-001-001",
+                "include_explanation": False,
+            },
+        )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["cluster_id"] == "run-001-001"
+    assert data["job_run_id"] == "jr-001-001"
+    assert data["job_cluster_metrics"]["avg_worker_nodes_consumed"] == 4.2
 
 
 @pytest.mark.asyncio
@@ -74,23 +91,24 @@ async def test_generate_success_per_run(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "run-001-001",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
+                "cluster_id": "run-001-001",
+                "start_date": "2026-06-01",
+                "end_date": "2026-06-03",
                 "include_explanation": False,
             },
         )
     assert response.status_code == 200, response.text
     data = response.json()
 
-    assert data["job_run_id"] == "run-001-001"
+    assert data["cluster_id"] == "run-001-001"
+    assert data["job_run_id"] == "jr-001-001"
     assert data["request_id"]
     assert data["recommendation"]["node_family"] in ("D", "E", "F", "L")
     assert "max_workers" in data["recommendation"]
     assert data["reason_codes"]
     assert isinstance(data["reason_codes"], list)
-    assert data["job_run_ingest"]["workflow_task_count"] == 150
-    assert data["job_run_ingest"]["azure_worker_vm_size"] == "Standard_E8s_v3"
+    assert data["job_cluster_metrics"]["azure_worker_vm_size"] == "Standard_E8s_v3"
+    assert data["job_cluster_metrics"]["p99_worker_nodes_consumed"] == 8.0
     assert data["sizing_hints"]["recommended_max_workers"] >= 1
     assert data["llm_recommendation"]["node_family"] in ("D", "E", "F", "L")
     assert data["guardrail_recommendation"]["max_workers"] == data["recommendation"]["max_workers"]
@@ -112,12 +130,14 @@ async def test_generate_with_prebuilt_ingest(api_client):
     ingest = json.loads(_sample_ingest_path.read_text())
     ingest["job_id"] = "1234567890"
     ingest["job_run_id"] = "34567894"
+    ingest["cluster_id"] = "cluster-34567894"
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/recommendations/generate",
             json={
                 "job_id": ingest["job_id"],
+                "cluster_id": ingest["cluster_id"],
                 "job_run_id": ingest["job_run_id"],
                 "start_date": "2026-04-30",
                 "end_date": "2026-04-30",
@@ -143,9 +163,7 @@ async def test_generate_with_explanation(api_client):
             "/api/recommendations/generate",
             json={
                 "job_id": "job-001",
-                "job_run_id": "run-001-002",
-                "start_date": "2024-01-15",
-                "end_date": "2024-01-18",
+                "cluster_id": "run-001-002",
                 "include_explanation": True,
             },
         )

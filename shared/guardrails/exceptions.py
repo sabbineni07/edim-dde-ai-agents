@@ -11,26 +11,40 @@ class GuardrailValidationError(Exception):
 
 
 class NoJobMetricsError(GuardrailValidationError):
-    """Raised when no job metrics are found for the given job_id/date range.
+    """Raised when no job metrics are found for the given job/run identifiers.
     Used to avoid calling LLMs when there is nothing to analyze.
     """
 
     def __init__(
         self,
         job_id: str,
-        start_date: str,
-        end_date: str,
+        start_date: str = "",
+        end_date: str = "",
+        *,
+        cluster_id: str | None = None,
         job_run_id: str | None = None,
     ):
         self.job_id = job_id
         self.start_date = start_date
         self.end_date = end_date
+        self.cluster_id = cluster_id
         self.job_run_id = job_run_id
-        run_part = f" job_run_id={job_run_id!r}" if job_run_id else ""
-        message = (
-            f"No job metrics found for job_id={job_id!r}{run_part} in date range "
-            f"{start_date!r} to {end_date!r}. Cannot generate recommendation."
-        )
+        if start_date and end_date:
+            message = (
+                f"No job metrics found for job_id={job_id!r} in date range "
+                f"{start_date!r} to {end_date!r}. Cannot generate recommendation."
+            )
+        else:
+            id_parts = []
+            if cluster_id:
+                id_parts.append(f"cluster_id={cluster_id!r}")
+            if job_run_id:
+                id_parts.append(f"job_run_id={job_run_id!r}")
+            id_text = ", ".join(id_parts) if id_parts else "selected run"
+            message = (
+                f"No job metrics found for job_id={job_id!r} ({id_text}). "
+                "Cannot generate recommendation."
+            )
         super().__init__(message, error_code="NO_JOB_METRICS")
 
 

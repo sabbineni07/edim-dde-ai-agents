@@ -8,3 +8,14 @@ export function last30DaysDateStrings(): { startDate: string; endDate: string } 
     endDate: end.toISOString().slice(0, 10),
   };
 }
+
+/** Sample CSV date range for local development. */
+export function sampleDataDateStrings(): { startDate: string; endDate: string } {
+  return { startDate: '2026-06-01', endDate: '2026-06-03' };
+}
+
+export function daysBetween(start: string, end: string): number {
+  const a = new Date(start);
+  const b = new Date(end);
+  return Math.ceil(Math.abs(b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+}

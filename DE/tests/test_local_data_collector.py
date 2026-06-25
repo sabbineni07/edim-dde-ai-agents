@@ -30,7 +30,7 @@ def test_collect_job_cluster_metrics():
     collector = LocalDataCollector()
 
     metrics = collector.collect_job_cluster_metrics(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(metrics, list)
@@ -41,8 +41,8 @@ def test_collect_job_cluster_metrics():
         metric = metrics[0]
         assert hasattr(metric, "job_id")
         assert hasattr(metric, "workspace_id")
-        assert hasattr(metric, "avg_cpu_utilization_pct")
-        assert hasattr(metric, "avg_memory_utilization_pct")
+        assert hasattr(metric, "avg_worker_cpu_utilization_pct")
+        assert hasattr(metric, "avg_worker_memory_utilization_pct")
 
 
 def test_collect_job_cluster_metrics_multiple_jobs():
@@ -50,7 +50,7 @@ def test_collect_job_cluster_metrics_multiple_jobs():
     collector = LocalDataCollector()
 
     metrics = collector.collect_job_cluster_metrics(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001", "job-002"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001", "job-002"]
     )
 
     assert isinstance(metrics, list)
@@ -66,7 +66,7 @@ def test_collect_resource_utilization():
     collector = LocalDataCollector()
 
     utilization = collector.collect_resource_utilization(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(utilization, list)
@@ -79,7 +79,7 @@ def test_collect_cost_data():
     collector = LocalDataCollector()
 
     cost_data = collector.collect_cost_data(
-        start_date="2024-01-15", end_date="2024-01-20", job_ids=["job-001"]
+        start_date="2026-06-01", end_date="2026-06-03", job_ids=["job-001"]
     )
 
     assert isinstance(cost_data, list)
@@ -91,7 +91,7 @@ def test_list_workspaces():
     """Test listing distinct workspaces with summary fields."""
     collector = LocalDataCollector()
 
-    workspaces = collector.list_workspaces(start_date="2024-01-15", end_date="2024-01-20")
+    workspaces = collector.list_workspaces()
 
     assert isinstance(workspaces, list)
     assert len(workspaces) > 0
@@ -111,8 +111,8 @@ def test_list_jobs_for_workspace():
 
     jobs = collector.list_jobs_for_workspace(
         workspace_id="1234567890123456",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
 
     assert isinstance(jobs, list)
@@ -121,11 +121,11 @@ def test_list_jobs_for_workspace():
     assert first["workspace_id"] == "1234567890123456"
     assert "job_id" in first
     assert "job_name" in first
-    assert "avg_cpu_utilization_pct" in first
-    assert "avg_memory_utilization_pct" in first
+    assert "avg_worker_cpu_utilization_pct" in first
+    assert "avg_worker_memory_utilization_pct" in first
     assert "total_runs" in first
-    assert "avg_duration_seconds" in first
-    assert "last_run_date" in first
+    assert "avg_job_run_duration_seconds" in first
+    assert "last_job_run_date" in first
 
 
 def test_list_job_runs():
@@ -134,16 +134,18 @@ def test_list_job_runs():
     runs = collector.list_job_runs(
         workspace_id="1234567890123456",
         job_id="job-001",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
     assert isinstance(runs, list)
     assert len(runs) > 0
     first = runs[0]
-    assert "job_run_id" in first
-    assert first["job_run_id"].startswith("run-001-")
-    assert "run_date" in first
-    assert "avg_cpu_utilization_pct" in first
+    assert "cluster_id" in first
+    assert first["cluster_id"].startswith("run-001-")
+    assert first["job_run_id"].startswith("jr-")
+    assert first["job_run_id"] != first["cluster_id"]
+    assert "job_run_date" in first
+    assert "avg_worker_cpu_utilization_pct" in first
 
 
 def test_get_job_metrics():
@@ -152,12 +154,12 @@ def test_get_job_metrics():
     metrics = collector.get_job_metrics(
         workspace_id="1234567890123456",
         job_id="job-001",
-        start_date="2024-01-15",
-        end_date="2024-01-20",
+        start_date="2026-06-01",
+        end_date="2026-06-03",
     )
     assert isinstance(metrics, dict)
     assert metrics is not None
     assert metrics["total_runs"] > 0
-    assert "avg_cpu_utilization" in metrics
-    assert "avg_memory_utilization" in metrics
-    assert "current_node_type" in metrics
+    assert "avg_worker_cpu_utilization_pct" in metrics
+    assert "avg_worker_memory_utilization_pct" in metrics
+    assert "azure_worker_vm_size" in metrics

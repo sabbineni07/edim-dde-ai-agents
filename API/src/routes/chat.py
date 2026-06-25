@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError, AzureOpenAIService
+from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError, AzureOpenAIService
 from DE.src.processors.metrics_processor import MetricsProcessor
 from shared.factories.data_collector_factory import get_data_collector
 from shared.utils.logging import get_logger

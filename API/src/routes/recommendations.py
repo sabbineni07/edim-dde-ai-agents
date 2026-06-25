@@ -5,11 +5,13 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
-from AI.src.services.azure_openai_service import AzureOpenAINotConfiguredError
+from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
 from API.src.deps import get_agent, get_cost_logger
+from DE.src.access.recommendation_metrics import fetch_job_run_metrics_for_recommendation
 from shared.config.loader import get_agent_settings
+from shared.factories.data_collector_context import reset_metrics_collector, set_metrics_collector
 from shared.guardrails import NoJobMetricsError, validate_intent, validate_recommendation_request
 from shared.recommendation_lifecycle import (
     ALLOWED_TRANSITIONS,
@@ -19,8 +21,8 @@ from shared.recommendation_lifecycle import (
     lifecycle_display_label,
     normalize_lifecycle_status,
 )
-from shared.services.agent_profile_service import AgentProfileService
 from shared.services.recommendation_lifecycle_service import RecommendationLifecycleService
+from shared.services.workspace_agent_service import WorkspaceAgentService
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -33,25 +35,64 @@ class GenerateRecommendationRequest(BaseModel):
     """Request model for per-job-run cluster recommendations."""
 
     agent_id: str = Field(
-        default="job_run_cluster_sizing",
-        description="Which agent to run (default: job_run_cluster_sizing).",
+        default="dbx_cluster_tuning_agent",
+        description="Which agent to run (default: dbx_cluster_tuning_agent).",
     )
-    profile_id: Optional[str] = Field(
+    workspace_agent_id: Optional[str] = Field(
         default=None,
-        description="Optional agent profile id (UUID) to apply as settings overrides.",
+        description="Workspace agent install id (UUID); resolves connection bindings.",
     )
     job_id: str = Field(..., min_length=1, description="Databricks job ID")
-    job_run_id: str = Field(..., min_length=1, description="Databricks job run ID")
-    start_date: str = Field(..., description="Start date YYYY-MM-DD")
-    end_date: str = Field(..., description="End date YYYY-MM-DD")
+    cluster_id: str = Field(
+        ...,
+        min_length=1,
+        description="Cluster identifier for the job run's attached cluster.",
+    )
+    job_run_id: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="Workflow job run identifier (optional; resolved from metrics when omitted).",
+    )
+    environment_id: Optional[str] = Field(
+        default=None,
+        description="Metrics environment id (same as job browse APIs).",
+    )
+    connection_id: Optional[str] = Field(
+        default=None,
+        description="Optional metrics connection override (UUID).",
+    )
+    dataset_id: Optional[str] = Field(
+        default=None,
+        description="Optional metrics dataset override (UUID).",
+    )
+    start_date: Optional[str] = Field(
+        default=None,
+        description="Optional browse window start (YYYY-MM-DD). Omitted = resolve metrics by cluster_id/job_run_id only.",
+    )
+    end_date: Optional[str] = Field(
+        default=None,
+        description="Optional browse window end (YYYY-MM-DD). Must be provided with start_date when set.",
+    )
     include_explanation: bool = Field(
         default=False,
         description="If true, run explanation LLM chain (slower). Default false for UI on-demand.",
     )
+    job_cluster_metrics: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Optional precomputed job-run ingest. Skips collector when set.",
+    )
     job_run_ingest: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Optional precomputed run metrics (Copilot-style flat JSON). Skips collector when set.",
+        description="Deprecated alias for job_cluster_metrics.",
     )
+
+    @model_validator(mode="after")
+    def _normalize_metrics_alias(self) -> "GenerateRecommendationRequest":
+        metrics = self.job_cluster_metrics or self.job_run_ingest
+        if metrics is not None:
+            object.__setattr__(self, "job_cluster_metrics", metrics)
+        return self
+
     intent: Optional[str] = Field(
         default=SUPPORTED_INTENT,
         description="Request intent; only 'cluster_recommendation' is supported.",
@@ -62,6 +103,7 @@ class RecommendationResponse(BaseModel):
     """Response model for recommendations."""
 
     request_id: Optional[str] = None
+    cluster_id: Optional[str] = None
     job_run_id: Optional[str] = None
     current_configuration: Optional[Dict] = None
     recommendation: Dict
@@ -69,6 +111,7 @@ class RecommendationResponse(BaseModel):
     pattern_analysis: str = ""
     risk_assessment: Dict = Field(default_factory=dict)
     reason_codes: list = Field(default_factory=list)
+    job_cluster_metrics: Optional[Dict] = None
     job_run_ingest: Optional[Dict] = None
     sizing_hints: Optional[Dict] = None
     llm_recommendation: Optional[Dict] = None
@@ -182,14 +225,17 @@ async def list_lifecycle_events(request_id: UUID):
 async def generate_recommendation(
     request: GenerateRecommendationRequest,
     cost_logger=Depends(get_cost_logger),
+    x_user_name: Optional[str] = Header(default=None),
+    x_user_id: Optional[str] = Header(default=None),
 ):
     """Generate a utilization-based recommendation for a single job run."""
     validate_intent(request.intent)
     validate_recommendation_request(
         job_id=request.job_id,
+        cluster_id=request.cluster_id,
+        job_run_id=request.job_run_id,
         start_date=request.start_date,
         end_date=request.end_date,
-        job_run_id=request.job_run_id,
     )
 
     request_id = uuid4()
@@ -201,39 +247,101 @@ async def generate_recommendation(
         status="processing",
         job_id=request.job_id,
     )
+    collector_token = None
     try:
         logger.info(
             "generating_recommendation",
             job_id=request.job_id,
+            cluster_id=request.cluster_id,
             job_run_id=request.job_run_id,
+            environment_id=request.environment_id,
         )
 
-        svc = AgentProfileService()
+        workspace_agent_svc = WorkspaceAgentService()
         agent_id = request.agent_id
         settings_override = None
-        if request.profile_id:
-            from uuid import UUID
+        settings_secrets = None
+        effective_dataset_id = request.dataset_id
 
-            prof = svc.get_profile(UUID(request.profile_id))
-            if not prof:
-                raise HTTPException(status_code=404, detail="Agent profile not found")
-            if prof.agent_id != agent_id:
+        if request.workspace_agent_id:
+            from uuid import UUID as _UUID
+
+            try:
+                wa_uuid = _UUID(request.workspace_agent_id)
+                resolved_agent_id, settings_override, settings_secrets = (
+                    workspace_agent_svc.resolve_settings_for_agent(wa_uuid)
+                )
+            except LookupError:
+                raise HTTPException(status_code=404, detail="Workspace agent not found") from None
+            if resolved_agent_id != agent_id:
                 raise HTTPException(
                     status_code=400,
-                    detail="profile_id does not match agent_id",
+                    detail="workspace_agent_id does not match agent_id",
                 )
-            settings_override = prof.overrides
+            if not effective_dataset_id:
+                effective_dataset_id = workspace_agent_svc.get_metrics_dataset_id(wa_uuid)
+        else:
+            # Option 2: no workspace agent install => RAG/search off unless explicitly bound.
+            settings_override = {"vector_retrieval_backend": "none"}
 
-        effective_settings = get_agent_settings(agent_id, overrides=settings_override)
-        agent = get_agent(agent_id, overrides={"settings": effective_settings})
+        metrics_override = request.job_cluster_metrics
+        if not metrics_override:
+            if request.environment_id:
+                from DE.src.access.environment_job_metrics_collector import (
+                    get_collector as get_job_metrics_collector,
+                )
+
+                collector = get_job_metrics_collector(
+                    request.environment_id,
+                    (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
+                    connection_id=request.connection_id,
+                    dataset_id=effective_dataset_id,
+                )
+                collector_token = set_metrics_collector(collector)
+
+            metrics_override = fetch_job_run_metrics_for_recommendation(
+                environment_id=request.environment_id,
+                user_id=x_user_id or x_user_name,
+                connection_id=request.connection_id,
+                dataset_id=effective_dataset_id,
+                job_id=request.job_id,
+                cluster_id=request.cluster_id,
+                job_run_id=request.job_run_id,
+                start_date=request.start_date,
+                end_date=request.end_date,
+            )
+            if not metrics_override:
+                raise NoJobMetricsError(
+                    job_id=request.job_id,
+                    start_date=request.start_date or "",
+                    end_date=request.end_date or "",
+                    cluster_id=request.cluster_id,
+                    job_run_id=request.job_run_id,
+                )
+
+        effective_settings = get_agent_settings(
+            agent_id,
+            overrides=settings_override,
+            secrets=settings_secrets,
+        )
+        from AI.src.agents.dbx_cluster_tuning_agent.deps import build_agent_runtime_deps
+
+        agent = get_agent(
+            agent_id,
+            overrides={
+                "settings": effective_settings,
+                **build_agent_runtime_deps(effective_settings, agent_id),
+            },
+        )
 
         result = await agent.generate_recommendation(
             job_id=request.job_id,
+            cluster_id=request.cluster_id,
             job_run_id=request.job_run_id,
-            start_date=request.start_date,
-            end_date=request.end_date,
+            start_date=request.start_date or None,
+            end_date=request.end_date or None,
             include_explanation=request.include_explanation,
-            job_run_ingest=request.job_run_ingest,
+            job_cluster_metrics=metrics_override,
             request_log_request_id=request_id,
         )
 
@@ -246,6 +354,7 @@ async def generate_recommendation(
 
         return RecommendationResponse(
             request_id=result.get("request_id"),
+            cluster_id=result.get("cluster_id"),
             job_run_id=result.get("job_run_id"),
             current_configuration=result.get("current_configuration"),
             recommendation=result["recommendation"],
@@ -253,7 +362,8 @@ async def generate_recommendation(
             pattern_analysis=result.get("pattern_analysis") or "",
             risk_assessment=result.get("risk_assessment") or {},
             reason_codes=result.get("reason_codes") or [],
-            job_run_ingest=result.get("job_run_ingest"),
+            job_cluster_metrics=result.get("job_cluster_metrics"),
+            job_run_ingest=result.get("job_cluster_metrics"),
             sizing_hints=result.get("sizing_hints"),
             llm_recommendation=result.get("llm_recommendation"),
             guardrail_recommendation=result.get("guardrail_recommendation"),
@@ -293,3 +403,6 @@ async def generate_recommendation(
         )
         logger.exception("recommendation_generation_error")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        if collector_token is not None:
+            reset_metrics_collector(collector_token)

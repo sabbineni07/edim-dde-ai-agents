@@ -1,6 +1,6 @@
 <div class="page-header mb-4">
   <nav class="mb-2">
-    <a routerLink="/app/workspaces" [queryParams]="{ start_date: startDate, end_date: endDate }" class="text-decoration-none small text-muted">Workspaces</a>
+    <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
     <span class="mx-2 text-muted">/</span>
     <a
       [routerLink]="['/app/jobs']"
@@ -8,56 +8,44 @@
       class="text-decoration-none small text-muted">
       Jobs</a>
     <span class="mx-2 text-muted">/</span>
-    <span class="small">Job {{ jobId() }}</span>
+    <span class="small">{{ jobId() }}</span>
   </nav>
-  <h2 class="mb-0">Job details</h2>
-  <p class="text-muted small mb-0 mt-1">Workspace: <code>{{ workspaceId() }}</code> · Job: <code>{{ jobId() }}</code></p>
-</div>
-
-<div class="alert alert-danger" *ngIf="error">{{ error }}</div>
-
-<!-- Date range & actions -->
-<div class="card mb-4">
-  <div class="card-body">
-    <div class="row g-2 align-items-end flex-wrap">
-      <div class="col-auto">
-        <label class="form-label small mb-0">Start date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="startDate" />
-      </div>
-      <div class="col-auto">
-        <label class="form-label small mb-0">End date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="endDate" />
-      </div>
-      <div class="col-auto">
-        <button class="btn btn-outline-primary btn-sm" (click)="refreshData()" [disabled]="loadingMetrics || loadingRuns">
-          Refresh
-        </button>
-      </div>
-      <div class="col-auto">
-        <label class="form-label small mb-0">Agent</label>
-        <select class="form-select form-select-sm" [(ngModel)]="selectedAgentId" (ngModelChange)="onAgentChange()">
-          <option *ngFor="let id of agentIds" [value]="id">{{ id }}</option>
+  <div class="d-flex justify-content-between align-items-end flex-wrap gap-3">
+    <div>
+      <h2 class="mb-0"><i class="bi bi-info-circle me-2"></i>Job Details</h2>
+      <p class="text-muted small mb-0 mt-1">Workspace: <code>{{ workspaceId() }}</code> · Job: <code>{{ jobId() }}</code></p>
+    </div>
+    <div class="d-flex align-items-center flex-wrap gap-3 job-detail-actions">
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="workspaceAgentSelect">Select Agent</label>
+        <select id="workspaceAgentSelect" class="form-select form-select-sm" [(ngModel)]="selectedWorkspaceAgentId">
+          <option value="">Platform default</option>
+          <option *ngFor="let wa of workspaceAgents" [value]="wa.id">{{ wa.name }}</option>
         </select>
       </div>
-      <div class="col-auto">
-        <label class="form-label small mb-0">Profile</label>
-        <select class="form-select form-select-sm" [(ngModel)]="selectedProfileId">
-          <option value="">Default settings</option>
-          <option *ngFor="let p of profiles" [value]="p.id">{{ p.name }}</option>
-        </select>
+      <div *ngIf="workspaceAgents.length === 0">
+        <a class="small" [routerLink]="['/app/workspaces', workspaceId()]" [queryParams]="{ tab: 'agents' }">Add agent</a>
       </div>
-      <div class="col-auto d-flex align-items-center pt-4">
+      <div>
         <div class="form-check mb-0">
           <input class="form-check-input" type="checkbox" id="includeExplanation" [(ngModel)]="includeExplanation" />
           <label class="form-check-label small" for="includeExplanation">Include explanation</label>
         </div>
       </div>
-      <div class="col-auto">
+      <div>
+        <button
+          class="btn btn-outline-primary btn-sm"
+          (click)="refreshJobData()"
+          [disabled]="loadingMetrics || loadingRuns || loadingRecs">
+          <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+      </div>
+      <div>
         <button
           class="btn btn-primary btn-sm"
           (click)="runRecommendation()"
-          [disabled]="runningRecommendation || !selectedRunId">
-          <span *ngIf="!runningRecommendation">Recommend for selected run</span>
+          [disabled]="runningRecommendation || !selectedClusterId">
+          <span *ngIf="!runningRecommendation">Run Recommendation</span>
           <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>Running...</span>
         </button>
       </div>
@@ -65,47 +53,67 @@
   </div>
 </div>
 
+<div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
+<div class="alert alert-danger" *ngIf="error">{{ error }}</div>
 <!-- Job runs -->
 <div class="card mb-4">
   <div class="card-header"><strong>Job runs</strong></div>
   <div class="card-body p-0">
     <div *ngIf="loadingRuns" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingRuns && runs.length === 0" class="p-3 text-muted small">
-      No runs in this date range. {{ sampleDataHint }}
+      No runs in this date range.
     </div>
     <div class="table-responsive" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
-            <th></th>
-            <th>Run ID</th>
-            <th>Date</th>
-            <th>CPU %</th>
-            <th>Memory %</th>
+            <th rowspan="2"></th>
+            <th rowspan="2">Job run ID</th>
+            <th rowspan="2">Cluster ID</th>
+            <th rowspan="2">Run date</th>
+            <th colspan="3" class="text-center border-start">Driver</th>
+            <th colspan="4" class="text-center border-start">Workers</th>
+          </tr>
+          <tr>
+            <th class="border-start">CPU %</th>
+            <th>Mem %</th>
+            <th>VM</th>
+            <th class="border-start">CPU %</th>
+            <th>Mem %</th>
             <th>Nodes</th>
-            <th>Node type</th>
+            <th>VM</th>
           </tr>
         </thead>
         <tbody>
           <tr
             *ngFor="let run of runs"
-            [class.table-active]="run.job_run_id === selectedRunId"
-            (click)="selectRun(run.job_run_id)"
+            [class.table-active]="run.cluster_id === selectedClusterId"
+            (click)="selectRun(run.cluster_id)"
             role="button">
             <td>
               <input
                 type="radio"
                 name="selectedRun"
-                [value]="run.job_run_id"
-                [checked]="run.job_run_id === selectedRunId"
-                (click)="$event.stopPropagation(); selectRun(run.job_run_id)" />
+                [value]="run.cluster_id"
+                [checked]="run.cluster_id === selectedClusterId"
+                (click)="$event.stopPropagation(); selectRun(run.cluster_id)" />
             </td>
-            <td><code class="small">{{ run.job_run_id }}</code></td>
-            <td>{{ run.run_date ?? '–' }}</td>
-            <td>{{ run.avg_cpu_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_memory_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_nodes_consumed | number:'1.1-1' }}</td>
-            <td>{{ run.current_node_type ?? '–' }}</td>
+            <td>
+              <code class="small job-run-id-text" [title]="run.job_run_id || ''">
+                {{ run.job_run_id || '—' }}
+              </code>
+            </td>
+            <td>
+              <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>
+            </td>
+            <td>{{ run.job_run_date ?? '–' }}</td>
+            <td class="border-start">{{ run.avg_driver_cpu_utilization_pct != null ? (run.avg_driver_cpu_utilization_pct | number:'1.0-1') : '–' }}</td>
+            <td>{{ run.avg_driver_memory_utilization_pct != null ? (run.avg_driver_memory_utilization_pct | number:'1.0-1') : '–' }}</td>
+            <td class="small">{{ run.azure_driver_vm_size ?? '–' }}</td>
+            <td class="border-start">{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.avg_worker_memory_utilization_pct | number:'1.0-1' }}</td>
+            <td>{{ run.avg_worker_nodes_consumed | number:'1.1-1' }}</td>
+            <td class="small">{{ run.azure_worker_vm_size ?? '–' }}</td>
           </tr>
         </tbody>
       </table>
@@ -118,16 +126,29 @@
   <div class="card-header"><strong>Job metrics (date range aggregate)</strong></div>
   <div class="card-body">
     <div *ngIf="loadingMetrics" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
-    <div *ngIf="!loadingMetrics && metricsData?.metrics" class="row g-3">
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Node type</strong><br>{{ metricsData!.metrics!['current_node_type'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Workers</strong><br>{{ metricsData!.metrics!['current_min_workers'] ?? '–' }} – {{ metricsData!.metrics!['current_max_workers'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg CPU %</strong><br>{{ metricsData!.metrics!['avg_cpu_utilization'] ?? metricsData!.metrics!['avg_cpu_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg memory %</strong><br>{{ metricsData!.metrics!['avg_memory_utilization'] ?? metricsData!.metrics!['avg_memory_utilization_pct'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Avg nodes</strong><br>{{ metricsData!.metrics!['avg_nodes_consumed'] ?? '–' }}</div></div>
-      <div class="col-md-4"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
+    <div *ngIf="!loadingMetrics && metricsData?.metrics" class="metrics-panels">
+      <h6 class="text-muted text-uppercase small mb-2">Driver node</h6>
+      <div class="row g-3 mb-4">
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Driver VM</strong><br>{{ metricsData!.metrics!['azure_driver_vm_size'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Driver count</strong><br>{{ metricsData!.metrics!['driver_node_count'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg driver CPU %</strong><br>{{ metricsData!.metrics!['avg_driver_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg driver memory %</strong><br>{{ metricsData!.metrics!['avg_driver_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak driver CPU %</strong><br>{{ metricsData!.metrics!['peak_driver_cpu_utilization_pct'] ?? '–' }}</div></div>
+      </div>
+      <h6 class="text-muted text-uppercase small mb-2">Worker cluster</h6>
+      <div class="row g-3">
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Worker VM</strong><br>{{ metricsData!.metrics!['azure_worker_vm_size'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Max workers</strong><br>{{ metricsData!.metrics!['max_worker_nodes_provisioned'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker CPU %</strong><br>{{ metricsData!.metrics!['avg_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker memory %</strong><br>{{ metricsData!.metrics!['avg_worker_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak worker CPU %</strong><br>{{ metricsData!.metrics!['peak_worker_cpu_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Peak worker memory %</strong><br>{{ metricsData!.metrics!['peak_worker_memory_utilization_pct'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Avg worker nodes</strong><br>{{ metricsData!.metrics!['avg_worker_nodes_consumed'] ?? '–' }}</div></div>
+        <div class="col-md-3"><div class="p-2 bg-light rounded"><strong>Total runs</strong><br>{{ metricsData!.metrics!['total_runs'] ?? '–' }}</div></div>
+      </div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="text-muted small">
-      No aggregated metrics for this job in the selected range. {{ sampleDataHint }}
+      No aggregated metrics for this job in the selected range (404).
     </div>
   </div>
 </div>
@@ -216,7 +237,7 @@
 
   <div *ngIf="lastResult.explanation">
     <strong class="small text-muted">Explanation</strong>
-    <p class="small mb-0 mt-1">{{ lastResult.explanation }}</p>
+    <app-markdown-content class="d-block mt-1" [content]="lastResult.explanation"></app-markdown-content>
   </div>
 
   <div class="mt-2 small text-muted" *ngIf="lastResult.recommendation_attempts">
@@ -231,7 +252,7 @@
   <div class="card-body">
     <div *ngIf="loadingRecs" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingRecs && recommendations.length === 0" class="text-muted small">
-      No recommendations yet. Select a run and click &quot;Recommend for selected run&quot;.
+      No recommendations yet. Select a run and click &quot;Run Recommendation&quot;.
     </div>
     <div *ngIf="!loadingRecs && recommendations.length > 0">
       <div class="accordion" id="recAccordion">
@@ -332,11 +353,31 @@
                   </table>
                 </details>
               </div>
-              <div class="mb-2" *ngIf="rec.recommendation">
-                <strong>Recommendation:</strong>
-                <pre class="bg-light p-2 rounded mt-1 mb-0">{{ rec.recommendation | json }}</pre>
+              <div class="mb-2" *ngIf="rec.reason_codes?.length">
+                <strong>Reason codes:</strong>
+                <span class="badge bg-info text-dark me-1" *ngFor="let code of rec.reason_codes">{{ code }}</span>
               </div>
-              <div class="mb-2" *ngIf="rec.explanation"><strong>Explanation:</strong><p class="mb-0 mt-1">{{ rec.explanation }}</p></div>
+              <div class="row g-2 mb-2" *ngIf="historyComparisonCurrent(rec) || historyComparisonRecommended(rec)">
+                <div class="col-md-6" *ngIf="historyComparisonCurrent(rec)">
+                  <strong class="small">Current</strong>
+                  <pre class="small bg-light p-2 rounded mb-0">{{ historyComparisonCurrent(rec) | json }}</pre>
+                </div>
+                <div class="col-md-6" *ngIf="historyComparisonRecommended(rec)">
+                  <strong class="small">Recommended</strong>
+                  <pre class="small bg-light p-2 rounded mb-0">{{ historyComparisonRecommended(rec) | json }}</pre>
+                </div>
+              </div>
+              <div class="mb-2" *ngIf="rec.cost_usage_summary">
+                <strong>LLM cost:</strong> {{ formatCost(rec.cost_usage_summary) }}
+              </div>
+              <div class="mb-2" *ngIf="rec.recommendation">
+                <strong>Applied recommendation:</strong>
+                <pre class="bg-light p-2 rounded mt-1 mb-0 small">{{ rec.recommendation | json }}</pre>
+              </div>
+              <div class="mb-2" *ngIf="rec.explanation">
+                <strong>Explanation:</strong>
+                <app-markdown-content class="d-block mt-1" [content]="rec.explanation"></app-markdown-content>
+              </div>
               <div class="mb-2" *ngIf="rec.pattern_analysis"><strong>Pattern analysis:</strong><pre class="mt-1 mb-0 bg-light p-2 rounded small">{{ rec.pattern_analysis }}</pre></div>
               <div *ngIf="rec.cost_usage_summary"><strong>Cost summary:</strong> {{ formatCost(rec.cost_usage_summary) }}</div>
             </div>

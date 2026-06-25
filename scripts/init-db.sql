@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS recommendations_history (
     pattern_analysis TEXT,
     risk_assessment JSONB,
     token_usage_analysis JSONB,
+    comparison JSONB,
+    reason_codes JSONB,
     lifecycle_status VARCHAR(64) DEFAULT 'RECOMMENDED',
     lifecycle_updated_at TIMESTAMP,
     lifecycle_updated_by VARCHAR(255),
@@ -86,18 +88,119 @@ CREATE TABLE IF NOT EXISTS recommendation_lifecycle_events (
 CREATE INDEX IF NOT EXISTS idx_lifecycle_events_request_id ON recommendation_lifecycle_events(request_id);
 CREATE INDEX IF NOT EXISTS idx_lifecycle_events_changed_at ON recommendation_lifecycle_events(changed_at);
 
--- Agent profiles table (Phase 9)
-CREATE TABLE IF NOT EXISTS agent_profiles (
+-- Workspace connections & agents (Phase 10)
+CREATE TABLE IF NOT EXISTS workspace_connections (
     id UUID PRIMARY KEY,
-    agent_id VARCHAR(255) NOT NULL,
+    workspace_id VARCHAR(255) NOT NULL,
+    workspace_name VARCHAR(512),
+    connection_type VARCHAR(64) NOT NULL,
     name VARCHAR(255) NOT NULL,
-    overrides JSONB NOT NULL DEFAULT '{}',
+    config JSONB NOT NULL DEFAULT '{}',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX IF NOT EXISTS idx_agent_profiles_agent_id ON agent_profiles(agent_id);
-CREATE INDEX IF NOT EXISTS idx_agent_profiles_name ON agent_profiles(name);
+CREATE INDEX IF NOT EXISTS idx_workspace_connections_workspace_id ON workspace_connections(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_connections_type ON workspace_connections(connection_type);
+
+CREATE TABLE IF NOT EXISTS workspace_agents (
+    id UUID PRIMARY KEY,
+    workspace_id VARCHAR(255) NOT NULL,
+    workspace_name VARCHAR(512),
+    agent_id VARCHAR(255) NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    bindings JSONB NOT NULL DEFAULT '{}',
+    agent_settings JSONB NOT NULL DEFAULT '{}',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_workspace_agents_workspace_id ON workspace_agents(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_agents_agent_id ON workspace_agents(agent_id);
+
+CREATE TABLE IF NOT EXISTS platform_environments (
+    id VARCHAR(64) PRIMARY KEY,
+    code VARCHAR(64) NOT NULL UNIQUE,
+    display_name VARCHAR(255) NOT NULL,
+    description TEXT,
+    environment_tier VARCHAR(32) NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    catalog_name VARCHAR(255),
+    schema_name VARCHAR(255),
+    table_name VARCHAR(255),
+    databricks_server_hostname VARCHAR(512),
+    databricks_http_path VARCHAR(512),
+    default_metrics_connection_id UUID,
+    default_llm_connection_id UUID,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    icon VARCHAR(64) NOT NULL DEFAULT 'cloud',
+    is_enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_platform_environments_tier ON platform_environments(environment_tier);
+CREATE INDEX IF NOT EXISTS idx_platform_environments_source ON platform_environments(source_type);
+
+CREATE TABLE IF NOT EXISTS environment_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    environment_id VARCHAR(64) NOT NULL REFERENCES platform_environments(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    connection_type VARCHAR(64) NOT NULL,
+    purpose VARCHAR(32) NOT NULL,
+    config JSONB NOT NULL DEFAULT '{}',
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_environment_connections_env ON environment_connections(environment_id);
+CREATE INDEX IF NOT EXISTS idx_environment_connections_purpose ON environment_connections(environment_id, purpose);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_connections_default
+    ON environment_connections(environment_id, purpose)
+    WHERE is_default = TRUE;
+
+CREATE TABLE IF NOT EXISTS environment_datasets (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    environment_id VARCHAR(64) NOT NULL REFERENCES platform_environments(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    source_type VARCHAR(32) NOT NULL,
+    table_fqn VARCHAR(512),
+    local_path VARCHAR(1024),
+    schema_profile VARCHAR(64) NOT NULL,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_environment_datasets_env ON environment_datasets(environment_id);
+CREATE INDEX IF NOT EXISTS idx_environment_datasets_profile ON environment_datasets(schema_profile);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_environment_datasets_default
+    ON environment_datasets(environment_id)
+    WHERE is_default = TRUE;
+
+ALTER TABLE platform_environments
+    DROP CONSTRAINT IF EXISTS platform_environments_default_metrics_connection_id_fkey;
+ALTER TABLE platform_environments
+    ADD CONSTRAINT platform_environments_default_metrics_connection_id_fkey
+    FOREIGN KEY (default_metrics_connection_id) REFERENCES environment_connections(id) ON DELETE SET NULL;
+
+ALTER TABLE platform_environments
+    DROP CONSTRAINT IF EXISTS platform_environments_default_llm_connection_id_fkey;
+ALTER TABLE platform_environments
+    ADD CONSTRAINT platform_environments_default_llm_connection_id_fkey
+    FOREIGN KEY (default_llm_connection_id) REFERENCES environment_connections(id) ON DELETE SET NULL;
+
+ALTER TABLE platform_environments
+    DROP CONSTRAINT IF EXISTS platform_environments_default_dataset_id_fkey;
+ALTER TABLE platform_environments
+    ADD COLUMN IF NOT EXISTS default_dataset_id UUID;
+ALTER TABLE platform_environments
+    ADD CONSTRAINT platform_environments_default_dataset_id_fkey
+    FOREIGN KEY (default_dataset_id) REFERENCES environment_datasets(id) ON DELETE SET NULL;
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_cost_logs_job_id ON cost_usage_logs(job_id);

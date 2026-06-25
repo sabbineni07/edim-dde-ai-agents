@@ -24,7 +24,6 @@ async def test_list_agents():
         response = await client.get("/api/agents/")
     assert response.status_code == 200
     data = response.json()
-    assert "agent_ids" in data
-    assert isinstance(data["agent_ids"], list)
-    assert "job_run_cluster_sizing" in data["agent_ids"]
-    assert "cluster_config" in data["agent_ids"]  # deprecated alias
+    assert "agents" in data
+    ids = [a["agent_id"] for a in data["agents"]]
+    assert ids == ["dbx_cluster_tuning_agent"]

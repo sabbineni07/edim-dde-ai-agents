@@ -9,6 +9,31 @@
         <h1 class="app-title">Insights Hub</h1>
       </div>
       <div class="header-right">
+        <div class="dropdown env-dropdown" *ngIf="environments.length">
+          <button
+            class="btn btn-outline-light btn-sm dropdown-toggle env-switcher"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            title="Switch metrics environment"
+          >
+            <i class="bi bi-layers me-1"></i>
+            {{ selectedEnvironment?.displayName || 'Select environment' }}
+          </button>
+          <ul class="dropdown-menu">
+            <li *ngFor="let env of environments">
+              <button
+                class="dropdown-item d-flex justify-content-between align-items-center"
+                type="button"
+                [class.active]="selectedEnvironment?.id === env.id"
+                (click)="selectEnvironment(env)"
+              >
+                <span>{{ env.display_name }}</span>
+                <span class="badge bg-secondary ms-2">{{ env.environment_tier }}</span>
+              </button>
+            </li>
+          </ul>
+        </div>
         <span class="user-text">{{ username }}</span>
         <div class="dropdown">
           <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
@@ -16,6 +41,12 @@
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><span class="dropdown-item-text text-muted small">{{ username }}</span></li>
+            <li *ngIf="isAdmin"><hr class="dropdown-divider"></li>
+            <li *ngIf="isAdmin">
+              <button class="dropdown-item" type="button" (click)="manageEnvironments()">
+                <i class="bi bi-sliders me-2"></i>Manage environments
+              </button>
+            </li>
             <li><hr class="dropdown-divider"></li>
             <li><button class="dropdown-item" type="button" (click)="logout()"><i class="bi bi-box-arrow-right me-2"></i>Logout</button></li>
           </ul>
@@ -23,6 +54,22 @@
       </div>
     </div>
   </header>
+
+  <div
+    class="shell-banner alert alert-dismissible fade show mb-0 rounded-0 border-0 border-bottom small"
+    [ngClass]="environmentsLoadFailed ? 'alert-danger' : 'alert-warning'"
+    role="alert"
+    *ngIf="environmentsLoadError && !environmentsLoadErrorDismissed"
+  >
+    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+    {{ environmentsLoadError }}
+    <button
+      type="button"
+      class="btn-close"
+      aria-label="Dismiss"
+      (click)="dismissEnvironmentsLoadError()"
+    ></button>
+  </div>
 
   <div class="shell-body">
     <app-sidebar
@@ -34,5 +81,29 @@
     <main class="main-content" [class.sidebar-closed]="!sidebarOpen">
       <router-outlet></router-outlet>
     </main>
+  </div>
+</div>
+
+<div class="modal fade show d-block" tabindex="-1" *ngIf="showEnvPicker" style="background: rgba(0,0,0,0.4);">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Choose environment</h5>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small">Select the metrics environment for this session.</p>
+        <div class="list-group">
+          <button
+            type="button"
+            class="list-group-item list-group-item-action"
+            *ngFor="let env of environments"
+            (click)="selectEnvironment(env)"
+          >
+            <strong>{{ env.display_name }}</strong>
+            <span class="badge bg-secondary ms-2">{{ env.environment_tier }}</span>
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </div>

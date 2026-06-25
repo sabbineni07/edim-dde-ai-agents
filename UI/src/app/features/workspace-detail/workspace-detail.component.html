@@ -1,0 +1,231 @@
+<div class="page-header mb-4">
+  <nav class="mb-2">
+    <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
+    <span class="mx-2 text-muted">/</span>
+    <span class="small">{{ workspaceName || workspaceId() }}</span>
+  </nav>
+  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+      <h2 class="mb-0">Workspace setup</h2>
+      <p class="text-muted small mb-0 mt-1">
+        <code>{{ workspaceId() }}</code> — install agents and bind environment connections
+        <span *ngIf="environmentDisplayName"> for <strong>{{ environmentDisplayName }}</strong></span>
+      </p>
+    </div>
+    <div class="d-flex gap-2">
+      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openJobs()">View jobs</button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refresh()">Refresh</button>
+    </div>
+  </div>
+</div>
+
+<div class="alert alert-info small mb-3">
+  <strong>How setup works</strong>
+  <ol class="mb-0 ps-3 mt-1">
+    <li>
+      <strong>Datasets</strong> — job metrics tables/CSV are managed in
+      <a routerLink="/app/datasets" class="alert-link">Datasets</a>.
+    </li>
+    <li>
+      <strong>Connections</strong> — SQL warehouses, LLM endpoints, and search indexes in
+      <a routerLink="/app/connections" class="alert-link">Connections</a>.
+    </li>
+    <li>
+      <strong>Agents</strong> — choose which AI agent runs on this workspace, which dataset it reads, and which LLM connection it uses.
+    </li>
+  </ol>
+  <span class="d-block mt-2 text-muted">
+    Authentication uses your Azure identity (<code>az login</code> or Managed Identity). No tokens or API keys are stored in this UI.
+  </span>
+</div>
+
+<div class="alert alert-warning small" *ngIf="!environmentId">
+  Select an environment in the header to bind agents to its connection pool.
+</div>
+
+<div class="alert alert-danger" *ngIf="error">{{ error }}</div>
+<div class="alert alert-success" *ngIf="message">{{ message }}</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <div>
+      <strong>Installed agents</strong>
+      <p class="small text-muted mb-0 mt-1">
+        Agents that run recommendations on this workspace using connections from the environment pool.
+      </p>
+    </div>
+    <button
+      type="button"
+      class="btn btn-primary btn-sm"
+      (click)="startAddAgent()"
+      [disabled]="showAgentWizard || !canAddAgent()">
+      Add agent
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <div *ngIf="loadingAgents || loadingConnections" class="text-center py-4">
+      <div class="spinner-border spinner-border-sm"></div>
+    </div>
+    <div *ngIf="!loadingConnections && environmentId && !canAddAgent()" class="p-3 text-muted small">
+      Add a dataset in <a routerLink="/app/datasets">Datasets</a> and an LLM connection in
+      <a routerLink="/app/connections">Connections</a> before installing an agent.
+    </div>
+    <div
+      *ngIf="!loadingAgents && canAddAgent() && workspaceAgents.length === 0"
+      class="p-3 text-muted small">
+      No agents installed yet. Add an agent and link a job metrics dataset and language model connection.
+    </div>
+    <table class="table table-sm mb-0" *ngIf="!loadingAgents && workspaceAgents.length > 0">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Agent</th>
+          <th>Linked resources</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let wa of workspaceAgents">
+          <td>{{ wa.name }}</td>
+          <td class="small">{{ agentCatalogName(wa.agent_id) }}</td>
+          <td class="small text-muted">{{ bindingSummary(wa) }}</td>
+          <td class="text-end">
+            <button type="button" class="btn btn-outline-danger btn-sm" (click)="deleteWorkspaceAgent(wa)">Remove</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card" *ngIf="showAgentWizard">
+  <div class="card-header"><strong>Install agent</strong></div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label small" for="wizardAgentName">
+          Agent name <span class="text-danger">*</span>
+        </label>
+        <input
+          id="wizardAgentName"
+          type="text"
+          class="form-control form-control-sm"
+          [(ngModel)]="wizardName"
+          placeholder="Enter name"
+          required />
+        <p class="small text-muted mt-1 mb-0">Shown when selecting which agent to run on job details.</p>
+      </div>
+      <div class="col-md-4">
+        <label class="form-label small" for="wizardAgentType">
+          Agent type <span class="text-danger">*</span>
+        </label>
+        <select
+          id="wizardAgentType"
+          class="form-select form-select-sm"
+          [(ngModel)]="wizardAgentId"
+          (ngModelChange)="onWizardAgentChange()"
+          required>
+          <option value="" disabled>Select agent type…</option>
+          <option *ngFor="let a of agentsCatalog" [value]="a.agent_id">{{ a.name }}</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="mt-3" *ngIf="wizardManifest">
+      <p class="small fw-semibold mb-1">Link datasets and connections</p>
+      <p class="small text-muted mb-2" *ngIf="wizardManifest.auth_note">{{ wizardManifest.auth_note }}</p>
+      <p class="small text-muted mb-2">
+        Job metrics come from an environment dataset; SQL warehouse access uses the environment default metrics connection.
+      </p>
+      <div class="row g-2" *ngFor="let role of wizardRoles()">
+        <div class="col-md-6">
+          <label class="form-label small mb-0">
+            {{ roleLabel(role) }}
+            <span *ngIf="isRoleRequired(role)" class="text-danger">*</span>
+            <span *ngIf="!isRoleRequired(role)" class="text-muted">(optional)</span>
+          </label>
+          <p class="small text-muted mb-1" *ngIf="roleHelp(role)">{{ roleHelp(role) }}</p>
+          <select
+            *ngIf="isDatasetRole(role)"
+            class="form-select form-select-sm"
+            [(ngModel)]="wizardBindings[role]">
+            <option value="">{{ isRoleRequired(role) ? 'Select a dataset…' : 'None' }}</option>
+            <option *ngFor="let d of datasetsForRole(role)" [value]="d.id">
+              {{ d.name }}{{ d.is_default ? ' (default)' : '' }} — {{ d.table_ref || d.table_fqn || d.local_path }}
+            </option>
+          </select>
+          <select
+            *ngIf="isConnectionRole(role)"
+            class="form-select form-select-sm"
+            [(ngModel)]="wizardBindings[role]">
+            <option value="">{{ isRoleRequired(role) ? 'Select a connection…' : 'None' }}</option>
+            <option *ngFor="let c of connectionsForTypes(allowedTypesForRole(role))" [value]="c.id">
+              {{ c.name }} ({{ connectionTypeLabel(c.connection_type) }})
+            </option>
+          </select>
+          <p class="small text-danger mb-0" *ngIf="isDatasetRole(role) && isRoleRequired(role) && datasetsForRole(role).length === 0">
+            Add a job cluster metrics dataset on the
+            <a routerLink="/app/datasets">Datasets</a> page first.
+          </p>
+          <p class="small text-danger mb-0" *ngIf="isConnectionRole(role) && isRoleRequired(role) && connectionsForTypes(allowedTypesForRole(role)).length === 0">
+            Add a {{ allowedTypesLabel(role) }} connection on the
+            <a routerLink="/app/connections">Connections</a> page first.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <details class="mt-3" *ngIf="wizardEditableFields.length">
+      <summary class="small fw-semibold">Advanced settings (optional)</summary>
+      <p class="small text-muted mt-2 mb-2">
+        Recommendation behavior for this install only. Language model and knowledge search settings come from the connections linked above.
+      </p>
+      <div class="row g-2 mt-1">
+        <div class="col-md-4" *ngFor="let f of wizardEditableFields">
+          <label class="form-label small mb-0">{{ f.label }}</label>
+          <p class="small text-muted mb-1" *ngIf="f.help">{{ f.help }}</p>
+          <select
+            *ngIf="f.type === 'select'"
+            class="form-select form-select-sm"
+            [(ngModel)]="wizardSettings[f.key]">
+            <option value="">Default</option>
+            <option *ngFor="let o of f.options" [value]="o">{{ o }}</option>
+          </select>
+          <div *ngIf="f.type === 'boolean'" class="form-check form-switch mt-1">
+            <input
+              class="form-check-input"
+              type="checkbox"
+              role="switch"
+              [id]="'wizard-setting-' + f.key"
+              [(ngModel)]="wizardSettings[f.key]" />
+          </div>
+          <input
+            *ngIf="f.type === 'number'"
+            type="number"
+            class="form-control form-control-sm"
+            [(ngModel)]="wizardSettings[f.key]"
+            [attr.min]="f.min"
+            [attr.max]="f.max"
+            [attr.step]="f.step" />
+          <input
+            *ngIf="f.type === 'string' || !f.type"
+            type="text"
+            class="form-control form-control-sm"
+            [(ngModel)]="wizardSettings[f.key]"
+            [placeholder]="f.placeholder || ''" />
+        </div>
+      </div>
+    </details>
+
+    <div class="mt-3">
+      <button
+        type="button"
+        class="btn btn-primary btn-sm me-2"
+        (click)="saveWorkspaceAgent()"
+        [disabled]="saving || !canInstallAgent()">
+        Install
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelAgentWizard()">Cancel</button>
+    </div>
+  </div>
+</div>

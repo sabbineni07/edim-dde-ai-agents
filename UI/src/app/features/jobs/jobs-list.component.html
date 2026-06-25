@@ -1,35 +1,92 @@
 <div class="page-header mb-4">
-  <nav class="mb-2">
-    <a routerLink="/app/workspaces" [queryParams]="{ start_date: startDate, end_date: endDate }" class="text-decoration-none small text-muted">Workspaces</a>
-    <span class="mx-2 text-muted">/</span>
-    <span class="small" *ngIf="workspaceId">Jobs</span>
-  </nav>
-  <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
-  <p class="text-muted small mb-0 mt-1" *ngIf="workspaceId">
-    Workspace: <code>{{ workspaceId }}</code>
-    · Range: <code>{{ startDate }}</code> – <code>{{ endDate }}</code>
-  </p>
-</div>
-
-<div class="alert alert-info" *ngIf="!workspaceId">
-  Select a workspace from <a routerLink="/app/workspaces">Workspaces</a> to see jobs.
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <nav class="mb-0">
+      <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
+      <span class="mx-2 text-muted">/</span>
+      <span class="small">Jobs</span>
+    </nav>
+    <div class="d-flex align-items-center flex-wrap gap-3 jobs-list-actions">
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsWorkspaceSelect">Workspace</label>
+        <select
+          id="jobsWorkspaceSelect"
+          class="form-select form-select-sm"
+          [ngModel]="workspaceId"
+          (ngModelChange)="onWorkspaceChange($event)"
+          [disabled]="workspacesLoading || !workspaces.length">
+          <option *ngIf="workspacesLoading" [ngValue]="null">Loading workspaces…</option>
+          <option *ngIf="!workspacesLoading && !workspaces.length" [ngValue]="null">No workspaces</option>
+          <option *ngFor="let w of workspaces" [ngValue]="w.workspace_id">
+            {{ w.workspace_name || w.workspace_id }}
+          </option>
+        </select>
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsStartDate">Start date</label>
+        <input
+          id="jobsStartDate"
+          type="date"
+          class="form-control form-control-sm"
+          [(ngModel)]="startDate"
+          [disabled]="!workspaceId" />
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <label class="small mb-0 fw-semibold text-nowrap" for="jobsEndDate">End date</label>
+        <input
+          id="jobsEndDate"
+          type="date"
+          class="form-control form-control-sm"
+          [(ngModel)]="endDate"
+          [disabled]="!workspaceId" />
+      </div>
+      <button
+        type="button"
+        class="btn btn-primary btn-sm"
+        (click)="applyDateRangeToUrl()"
+        [disabled]="loading || !workspaceId">
+        Apply
+      </button>
+      <button
+        type="button"
+        class="btn btn-outline-primary btn-sm"
+        (click)="refreshJobs()"
+        [disabled]="loading || !workspaceId">
+        <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
+      </button>
+    </div>
+  </div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+    <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
+    <input
+      *ngIf="workspaceId"
+      type="text"
+      class="form-control form-control-sm jobs-list-search"
+      placeholder="Filter by job id, name, workload..."
+      [(ngModel)]="filterText"
+      (ngModelChange)="onFilterChange()" />
+  </div>
 </div>
 
 <div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+<div class="alert alert-warning py-2 small" *ngIf="dateRangeWarning">{{ dateRangeWarning }}</div>
 
-<div class="mb-3" *ngIf="workspaceId">
-  <input type="text" class="form-control form-control-sm" style="max-width: 300px;" placeholder="Filter by job id, name, workload..." [(ngModel)]="filterText" />
-</div>
-
-<div class="card" *ngIf="loading && workspaceId">
+<div class="card" *ngIf="(loading || workspacesLoading) && workspaceId">
   <div class="card-body text-center py-5">
     <div class="spinner-border text-primary"></div>
     <p class="mt-2 mb-0 text-muted">Loading jobs...</p>
   </div>
 </div>
 
+<div class="card" *ngIf="!workspacesLoading && !workspaces.length && !error">
+  <div class="card-body text-center py-5 text-muted">No workspaces found. Ensure the data source has job metrics.</div>
+</div>
+
 <div class="card" *ngIf="!loading && workspaceId && !jobs.length && !error">
   <div class="card-body text-center py-5 text-muted">No jobs in this workspace for the selected date range.</div>
+</div>
+
+<div class="card" *ngIf="!loading && workspaceId && jobs.length && !filteredJobs.length && !error">
+  <div class="card-body text-center py-5 text-muted">No jobs match your filter.</div>
 </div>
 
 <div class="table-responsive" *ngIf="!loading && workspaceId && filteredJobs.length > 0">
@@ -37,7 +94,7 @@
     <thead class="table-light">
       <tr>
         <th>Job ID</th>
-        <th>Name</th>
+        <th class="jobs-col-name">Name</th>
         <th>Workload</th>
         <th>Avg CPU %</th>
         <th>Avg Mem %</th>
@@ -47,16 +104,66 @@
       </tr>
     </thead>
     <tbody>
-      <tr *ngFor="let j of filteredJobs">
+      <tr *ngFor="let j of paginatedJobs">
         <td><code class="small">{{ j.job_id }}</code></td>
-        <td>{{ j.job_name || '–' }}</td>
-        <td>{{ j.workload_type || '–' }}</td>
-        <td>{{ j.avg_cpu_utilization_pct != null ? (j.avg_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
-        <td>{{ j.avg_memory_utilization_pct != null ? (j.avg_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td class="jobs-col-name">
+          <span class="jobs-name-text" [title]="j.job_name || ''">{{ j.job_name || '–' }}</span>
+        </td>
+        <td>{{ j.job_type || '–' }}</td>
+        <td>{{ j.avg_worker_cpu_utilization_pct != null ? (j.avg_worker_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+        <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
         <td>{{ j.total_runs ?? '–' }}</td>
-        <td class="small">{{ j.current_node_type || '–' }}</td>
+        <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
         <td><button class="btn btn-primary btn-sm" (click)="openDetail(j)">View details</button></td>
       </tr>
     </tbody>
   </table>
+</div>
+
+<div
+  class="jobs-pagination d-flex flex-wrap justify-content-between align-items-center gap-3 mt-3"
+  *ngIf="!loading && workspaceId && filteredJobs.length > 0">
+  <div class="small text-muted">
+    Showing {{ pageRangeStart }}–{{ pageRangeEnd }} of {{ totalFilteredJobs }} job{{ totalFilteredJobs === 1 ? '' : 's' }}
+    <span *ngIf="filterText.trim()"> (filtered)</span>
+  </div>
+  <div class="d-flex align-items-center flex-wrap gap-3">
+    <div class="d-flex align-items-center gap-2">
+      <label class="small mb-0 text-nowrap" for="jobsPageSize">Rows per page</label>
+      <select
+        id="jobsPageSize"
+        class="form-select form-select-sm jobs-page-size-select"
+        [(ngModel)]="pageSize"
+        (ngModelChange)="onPageSizeChange()">
+        <option *ngFor="let size of pageSizeOptions" [ngValue]="size">{{ size }}</option>
+      </select>
+    </div>
+    <nav aria-label="Jobs pagination">
+      <ul class="pagination pagination-sm mb-0">
+        <li class="page-item" [class.disabled]="currentPage <= 1">
+          <button
+            type="button"
+            class="page-link"
+            (click)="goToPage(currentPage - 1)"
+            [disabled]="currentPage <= 1"
+            aria-label="Previous page">
+            Previous
+          </button>
+        </li>
+        <li class="page-item disabled">
+          <span class="page-link">Page {{ currentPage }} of {{ totalPages }}</span>
+        </li>
+        <li class="page-item" [class.disabled]="currentPage >= totalPages">
+          <button
+            type="button"
+            class="page-link"
+            (click)="goToPage(currentPage + 1)"
+            [disabled]="currentPage >= totalPages"
+            aria-label="Next page">
+            Next
+          </button>
+        </li>
+      </ul>
+    </nav>
+  </div>
 </div>

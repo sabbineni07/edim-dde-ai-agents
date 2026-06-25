@@ -7,6 +7,8 @@ from uuid import UUID
 
 from shared.recommendation_lifecycle import (
     LIFECYCLE_RECOMMENDED,
+    LIFECYCLE_SUPERSEDED,
+    TERMINAL_LIFECYCLE_STATUSES,
     InvalidLifecycleTransitionError,
     allowed_next_statuses,
     normalize_lifecycle_status,
@@ -177,3 +179,69 @@ class RecommendationLifecycleService:
             notes="Recommendation generated",
         )
         session.add(event)
+
+    def supersede_prior_recommendations(
+        self,
+        job_id: str,
+        job_run_id: str,
+        except_request_id: UUID,
+    ) -> int:
+        """Mark non-terminal prior recommendations for the same run as SUPERSEDED."""
+        if not DATABASE_AVAILABLE:
+            return 0
+        session = get_database_session()
+        count = 0
+        try:
+            rows = (
+                session.query(RecommendationHistory)
+                .filter(
+                    RecommendationHistory.job_id == job_id,
+                    RecommendationHistory.job_run_id == job_run_id,
+                    RecommendationHistory.request_id != except_request_id,
+                )
+                .all()
+            )
+            now = utc_now()
+            for rec in rows:
+                cur = normalize_lifecycle_status(rec.lifecycle_status)
+                if cur in TERMINAL_LIFECYCLE_STATUSES:
+                    continue
+                try:
+                    new_status = validate_transition(cur, LIFECYCLE_SUPERSEDED)
+                except InvalidLifecycleTransitionError:
+                    continue
+                session.add(
+                    RecommendationLifecycleEvent(
+                        request_id=rec.request_id,
+                        from_status=cur,
+                        to_status=new_status,
+                        changed_by="system",
+                        changed_at=now,
+                        notes="Superseded by newer recommendation for this run",
+                    )
+                )
+                rec.lifecycle_status = new_status
+                rec.lifecycle_updated_at = now
+                rec.lifecycle_updated_by = "system"
+                rec.recommendation = patch_stored_recommendation_lifecycle(
+                    rec.recommendation or {},
+                    status=new_status,
+                    changed_by="system",
+                    changed_at=now,
+                )
+                count += 1
+            if count:
+                session.commit()
+                logger.info(
+                    "superseded_prior_recommendations",
+                    job_id=job_id,
+                    job_run_id=job_run_id,
+                    count=count,
+                )
+            return count
+        except Exception as e:
+            session.rollback()
+            logger.warning("supersede_prior_recommendations_failed", error=str(e))
+            return 0
+        finally:
+            session.close()

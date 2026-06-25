@@ -1,51 +1,77 @@
 <div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-  <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
-  <button class="btn btn-outline-primary btn-sm" (click)="load()" [disabled]="loading">
-    <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
-  </button>
-</div>
-
-<div class="card mb-4">
-  <div class="card-body py-3">
-    <div class="row g-3 align-items-end flex-wrap">
-      <div class="col-auto">
-        <label class="form-label small mb-0 fw-semibold">Start date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="startDate" />
-      </div>
-      <div class="col-auto">
-        <label class="form-label small mb-0 fw-semibold">End date</label>
-        <input type="date" class="form-control form-control-sm" [(ngModel)]="endDate" />
-      </div>
-      <div class="col-auto">
-        <button
-          type="button"
-          class="btn btn-primary btn-sm"
-          (click)="applyDateRangeToUrl()"
-          [disabled]="loading">
-          Apply range
-        </button>
-      </div>
-    </div>
-    <p class="text-muted small mb-0 mt-2">
-      Choose a date range and click <strong>Apply range</strong> to filter (same query params as
-      <code>GET /api/workspaces</code>). With no dates in the URL, the last 30 days are used until you apply.
+  <div>
+    <h2 class="mb-0"><i class="bi bi-building me-2"></i>Workspaces</h2>
+    <p class="text-muted small mb-0" *ngIf="environmentName">
+      Environment: <strong>{{ environmentName }}</strong>
+      <span *ngIf="metricsDatasetName" class="ms-2">
+        · Dataset: <strong>{{ metricsDatasetName }}</strong>
+        <span *ngIf="metricsDatasetRef" class="ms-1">
+          (<code>{{ metricsDatasetRef }}</code>)
+        </span>
+        <a routerLink="/app/datasets" class="ms-1 small">Manage</a>
+      </span>
     </p>
   </div>
-</div>
-
-<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
-
-<div class="card" *ngIf="loading && !workspaces.length">
-  <div class="card-body text-center py-5">
-    <div class="spinner-border text-primary"></div>
-    <p class="mt-2 mb-0 text-muted">Loading workspaces...</p>
+  <div class="d-flex gap-2 align-items-center flex-wrap">
+    <div *ngIf="showDatasetPicker" class="d-flex align-items-center gap-2">
+      <label class="form-label small mb-0 text-muted">Dataset</label>
+      <select
+        class="form-select form-select-sm"
+        style="min-width: 12rem;"
+        [ngModel]="selectedDatasetId"
+        (ngModelChange)="onDatasetChange($event)"
+      >
+        <option *ngFor="let d of datasets" [value]="d.id">
+          {{ d.name }}{{ d.is_default ? ' (default)' : '' }}
+        </option>
+      </select>
+    </div>
+    <div *ngIf="showConnectionPicker" class="d-flex align-items-center gap-2">
+      <label class="form-label small mb-0 text-muted">Connection</label>
+      <select
+        class="form-select form-select-sm"
+        style="min-width: 12rem;"
+        [ngModel]="selectedConnectionId"
+        (ngModelChange)="onConnectionChange($event)"
+      >
+        <option *ngFor="let c of databricksConnections" [value]="c.id">
+          {{ c.name }}{{ c.is_default ? ' (default)' : '' }}
+        </option>
+      </select>
+    </div>
+    <button class="btn btn-outline-primary btn-sm" (click)="refreshWorkspaces()" [disabled]="loading">
+      <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
+    </button>
   </div>
 </div>
 
-<div class="card" *ngIf="!loading && workspaces.length === 0 && !error">
+<div class="alert alert-info" *ngIf="!environmentId && !loading">
+  Select an environment from the header to browse workspaces.
+</div>
+
+<div
+  class="alert alert-warning alert-dismissible fade show"
+  role="alert"
+  *ngIf="error && !errorDismissed"
+>
+  {{ error }}
+  <span *ngIf="error.includes('connection')" class="ms-1">
+    <a routerLink="/app/connections">Configure in Connections</a>
+  </span>
+  <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismissError()"></button>
+</div>
+
+<div class="card" *ngIf="loading">
+  <div class="card-body text-center py-5">
+    <div class="spinner-border text-primary"></div>
+    <p class="mt-2 mb-0 text-muted">Loading workspaces…</p>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && workspaces.length === 0 && !error && environmentId">
   <div class="card-body text-center py-5 text-muted">
     <i class="bi bi-inbox display-4"></i>
-    <p class="mt-2 mb-0">No workspaces found. Ensure the data source (CSV or Delta) has metrics for the date range.</p>
+    <p class="mt-2 mb-0">No workspaces found. Configure a Databricks connection in <a routerLink="/app/connections">Connections</a>.</p>
   </div>
 </div>
 
@@ -56,7 +82,6 @@
         <th>Workspace</th>
         <th>ID</th>
         <th>Jobs</th>
-        <th>Date range</th>
         <th></th>
       </tr>
     </thead>
@@ -65,12 +90,11 @@
         <td>{{ w.workspace_name || w.workspace_id }}</td>
         <td><code class="small">{{ w.workspace_id }}</code></td>
         <td>{{ w.job_count }}</td>
-        <td class="small text-muted">
-          <span *ngIf="w.first_seen_date">{{ w.first_seen_date }} – {{ w.last_seen_date }}</span>
-          <span *ngIf="!w.first_seen_date">–</span>
-        </td>
-        <td>
-          <button class="btn btn-primary btn-sm" (click)="openJobs(w)">View jobs</button>
+        <td class="text-nowrap text-end">
+          <button class="btn btn-primary btn-sm me-1" (click)="openJobs(w)">Jobs</button>
+          <button class="btn btn-outline-secondary btn-sm" (click)="openWorkspaceSetup(w)" title="Workspace settings">
+            <i class="bi bi-gear"></i><span class="ms-1">Settings</span>
+          </button>
         </td>
       </tr>
     </tbody>

@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { EnvironmentSelectionService } from './environment-selection.service';
 
 export interface User {
   username: string;
@@ -11,8 +12,9 @@ const USER_KEY = 'insights_hub_user';
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private token: string | null = null;
+  private adminUsernames: string[] = ['admin'];
 
-  constructor() {
+  constructor(private environmentSelection: EnvironmentSelectionService) {
     this.token = sessionStorage.getItem(AUTH_KEY);
   }
 
@@ -28,6 +30,15 @@ export class AuthService {
     } catch {
       return null;
     }
+  }
+
+  setAdminUsernames(usernames: string[]): void {
+    this.adminUsernames = (usernames || []).map((u) => u.trim().toLowerCase()).filter(Boolean);
+  }
+
+  isAdmin(): boolean {
+    const name = (this.currentUser?.username || '').trim().toLowerCase();
+    return !!name && this.adminUsernames.includes(name);
   }
 
   login(username: string, _password: string): Promise<{ user: User; token: string }> {
@@ -47,6 +58,7 @@ export class AuthService {
     this.token = null;
     sessionStorage.removeItem(AUTH_KEY);
     sessionStorage.removeItem(USER_KEY);
+    this.environmentSelection.clearSelected();
   }
 
   getToken(): string | null {

@@ -5,6 +5,7 @@ from typing import Any, Callable, Optional
 from AI.src.core.retrieval.azure_provider import AzureSearchRagProvider
 from AI.src.core.retrieval.faiss_provider import FaissRagProvider, load_faiss_vectorstore
 from AI.src.core.retrieval.protocol import RagContextProvider
+from shared.config.rag_settings import is_rag_enabled, rag_backend
 from shared.config.settings import Settings
 from shared.utils.logging import get_logger
 
@@ -17,9 +18,9 @@ def create_rag_context_provider(
     get_search_service: Callable[[], Any],
 ) -> Optional[RagContextProvider]:
     """Build retrieval provider for pattern/cost chains. Returns None when RAG is off or unavailable."""
-    backend = (settings.vector_retrieval_backend or "azure_search").strip().lower()
+    backend = rag_backend(settings)
 
-    if backend in ("none", "off", "disabled"):
+    if not is_rag_enabled(settings):
         logger.info("rag_context_provider_disabled", backend=backend)
         return None
 

@@ -1,0 +1,118 @@
+<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
+  <div>
+    <h2 class="mb-0"><i class="bi bi-plug me-2"></i>Connections</h2>
+    <p class="text-muted small mb-0" *ngIf="environmentName">
+      Environment: <strong>{{ environmentName }}</strong> — use the header to switch environments.
+    </p>
+    <p class="text-muted small mb-0" *ngIf="!environmentName">
+      Select an environment from the header to manage its connections.
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-secondary btn-sm" type="button" (click)="loadConnections(true)" [disabled]="loading || !environmentId">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
+    <button *ngIf="isAdmin" class="btn btn-primary btn-sm" type="button" (click)="startCreate()" [disabled]="!environmentId">
+      <i class="bi bi-plus-lg me-1"></i>New connection
+    </button>
+  </div>
+</div>
+
+<div class="alert alert-info small mb-3" *ngIf="environmentId && metricsTableFqn && environmentId !== 'local'">
+  Default metrics dataset table:
+  <code class="ms-1">{{ metricsTableFqn }}</code>
+  <span class="text-muted ms-1">— manage datasets on the <a routerLink="/app/datasets">Datasets</a> page.</span>
+</div>
+
+<div class="alert alert-success" *ngIf="message">{{ message }}</div>
+<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+
+<div class="card mb-3" *ngIf="showForm && isAdmin">
+  <div class="card-header">{{ editingId ? 'Edit connection' : 'New connection' }}</div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <label class="form-label">Name</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formName" />
+      </div>
+      <div class="col-md-4" *ngIf="!editingId">
+        <label class="form-label">Type</label>
+        <select class="form-select form-select-sm" [(ngModel)]="formType">
+          <option *ngFor="let t of connectionTypes" [value]="t.connection_type">{{ t.label }}</option>
+        </select>
+        <div class="form-text" *ngIf="typeMeta(formType) as meta">{{ meta.description }}</div>
+      </div>
+      <div class="col-md-4 d-flex align-items-end" *ngIf="!editingId">
+        <div class="form-check">
+          <input class="form-check-input" type="checkbox" id="setDefault" [(ngModel)]="formSetDefault" />
+          <label class="form-check-label small" for="setDefault">Set as default for this type</label>
+        </div>
+      </div>
+    </div>
+    <div class="row g-3 mt-1" *ngIf="typeMeta(formType) as meta">
+      <div class="col-md-6" *ngFor="let f of meta.fields">
+        <label class="form-label small">{{ f.label }}</label>
+        <input
+          class="form-control form-control-sm"
+          [(ngModel)]="formConfig[f.key]"
+          [placeholder]="f.placeholder || ''"
+        />
+        <div class="form-text" *ngIf="f.help">{{ f.help }}</div>
+      </div>
+      <div class="col-12" *ngIf="meta.auth_note">
+        <p class="text-muted small mb-0"><i class="bi bi-shield-lock me-1"></i>{{ meta.auth_note }}</p>
+      </div>
+    </div>
+    <div class="mt-3 d-flex gap-2">
+      <button class="btn btn-primary btn-sm" type="button" (click)="save()" [disabled]="saving">
+        {{ saving ? 'Saving…' : 'Save' }}
+      </button>
+      <button class="btn btn-outline-secondary btn-sm" type="button" (click)="cancelForm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" *ngIf="loading">
+  <div class="card-body text-center py-4">
+    <div class="spinner-border text-primary spinner-border-sm"></div>
+  </div>
+</div>
+
+<div class="table-responsive" *ngIf="!loading && connections.length">
+  <table class="table table-hover align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>Name</th>
+        <th>Type</th>
+        <th>Default</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let c of connections">
+        <td>{{ c.name }}</td>
+        <td>{{ typeLabel(c.connection_type) }}</td>
+        <td>
+          <span class="badge bg-success" *ngIf="c.is_default">Default</span>
+          <button
+            *ngIf="isAdmin && !c.is_default"
+            class="btn btn-link btn-sm p-0"
+            type="button"
+            (click)="setDefault(c)"
+          >Set default</button>
+        </td>
+        <td class="text-end text-nowrap">
+          <button *ngIf="isAdmin" class="btn btn-outline-secondary btn-sm me-1" type="button" (click)="startEdit(c)">Edit</button>
+          <button *ngIf="isAdmin" class="btn btn-outline-danger btn-sm" type="button" (click)="deleteConnection(c)">Delete</button>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card" *ngIf="!loading && !connections.length && environmentId">
+  <div class="card-body text-center text-muted py-4">
+    No connections for {{ environmentName }}.
+    <span *ngIf="isAdmin"> Click <strong>New connection</strong> to add one.</span>
+  </div>
+</div>

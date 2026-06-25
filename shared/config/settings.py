@@ -60,18 +60,20 @@ class Settings(BaseSettings):
     use_local_data: bool = True
     local_data_path: Optional[str] = None
 
-    vector_retrieval_backend: str = "azure_search"
+    vector_retrieval_backend: str = "none"
     faiss_index_path: Optional[str] = None
 
     default_monthly_budget: float = 500.0
     default_model_name: str = "gpt-4o"
     default_confidence_score: float = 0.85
     recommendation_auto_termination_minutes: int = 0
-    recommendation_cost_retry_enabled: bool = False
+    recommendation_cost_retry_enabled: bool = True
 
     guardrail_max_job_id_length: int = 256
     guardrail_max_date_range_days: int = 30
     guardrail_supported_intent: str = "cluster_recommendation"
+
+    admin_usernames: str = "admin"
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -81,11 +83,13 @@ class Settings(BaseSettings):
     )
 
 
-DEFAULT_AGENT_ID = "job_run_cluster_sizing"
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
+
+DEFAULT_AGENT_ID = DBX_CLUSTER_TUNING_AGENT_ID
 
 
 class _SettingsProxy:
-    """Backward-compatible module-level `settings` (default agent merge)."""
+    """Module-level `settings` proxy (default agent merged config)."""
 
     def __getattr__(self, name: str):
         from shared.config.loader import get_agent_settings

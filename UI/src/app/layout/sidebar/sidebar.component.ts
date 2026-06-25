@@ -22,6 +22,8 @@ export class SidebarComponent {
 
   getIconClass(icon: string): string {
     const map: Record<string, string> = {
+      plug: 'bi-plug',
+      table: 'bi-table',
       building: 'bi-building',
       'list-task': 'bi-list-task',
       'chat-dots': 'bi-chat-dots',

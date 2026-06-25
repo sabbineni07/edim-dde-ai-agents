@@ -64,15 +64,23 @@ def get_platform_settings() -> Settings:
     return _platform_cache
 
 
-def get_agent_settings(agent_id: str, overrides: Optional[Dict] = None) -> Settings:
+def get_agent_settings(
+    agent_id: str,
+    overrides: Optional[Dict] = None,
+    secrets: Optional[Dict] = None,
+) -> Settings:
     """Merged platform + agent YAML; agent keys override. Env overrides secrets.
 
-    If overrides are provided (e.g., from an Agent Profile), they are validated and applied
-    on top of YAML before env is applied.
+    If overrides are provided (e.g., from an Agent Profile or workspace agent bindings),
+    they are validated and applied on top of YAML before env is applied.
+
+    secrets: connection-resolved tokens/keys; omitted keys leave Managed Identity path.
     """
-    if overrides:
-        flat_overrides = validate_profile_overrides(overrides)
+    if overrides is not None or secrets:
+        flat_overrides = validate_profile_overrides(overrides or {}) if overrides else {}
         merged = {**load_platform_dict(), **load_agent_dict(agent_id), **flat_overrides}
+        if secrets:
+            merged = {**merged, **{k: v for k, v in secrets.items() if v is not None}}
         return _build_settings(merged)
 
     if agent_id not in _agent_cache:

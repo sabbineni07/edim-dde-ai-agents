@@ -43,6 +43,19 @@
 
 .user-text { font-size: 0.9rem; }
 
+.env-dropdown .env-switcher {
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-banner {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  padding-right: 2.5rem;
+}
+
 .shell-body {
   display: flex;
   flex: 1;

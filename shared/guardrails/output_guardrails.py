@@ -185,7 +185,11 @@ def validate_and_clamp_with_adjustments(
     llm_max_before_floor = out["max_workers"]
     if job_run_ingest:
         _, floor_max = recommended_min_max_workers(job_run_ingest)
-        ceiling_max = int(job_run_ingest.get("max_worker_nodes_cluster_ceiling") or floor_max)
+        ceiling_max = int(
+            job_run_ingest.get("max_worker_nodes_provisioned")
+            or job_run_ingest.get("max_worker_nodes_cluster_ceiling")
+            or floor_max
+        )
         if out["max_workers"] < floor_max:
             applied = min(floor_max, MAX_WORKERS_MAX)
             _record_adjustment(

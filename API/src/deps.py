@@ -2,8 +2,8 @@
 
 from typing import Any, Optional
 
-from AI.src.agents import job_run_cluster_sizing  # noqa: F401 - register agents
-from AI.src.agents.job_run_cluster_sizing import AGENT_ID
+from AI.src.agents import dbx_cluster_tuning_agent  # noqa: F401 - register agents
+from AI.src.agents.dbx_cluster_tuning_agent import AGENT_ID
 from AI.src.core.platform import (
     get_cost_logger,
     get_llm_provider,
@@ -21,7 +21,7 @@ _agent_cache: dict[str, Any] = {}
 
 
 def get_agent(agent_id: str = AGENT_ID, overrides: Optional[dict] = None):
-    """Create or return cached agent by registry id (default: job_run_cluster_sizing)."""
+    """Create or return cached agent by registry id (default: dbx_cluster_tuning_agent)."""
     if overrides:
         return create_agent(agent_id, **overrides)
     if agent_id not in _agent_cache:
@@ -30,7 +30,7 @@ def get_agent(agent_id: str = AGENT_ID, overrides: Optional[dict] = None):
 
 
 def get_recommendation_agent(overrides: Optional[dict] = None):
-    """Job-run cluster sizing agent (registry id job_run_cluster_sizing)."""
+    """DBX cluster tuning agent (registry id dbx_cluster_tuning_agent)."""
     return get_agent(AGENT_ID, overrides=overrides)
 
 

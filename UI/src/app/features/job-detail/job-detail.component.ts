@@ -1,22 +1,30 @@
-import { Component, OnInit, input } from '@angular/core';
+import { Component, DestroyRef, OnInit, inject, input } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { combineLatest } from 'rxjs';
 import {
-  AgentProfile,
   ApiService,
+  GenerateRecommendationRequest,
   GenerateRecommendationResponse,
   JobMetricsResponse,
   JobRunSummary,
   RecommendationHistoryEntry,
+  WorkspaceAgent,
 } from '../../services/api.service';
-import { last30DaysDateStrings } from '../../core/date-range.util';
+import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
+import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
+import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
+import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
+import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
+import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent],
   templateUrl: './job-detail.component.html',
   styleUrls: ['./job-detail.component.css'],
 })
@@ -26,14 +34,12 @@ export class JobDetailComponent implements OnInit {
 
   metricsData: JobMetricsResponse | null = null;
   runs: JobRunSummary[] = [];
-  selectedRunId = '';
+  selectedClusterId = '';
   recommendations: RecommendationHistoryEntry[] = [];
   lastResult: GenerateRecommendationResponse | null = null;
 
-  agentIds: string[] = ['job_run_cluster_sizing'];
-  selectedAgentId = 'job_run_cluster_sizing';
-  profiles: AgentProfile[] = [];
-  selectedProfileId = '';
+  workspaceAgents: WorkspaceAgent[] = [];
+  selectedWorkspaceAgentId = '';
 
   loadingMetrics = true;
   loadingRuns = true;
@@ -42,7 +48,7 @@ export class JobDetailComponent implements OnInit {
   error = '';
   startDate = '';
   endDate = '';
-  includeExplanation = false;
+  includeExplanation = true;
 
   lifecycleLabels: Record<string, string> = {};
   lifecycleNotes: Record<string, string> = {};
@@ -50,13 +56,18 @@ export class JobDetailComponent implements OnInit {
   updatingLifecycle: Record<string, boolean> = {};
   lifecycleFeedback: Record<string, { type: 'success' | 'error'; message: string }> = {};
 
-  readonly sampleDataHint =
-    'Sample CSV uses 2024-01-15 through 2024-01-20. Adjust the date range if no runs appear.';
+  uiHints: UiHints | null = null;
+  loadError = '';
+
+  private readonly destroyRef = inject(DestroyRef);
+  private lastLoadKey = '';
 
   constructor(
     private api: ApiService,
     private route: ActivatedRoute,
-    private auth: AuthService
+    private auth: AuthService,
+    private environmentSelection: EnvironmentSelectionService,
+    private browseCache: BrowseDataCacheService
   ) {}
 
   /** Signed-in user for lifecycle audit (from login session). */
@@ -66,20 +77,51 @@ export class JobDetailComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    const qp = this.route.snapshot.queryParamMap;
+    this.loadLifecycleMeta();
+    this.loadWorkspaceAgents();
+
+    combineLatest([this.api.getUiHints(), this.route.queryParamMap])
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(([hints, qp]) => {
+        this.uiHints = hints;
+        this.syncDatesAndLoad(qp);
+      });
+  }
+
+  private syncDatesAndLoad(qp: { get: (name: string) => string | null }): void {
     const qs = qp.get('start_date')?.trim();
     const qe = qp.get('end_date')?.trim();
+
     if (qs && qe) {
       this.startDate = qs;
       this.endDate = qe;
+    } else if (this.uiHints) {
+      const fallback = this.uiHints.use_local_data
+        ? sampleDataDateStrings()
+        : last30DaysDateStrings();
+      this.startDate = fallback.startDate;
+      this.endDate = fallback.endDate;
     } else {
-      const r = last30DaysDateStrings();
-      this.startDate = r.startDate;
-      this.endDate = r.endDate;
+      return;
     }
-    this.loadLifecycleMeta();
-    this.loadAgents();
-    this.refreshData();
+
+    const loadKey = `${this.workspaceId()}|${this.jobId()}|${this.startDate}|${this.endDate}`;
+    if (loadKey === this.lastLoadKey) {
+      return;
+    }
+    this.lastLoadKey = loadKey;
+    this.loadError = '';
+
+    this.loadMetrics();
+    this.loadRuns();
+    this.loadRecommendations();
+  }
+
+  refreshJobData(): void {
+    this.loadError = '';
+    this.loadMetrics(true);
+    this.loadRuns(true);
+    this.loadRecommendations(true);
   }
 
   loadLifecycleMeta(): void {
@@ -155,7 +197,7 @@ export class JobDetailComponent implements OnInit {
             type: 'success',
             message: `Updated to ${label}.`,
           };
-          this.loadRecommendations();
+          this.loadRecommendations(true);
         },
         error: (err) => {
           const next = { ...this.updatingLifecycle };
@@ -171,95 +213,155 @@ export class JobDetailComponent implements OnInit {
       });
   }
 
-  loadAgents(): void {
-    this.api.getAgents().subscribe({
-      next: (res) => {
-        const ids = (res.agent_ids || []).filter(
-          (id) => id === 'job_run_cluster_sizing' || id !== 'cluster_config'
-        );
-        this.agentIds = ids.length ? ids : ['job_run_cluster_sizing'];
-        if (!this.agentIds.includes(this.selectedAgentId)) {
-          this.selectedAgentId = this.agentIds[0];
-        }
-        this.loadProfiles();
-      },
-    });
-  }
-
-  onAgentChange(): void {
-    this.selectedProfileId = '';
-    this.loadProfiles();
-  }
-
-  loadProfiles(): void {
-    this.api.getAgentProfiles(this.selectedAgentId).subscribe({
-      next: (list) => {
-        this.profiles = list;
-      },
-    });
-  }
-
-  refreshData(): void {
-    this.loadMetrics();
-    this.loadRuns();
-    this.loadRecommendations();
-  }
-
-  loadMetrics(): void {
+  loadWorkspaceAgents(): void {
     const ws = this.workspaceId();
-    const j = this.jobId();
-    this.loadingMetrics = true;
-    this.api.getJobMetrics(ws, j, this.startDate || undefined, this.endDate || undefined).subscribe({
-      next: (data) => {
-        this.metricsData = data;
-        this.loadingMetrics = false;
-      },
-      error: () => {
-        this.loadingMetrics = false;
-        this.metricsData = null;
-      },
-    });
-  }
-
-  loadRuns(): void {
-    const ws = this.workspaceId();
-    const j = this.jobId();
-    this.loadingRuns = true;
-    this.api.getJobRuns(ws, j, this.startDate || undefined, this.endDate || undefined).subscribe({
+    this.api.getWorkspaceAgents(ws).subscribe({
       next: (list) => {
-        this.runs = list;
-        this.loadingRuns = false;
-        if (list.length && !this.selectedRunId) {
-          this.selectedRunId = list[0].job_run_id;
-        } else if (list.length && !list.some((r) => r.job_run_id === this.selectedRunId)) {
-          this.selectedRunId = list[0].job_run_id;
+        this.workspaceAgents = list;
+        if (list.length && !this.selectedWorkspaceAgentId) {
+          this.selectedWorkspaceAgentId = list[0].id;
+        } else if (
+          this.selectedWorkspaceAgentId &&
+          !list.some((a) => a.id === this.selectedWorkspaceAgentId)
+        ) {
+          this.selectedWorkspaceAgentId = list[0]?.id || '';
         }
       },
-      error: () => {
-        this.loadingRuns = false;
-        this.runs = [];
-      },
     });
   }
 
-  loadRecommendations(): void {
+  /** Agent type for the recommend API — from workspace agent install, or platform default. */
+  private resolveAgentId(): string {
+    if (this.selectedWorkspaceAgentId) {
+      const wa = this.workspaceAgents.find((a) => a.id === this.selectedWorkspaceAgentId);
+      if (wa?.agent_id) return wa.agent_id;
+    }
+    return this.uiHints?.default_agent_id || 'dbx_cluster_tuning_agent';
+  }
+
+  loadMetrics(force = false): void {
     const ws = this.workspaceId();
     const j = this.jobId();
-    this.loadingRecs = true;
-    this.api.getRecommendations(ws, j, 5).subscribe({
-      next: (list) => {
-        this.recommendations = list;
-        this.loadingRecs = false;
-      },
-      error: () => {
-        this.loadingRecs = false;
-        this.recommendations = [];
-      },
-    });
+    const envId = this.environmentSelection.getSelectedId();
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
+    const cacheKey = this.browseCache.jobMetricsKey(
+      envId,
+      connId,
+      datasetId,
+      ws,
+      j,
+      this.startDate,
+      this.endDate
+    );
+    const cached = !force && this.browseCache.peek<JobMetricsResponse>(cacheKey);
+    this.loadingMetrics = !cached;
+    this.browseCache
+      .get(
+        cacheKey,
+        () =>
+          this.api.browseJobMetrics(
+            ws,
+            j,
+            this.startDate || undefined,
+            this.endDate || undefined,
+            envId,
+            connId,
+            datasetId
+          ),
+        force
+      )
+      .subscribe({
+        next: (data) => {
+          this.metricsData = data;
+          this.loadingMetrics = false;
+        },
+        error: (err) => {
+          this.loadingMetrics = false;
+          this.metricsData = null;
+          this.reportLoadError(err, 'Failed to load job metrics');
+        },
+      });
   }
 
-  selectRun(runId: string): void {
-    this.selectedRunId = runId;
+  loadRuns(force = false): void {
+    const ws = this.workspaceId();
+    const j = this.jobId();
+    const envId = this.environmentSelection.getSelectedId();
+    const connId = this.environmentSelection.getSelectedConnectionId();
+    const datasetId = this.environmentSelection.getSelectedDatasetId();
+    const cacheKey = this.browseCache.jobRunsKey(
+      envId,
+      connId,
+      datasetId,
+      ws,
+      j,
+      this.startDate,
+      this.endDate
+    );
+    const cached = !force && this.browseCache.peek<JobRunSummary[]>(cacheKey);
+    this.loadingRuns = !cached;
+    this.browseCache
+      .get(
+        cacheKey,
+        () =>
+          this.api.browseJobRuns(
+            ws,
+            j,
+            this.startDate || undefined,
+            this.endDate || undefined,
+            envId,
+            connId,
+            datasetId
+          ),
+        force
+      )
+      .subscribe({
+        next: (list) => {
+          this.runs = list;
+          this.loadingRuns = false;
+          if (list.length && !this.selectedClusterId) {
+            this.selectedClusterId = list[0].cluster_id;
+          } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
+            this.selectedClusterId = list[0].cluster_id;
+          }
+        },
+        error: (err) => {
+          this.loadingRuns = false;
+          this.runs = [];
+          this.reportLoadError(err, 'Failed to load job runs');
+        },
+      });
+  }
+
+  loadRecommendations(force = false): void {
+    const ws = this.workspaceId();
+    const j = this.jobId();
+    const limit = 5;
+    const cacheKey = this.browseCache.recommendationsKey(ws, j, limit);
+    const cached = !force && this.browseCache.peek<RecommendationHistoryEntry[]>(cacheKey);
+    this.loadingRecs = !cached;
+    this.browseCache
+      .get(cacheKey, () => this.api.getRecommendations(ws, j, limit), force)
+      .subscribe({
+        next: (list) => {
+          this.recommendations = list;
+          this.loadingRecs = false;
+        },
+        error: () => {
+          this.loadingRecs = false;
+          this.recommendations = [];
+        },
+      });
+  }
+
+  selectRun(clusterId: string): void {
+    this.selectedClusterId = clusterId;
+  }
+
+  private reportLoadError(err: unknown, fallback: string): void {
+    if (this.loadError) return;
+    this.loadError = parseApiError(err, fallback);
   }
 
   formatCost(summary: Record<string, unknown>): string {
@@ -271,42 +373,62 @@ export class JobDetailComponent implements OnInit {
   }
 
   runRecommendation(): void {
-    if (!this.selectedRunId) {
-      this.error = 'Select a job run first.';
+    if (!this.selectedClusterId) {
+      this.error = 'Select a cluster run first.';
       return;
     }
     const j = this.jobId();
     this.runningRecommendation = true;
     this.error = '';
     this.lastResult = null;
-    this.api
-      .generateRecommendation({
-        agent_id: this.selectedAgentId,
-        profile_id: this.selectedProfileId || null,
-        job_id: j,
-        job_run_id: this.selectedRunId,
-        start_date: this.startDate || this.metricsData?.start_date || '',
-        end_date: this.endDate || this.metricsData?.end_date || '',
-        include_explanation: this.includeExplanation,
-      })
+    const selectedRun = this.runs.find((r) => r.cluster_id === this.selectedClusterId);
+    const body: GenerateRecommendationRequest = {
+      agent_id: this.resolveAgentId(),
+      job_id: j,
+      cluster_id: this.selectedClusterId,
+      include_explanation: this.includeExplanation,
+      environment_id: this.environmentSelection.getSelectedId() || undefined,
+      connection_id: this.environmentSelection.getSelectedConnectionId() || undefined,
+      dataset_id: this.environmentSelection.getSelectedDatasetId() || undefined,
+    };
+    if (selectedRun?.job_run_id) {
+      body.job_run_id = selectedRun.job_run_id;
+    }
+    if (this.selectedWorkspaceAgentId) {
+      body.workspace_agent_id = this.selectedWorkspaceAgentId;
+    }
+    this.api.generateRecommendation(body)
       .subscribe({
         next: (res) => {
           this.runningRecommendation = false;
           this.lastResult = res;
-          this.loadRecommendations();
+          this.loadRecommendations(true);
         },
         error: (err) => {
           this.runningRecommendation = false;
-          const detail = err?.error?.detail;
-          if (typeof detail === 'string') {
-            this.error = detail;
-          } else if (Array.isArray(detail)) {
-            this.error = detail.map((d: { msg?: string }) => d.msg || JSON.stringify(d)).join('; ');
-          } else {
-            this.error = err?.message || 'Recommendation failed';
-          }
+          this.error = parseApiError(err, 'Recommendation failed');
         },
       });
+  }
+
+  historyComparisonCurrent(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const block = this.historyComparisonBlock(rec);
+    return (block?.['current_configuration'] as Record<string, unknown>) ?? null;
+  }
+
+  historyComparisonRecommended(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const block = this.historyComparisonBlock(rec);
+    return (block?.['recommended_configuration'] as Record<string, unknown>) ?? null;
+  }
+
+  private historyComparisonBlock(rec: RecommendationHistoryEntry): Record<string, unknown> | null {
+    const comp = rec.comparison;
+    if (!comp) return null;
+    if (comp['comparison'] && typeof comp['comparison'] === 'object') {
+      return comp['comparison'] as Record<string, unknown>;
+    }
+    if (comp['current_configuration']) return comp;
+    return null;
   }
 
   comparisonCurrent(): Record<string, unknown> | null {

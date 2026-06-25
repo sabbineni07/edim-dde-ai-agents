@@ -7,9 +7,9 @@ from typing import Any, Dict, List
 from langchain_core.documents import Document
 
 from AI.src.core.retrieval.formatting import (
-    format_job_pattern_hits_for_cost_chain,
-    format_job_patterns_for_pattern_chain,
-    format_recommendation_hits_for_cost_chain,
+    format_job_patterns_for_sizing,
+    format_job_utilization_summary,
+    format_recommendation_hits,
 )
 from shared.utils.logging import get_logger
 
@@ -30,37 +30,24 @@ class FaissRagProvider:
         self._top_rec = top_k_recommendations
         self._top_jobs = top_k_jobs
 
-    def cost_chain_historical_context(
-        self, pattern_analysis: str, job_cluster_metrics: Dict
-    ) -> str:
-        query = pattern_analysis.strip() if pattern_analysis else str(job_cluster_metrics)
+    def sizing_chain_historical_context(self, job_cluster_metrics: Dict) -> str:
+        query = str(job_cluster_metrics)
         try:
             docs = self._vs.similarity_search(query, k=max(self._top_rec + self._top_jobs, 6))
             rec_hits = [_doc_to_recommendation_hit(d) for d in docs if _is_rec_doc(d)]
             rec_hits = [h for h in rec_hits if h][: self._top_rec]
             if rec_hits:
-                return format_recommendation_hits_for_cost_chain(rec_hits)
+                return format_recommendation_hits(rec_hits)
 
             job_hits = [_doc_to_job_hit(d) for d in docs if _is_job_doc(d)]
             job_hits = [h for h in job_hits if h][: self._top_jobs]
             if not job_hits:
-                docs_b = self._vs.similarity_search(str(job_cluster_metrics), k=self._top_jobs)
+                docs_b = self._vs.similarity_search(query, k=self._top_jobs)
                 job_hits = [_doc_to_job_hit(d) for d in docs_b if _is_job_doc(d)]
                 job_hits = [h for h in job_hits if h][: self._top_jobs]
-            return format_job_pattern_hits_for_cost_chain(job_hits)
-        except Exception as e:
-            logger.warning("faiss_rag_cost_context_failed", error=str(e))
-            return ""
-
-    def pattern_chain_historical_context(self, job_cluster_metrics: Dict) -> str:
-        return self.sizing_chain_historical_context(job_cluster_metrics)
-
-    def sizing_chain_historical_context(self, job_cluster_metrics: Dict) -> str:
-        try:
-            docs = self._vs.similarity_search(str(job_cluster_metrics), k=self._top_jobs + 2)
-            job_hits = [_doc_to_job_hit(d) for d in docs if _is_job_doc(d)]
-            job_hits = [h for h in job_hits if h][: self._top_jobs]
-            return format_job_patterns_for_pattern_chain(job_hits)
+            if job_hits:
+                return format_job_patterns_for_sizing(job_hits)
+            return format_job_utilization_summary(job_hits)
         except Exception as e:
             logger.warning("faiss_rag_sizing_context_failed", error=str(e))
             return ""
