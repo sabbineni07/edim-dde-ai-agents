@@ -1,7 +1,7 @@
 import { Component, DestroyRef, OnInit, inject, input } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import {
   AgentConnectionManifest,
@@ -58,7 +58,6 @@ export class WorkspaceDetailComponent implements OnInit {
 
   constructor(
     private api: ApiService,
-    private route: ActivatedRoute,
     private router: Router,
     private workspaceSelection: WorkspaceSelectionService,
     private environmentSelection: EnvironmentSelectionService
