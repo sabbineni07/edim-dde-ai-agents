@@ -3,7 +3,8 @@
 from typing import Any, Callable, Optional
 
 from AI.src.core.retrieval.azure_provider import AzureSearchRagProvider
-from AI.src.core.retrieval.faiss_provider import FaissRagProvider, load_faiss_vectorstore
+from AI.src.core.retrieval.faiss_cache import load_cached_faiss_vectorstore
+from AI.src.core.retrieval.faiss_provider import FaissRagProvider
 from AI.src.core.retrieval.protocol import RagContextProvider
 from shared.config.rag_settings import is_rag_enabled, rag_backend
 from shared.config.settings import Settings
@@ -46,7 +47,7 @@ def create_rag_context_provider(
             if emb is None:
                 logger.warning("rag_faiss_no_embeddings")
                 return None
-            vs = load_faiss_vectorstore(path, emb)
+            vs = load_cached_faiss_vectorstore(path, emb)
             logger.info("rag_context_provider_ready", backend="faiss", path=path)
             return FaissRagProvider(vs)
         except Exception as e:
