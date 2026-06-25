@@ -325,15 +325,16 @@ export class ApiService {
 
   getUiHints(): Observable<UiHints> {
     return this.http.get<UiHints>(`${API_BASE}/platform/ui-hints`).pipe(
-      catchError(() =>
-        of({
+      catchError((err) => {
+        console.warn('getUiHints failed; using defaults', err);
+        return of({
           guardrail_max_date_range_days: 30,
           use_local_data: true,
           sample_data_start_date: '2026-06-01',
           sample_data_end_date: '2026-06-03',
           default_agent_id: 'dbx_cluster_tuning_agent',
-        })
-      )
+        });
+      })
     );
   }
 
