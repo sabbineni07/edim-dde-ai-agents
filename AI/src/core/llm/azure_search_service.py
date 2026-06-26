@@ -64,7 +64,7 @@ class AzureSearchService:
                 index_name=index_name,
                 credential=credential,
             )
-            self.openai_service = FoundryLLMService()
+            self.openai_service = FoundryLLMService(config=cfg)
             logger.info("azure_search_service_initialized", auth=auth)
         except Exception as e:
             logger.warning("azure_search_init_failed", error=str(e))

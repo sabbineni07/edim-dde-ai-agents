@@ -21,20 +21,23 @@ class RecommendationExplanationChain:
 
     def __init__(
         self,
-        llm_provider: "LLMProvider",
+        llm_provider: Optional["LLMProvider"] = None,
         settings: Optional[Settings] = None,
     ):
         """Initialize explanation chain.
 
         Args:
-            llm_provider: LLM provider (e.g. FoundryLLMService)
+            llm_provider: LLM provider fallback when settings lack a Foundry endpoint
             settings: Effective agent settings (workspace overrides + YAML)
         """
         self.settings: Settings = settings or default_settings
         if can_create_chat_model(self.settings):
             self.llm = create_chat_model(self.settings, chain="explanation")
         else:
-            self.llm = llm_provider.get_llm()
+            from AI.src.core.platform import get_llm_provider
+
+            provider = llm_provider or get_llm_provider()
+            self.llm = provider.get_llm("explanation")
 
         self.prompt = ChatPromptTemplate.from_messages(
             [

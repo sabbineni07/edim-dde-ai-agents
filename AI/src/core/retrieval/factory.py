@@ -45,8 +45,14 @@ def create_rag_context_provider(
             logger.warning("rag_faiss_missing_path", hint="Set FAISS_INDEX_PATH to index folder")
             return None
         try:
-            llm = get_llm_provider()
-            emb = llm.get_embeddings()
+            from AI.src.core.llm.chat_model_factory import can_create_chat_model
+            from shared.rag.embeddings import embeddings_from_settings
+
+            if can_create_chat_model(settings):
+                emb = embeddings_from_settings(settings)
+            else:
+                llm = get_llm_provider()
+                emb = llm.get_embeddings()
             if emb is None:
                 logger.warning("rag_faiss_no_embeddings")
                 return None

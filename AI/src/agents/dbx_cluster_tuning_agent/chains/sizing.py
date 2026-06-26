@@ -81,7 +81,7 @@ class ClusterSizingChain:
 
     def __init__(
         self,
-        llm_provider: "LLMProvider",
+        llm_provider: Optional["LLMProvider"] = None,
         rag_provider: Optional["RagContextProvider"] = None,
         use_rag: bool = True,
         settings: Optional[Settings] = None,
@@ -90,7 +90,10 @@ class ClusterSizingChain:
         if can_create_chat_model(self.settings):
             self.llm = create_chat_model(self.settings, chain="sizing")
         else:
-            self.llm = llm_provider.get_llm()
+            from AI.src.core.platform import get_llm_provider
+
+            provider = llm_provider or get_llm_provider()
+            self.llm = provider.get_llm("sizing")
         self.rag_provider = rag_provider
         self.use_rag = use_rag and rag_provider is not None
         auto_termination_minutes = int(self.settings.recommendation_auto_termination_minutes or 0)
