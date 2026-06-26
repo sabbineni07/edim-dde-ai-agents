@@ -28,7 +28,6 @@ azure_openai:
   endpoint: ${env:AZURE_OPENAI_ENDPOINT}
   api_key: ${env:AZURE_OPENAI_API_KEY}
   access_token: ${env:AZURE_OPENAI_ACCESS_TOKEN}
-  api_version: ${env:AZURE_OPENAI_API_VERSION}
   deployment: ${resolve:default_openai_deployment}
   embedding_deployment: ${env:AZURE_OPENAI_EMBEDDING_DEPLOYMENT}
 

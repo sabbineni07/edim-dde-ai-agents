@@ -82,7 +82,7 @@ setup: ## Create venv only (then: make install or make dev-setup)
 up: ## Start postgres + api (loads .env; optional az token injection)
 	@echo "$(BLUE)Starting Docker services...$(NC)"
 	@if command -v az >/dev/null 2>&1; then \
-		export AZURE_OPENAI_ACCESS_TOKEN=$$(az account get-access-token --resource https://cognitiveservices.azure.com --query accessToken -o tsv 2>/dev/null) || true; \
+		export AZURE_OPENAI_ACCESS_TOKEN=$$(az account get-access-token --scope https://ai.azure.com/.default --query accessToken -o tsv 2>/dev/null) || true; \
 		export DATABRICKS_TOKEN=$$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query accessToken -o tsv 2>/dev/null) || true; \
 	fi; \
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d postgres $(API_SERVICE)

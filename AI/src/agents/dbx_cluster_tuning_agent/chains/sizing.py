@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_azure_chat_model
+from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
 from shared.utils.logging import get_logger
@@ -88,7 +88,7 @@ class ClusterSizingChain:
     ):
         self.settings: Settings = settings or default_settings  # proxy resolves default agent
         if can_create_chat_model(self.settings):
-            self.llm = create_azure_chat_model(self.settings, chain="sizing")
+            self.llm = create_chat_model(self.settings, chain="sizing")
         else:
             self.llm = llm_provider.get_llm()
         self.rag_provider = rag_provider

@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     azure_openai_endpoint: Optional[str] = None
     azure_openai_api_key: Optional[str] = None
     azure_openai_access_token: Optional[str] = None
-    azure_openai_api_version: Optional[str] = None
     azure_openai_deployment_name: Optional[str] = None
     azure_openai_embedding_deployment: Optional[str] = None
 

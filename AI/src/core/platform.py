@@ -2,8 +2,8 @@
 
 from typing import Any, Optional
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAIService
 from AI.src.core.llm.azure_search_service import AzureSearchService, create_search_service
+from AI.src.core.llm.foundry_llm_service import FoundryLLMService
 from AI.src.core.llm.mock_llm_service import MockLLMService
 from AI.src.core.retrieval import create_rag_context_provider
 from shared.config.loader import get_platform_settings
@@ -20,7 +20,7 @@ _cost_logger: Optional[ObservabilityService] = None
 
 
 def get_llm_provider():
-    """Azure OpenAI or mock when USE_MOCK_LLM=true."""
+    """Azure AI Foundry or mock when USE_MOCK_LLM=true."""
     global _llm_provider
     if _llm_provider is None:
         import os
@@ -29,7 +29,7 @@ def get_llm_provider():
             _llm_provider = MockLLMService()
             logger.info("using_mock_llm_provider")
         else:
-            _llm_provider = AzureOpenAIService()
+            _llm_provider = FoundryLLMService()
     return _llm_provider
 
 

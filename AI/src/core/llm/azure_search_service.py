@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 from azure.core.credentials import AzureKeyCredential, TokenCredential
 from azure.search.documents import SearchClient
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAIService
+from AI.src.core.llm.foundry_llm_service import FoundryLLMService
 from shared.auth.azure_tokens import get_default_azure_credential
 from shared.config.settings import Settings, settings
 from shared.models.job_cluster_metrics import JobClusterMetrics
@@ -64,7 +64,7 @@ class AzureSearchService:
                 index_name=index_name,
                 credential=credential,
             )
-            self.openai_service = AzureOpenAIService()
+            self.openai_service = FoundryLLMService()
             logger.info("azure_search_service_initialized", auth=auth)
         except Exception as e:
             logger.warning("azure_search_init_failed", error=str(e))

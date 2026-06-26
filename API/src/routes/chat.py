@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError, AzureOpenAIService
+from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError, FoundryLLMService
 from DE.src.processors.metrics_processor import MetricsProcessor
 from shared.factories.data_collector_factory import get_data_collector
 from shared.utils.logging import get_logger
@@ -91,13 +91,13 @@ async def chat(req: ChatRequest) -> ChatResponse:
         )
 
     try:
-        aos = AzureOpenAIService()
-        llm = aos.get_llm()
-    except AzureOpenAINotConfiguredError as e:
-        logger.error("chat_azure_not_configured", error=str(e))
+        svc = FoundryLLMService()
+        llm = svc.get_llm()
+    except FoundryLLMNotConfiguredError as e:
+        logger.error("chat_foundry_llm_not_configured", error=str(e))
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
-        logger.error("chat_azure_init_error", error=str(e))
+        logger.error("chat_foundry_llm_init_error", error=str(e))
         raise HTTPException(status_code=500, detail="LLM not available") from e
 
     system_prompt = (

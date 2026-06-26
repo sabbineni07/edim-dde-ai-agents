@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_azure_chat_model
+from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
 from shared.utils.logging import get_logger
@@ -27,12 +27,12 @@ class RecommendationExplanationChain:
         """Initialize explanation chain.
 
         Args:
-            llm_provider: LLM provider (e.g. AzureOpenAIService)
+            llm_provider: LLM provider (e.g. FoundryLLMService)
             settings: Effective agent settings (workspace overrides + YAML)
         """
         self.settings: Settings = settings or default_settings
         if can_create_chat_model(self.settings):
-            self.llm = create_azure_chat_model(self.settings, chain="explanation")
+            self.llm = create_chat_model(self.settings, chain="explanation")
         else:
             self.llm = llm_provider.get_llm()
 

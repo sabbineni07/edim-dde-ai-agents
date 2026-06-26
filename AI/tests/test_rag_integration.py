@@ -63,7 +63,7 @@ class TestAzureSearchService:
                     return_value=mock_client,
                 ) as search_client:
                     with patch(
-                        "AI.src.core.llm.azure_search_service.AzureOpenAIService",
+                        "AI.src.core.llm.azure_search_service.FoundryLLMService",
                         return_value=mock_openai,
                     ):
                         service = AzureSearchService()
@@ -92,7 +92,7 @@ class TestAzureSearchService:
                 return_value=mock_client,
             ) as search_client:
                 with patch(
-                    "AI.src.core.llm.azure_search_service.AzureOpenAIService",
+                    "AI.src.core.llm.azure_search_service.FoundryLLMService",
                     return_value=mock_openai,
                 ):
                     with patch(

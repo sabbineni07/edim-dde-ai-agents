@@ -1,11 +1,12 @@
-"""Build AzureChatOpenAI instances from resolved Settings (sampling + auth)."""
+"""Build ChatOpenAI instances for Azure AI Foundry (OpenAI v1 API)."""
 
 from __future__ import annotations
 
-from typing import Optional
+from langchain_core.language_models import BaseChatModel
+from langchain_openai import ChatOpenAI
 
-from langchain_openai import AzureChatOpenAI
-
+from shared.auth.azure_tokens import AZURE_FOUNDRY_AAD_SCOPE, get_azure_access_token
+from shared.azure.endpoint_resolver import resolve_openai_v1_base_url
 from shared.config.llm_sampling import ChainKind, resolve_llm_sampling
 from shared.config.settings import Settings
 from shared.utils.logging import get_logger
@@ -13,19 +14,11 @@ from shared.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
-def _normalize_azure_endpoint(endpoint: str) -> str:
-    if "/api/projects/" in endpoint:
-        return endpoint.split("/api/projects/")[0].rstrip("/")
-    return endpoint.rstrip("/")
-
-
 def _token_provider_for_settings(cfg: Settings):
     def token_provider() -> str:
         token = (cfg.azure_openai_access_token or "").strip()
         if not token:
-            from shared.auth.azure_tokens import AZURE_OPENAI_AAD_SCOPE, get_azure_access_token
-
-            token = get_azure_access_token(AZURE_OPENAI_AAD_SCOPE)
+            token = get_azure_access_token(AZURE_FOUNDRY_AAD_SCOPE)
             cfg.azure_openai_access_token = token
         return token
 
@@ -36,37 +29,30 @@ def can_create_chat_model(cfg: Settings) -> bool:
     return bool((cfg.azure_openai_endpoint or "").strip())
 
 
-def create_azure_chat_model(cfg: Settings, *, chain: ChainKind = "default") -> AzureChatOpenAI:
+def create_chat_model(cfg: Settings, *, chain: ChainKind = "default") -> BaseChatModel:
     """Create a chat model for the given settings bundle and chain sampling profile."""
-    endpoint = _normalize_azure_endpoint((cfg.azure_openai_endpoint or "").strip())
-    if not endpoint:
-        raise ValueError("Azure OpenAI endpoint not configured")
-
+    base_url = resolve_openai_v1_base_url((cfg.azure_openai_endpoint or "").strip())
+    model = cfg.azure_openai_deployment_name or cfg.default_model_name or "gpt-4o"
     temperature, top_p = resolve_llm_sampling(cfg, chain)
-    api_version = cfg.azure_openai_api_version or "2024-05-01-preview"
-    deployment = cfg.azure_openai_deployment_name or cfg.default_model_name or "gpt-4o"
     api_key = (cfg.azure_openai_api_key or "").strip()
 
     common = {
-        "azure_endpoint": endpoint,
-        "api_version": api_version,
-        "azure_deployment": deployment,
+        "model": model,
+        "base_url": base_url,
         "temperature": temperature,
         "top_p": top_p,
     }
 
     if api_key:
-        llm = AzureChatOpenAI(api_key=api_key, **common)
+        llm = ChatOpenAI(api_key=api_key, **common)
     else:
-        llm = AzureChatOpenAI(
-            azure_ad_token_provider=_token_provider_for_settings(cfg),
-            **common,
-        )
+        llm = ChatOpenAI(api_key=_token_provider_for_settings(cfg), **common)
 
     logger.debug(
-        "azure_chat_model_created",
+        "foundry_chat_model_created",
         chain=chain,
-        deployment=deployment,
+        model=model,
+        base_url=base_url,
         temperature=temperature,
         top_p=top_p,
     )
