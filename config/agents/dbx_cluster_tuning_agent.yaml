@@ -4,10 +4,15 @@ agent_id: dbx_cluster_tuning_agent
 llm:
   deployment: ${env:AZURE_OPENAI_DEPLOYMENT_NAME}
   default_model_name: gpt-4o
+  temperature: 0
+  top_p: 1.0
+  explanation_temperature: 0.2
 
 rag:
   enabled: false
   backend: none
+  top_k_recommendations: 3
+  top_k_jobs: 5
 
 sizing:
   recommendation_auto_termination_minutes: 0

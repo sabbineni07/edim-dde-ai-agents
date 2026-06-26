@@ -59,6 +59,22 @@ def flatten_overrides(overrides: Dict[str, Any]) -> Dict[str, Any]:
             mapped["default_confidence_score"] = v
         elif k == "guardrails_max_date_range_days":
             mapped["guardrail_max_date_range_days"] = v
+        elif k == "llm_temperature":
+            mapped["llm_temperature"] = v
+        elif k == "llm_top_p":
+            mapped["llm_top_p"] = v
+        elif k == "sizing_temperature":
+            mapped["sizing_llm_temperature"] = v
+        elif k == "sizing_top_p":
+            mapped["sizing_llm_top_p"] = v
+        elif k == "explanation_temperature":
+            mapped["explanation_llm_temperature"] = v
+        elif k == "explanation_top_p":
+            mapped["explanation_llm_top_p"] = v
+        elif k == "rag_top_k_recommendations":
+            mapped["rag_top_k_recommendations"] = v
+        elif k == "rag_top_k_jobs":
+            mapped["rag_top_k_jobs"] = v
         else:
             mapped[k] = v
 

@@ -34,7 +34,7 @@ class FaissRagProvider:
         query = str(job_cluster_metrics)
         try:
             docs = self._vs.similarity_search(query, k=max(self._top_rec + self._top_jobs, 6))
-            rec_hits = [_doc_to_recommendation_hit(d) for d in docs if _is_rec_doc(d)]
+            rec_hits = [_doc_to_recommendation_hit(d) for d in docs if _is_approved_rec_doc(d)]
             rec_hits = [h for h in rec_hits if h][: self._top_rec]
             if rec_hits:
                 return format_recommendation_hits(rec_hits)
@@ -56,6 +56,14 @@ class FaissRagProvider:
 def _is_rec_doc(doc: Document) -> bool:
     md = doc.metadata or {}
     return md.get("document_type") == "recommendation" or md.get("is_recommendation") is True
+
+
+def _is_approved_rec_doc(doc: Document) -> bool:
+    if not _is_rec_doc(doc):
+        return False
+    md = doc.metadata or {}
+    quality = (md.get("config_quality") or "approved").lower()
+    return quality in ("approved", "optimal")
 
 
 def _is_job_doc(doc: Document) -> bool:

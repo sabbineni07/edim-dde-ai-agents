@@ -43,6 +43,7 @@ class EditableSettingsField(BaseModel):
     min: float | None = None
     max: float | None = None
     step: float | None = None
+    group: str | None = None
 
 
 class EditableSettingsResponse(BaseModel):
@@ -114,6 +115,14 @@ async def preview_effective_settings(agent_id: str, body: EffectiveSettingsPrevi
         "vector_retrieval_backend",
         "recommendation_auto_termination_minutes",
         "recommendation_cost_retry_enabled",
+        "llm_temperature",
+        "llm_top_p",
+        "sizing_llm_temperature",
+        "sizing_llm_top_p",
+        "explanation_llm_temperature",
+        "explanation_llm_top_p",
+        "rag_top_k_recommendations",
+        "rag_top_k_jobs",
         "use_local_data",
     ]
     effective = {k: getattr(settings, k) for k in safe_keys if hasattr(settings, k)}

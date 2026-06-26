@@ -1,7 +1,7 @@
 import { Component, DestroyRef, OnInit, inject, input } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CommonModule } from '@angular/common';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import {
   AgentConnectionManifest,
@@ -47,6 +47,8 @@ export class WorkspaceDetailComponent implements OnInit {
   error = '';
 
   showAgentWizard = false;
+  /** Set when editing an existing install; null when adding a new agent. */
+  editingAgentId: string | null = null;
   wizardAgentId = '';
   wizardName = '';
   wizardBindings: Record<string, string> = {};
@@ -56,7 +58,6 @@ export class WorkspaceDetailComponent implements OnInit {
 
   constructor(
     private api: ApiService,
-    private route: ActivatedRoute,
     private router: Router,
     private workspaceSelection: WorkspaceSelectionService,
     private environmentSelection: EnvironmentSelectionService
@@ -167,8 +168,13 @@ export class WorkspaceDetailComponent implements OnInit {
     return ref ? `${ds.name} (${ref})` : ds.name;
   }
 
+  get isEditingAgent(): boolean {
+    return !!this.editingAgentId;
+  }
+
   startAddAgent(): void {
     this.showAgentWizard = true;
+    this.editingAgentId = null;
     this.wizardAgentId = '';
     this.wizardName = '';
     this.wizardBindings = {};
@@ -178,6 +184,35 @@ export class WorkspaceDetailComponent implements OnInit {
     this.error = '';
     this.message = '';
     this.applyDefaultWizardAgentId();
+  }
+
+  startEditAgent(wa: WorkspaceAgent): void {
+    this.showAgentWizard = true;
+    this.editingAgentId = wa.id;
+    this.wizardAgentId = wa.agent_id;
+    this.wizardName = wa.name;
+    this.wizardBindings = { ...(wa.bindings || {}) };
+    this.wizardSettings = this.normalizeWizardSettings(wa.agent_settings);
+    this.wizardManifest = null;
+    this.wizardEditableFields = [];
+    this.error = '';
+    this.message = '';
+    this.loadWizardManifest();
+    this.loadWizardEditableFields();
+  }
+
+  /** Coerce API agent_settings JSON into form-friendly scalar values. */
+  private normalizeWizardSettings(
+    raw: Record<string, unknown> | undefined
+  ): Record<string, string | number | boolean> {
+    const out: Record<string, string | number | boolean> = {};
+    if (!raw) return out;
+    for (const [key, value] of Object.entries(raw)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+        out[key] = value;
+      }
+    }
+    return out;
   }
 
   private applyDefaultWizardAgentId(): void {
@@ -203,6 +238,7 @@ export class WorkspaceDetailComponent implements OnInit {
 
   cancelAgentWizard(): void {
     this.showAgentWizard = false;
+    this.editingAgentId = null;
   }
 
   onWizardAgentChange(): void {
@@ -240,6 +276,30 @@ export class WorkspaceDetailComponent implements OnInit {
     });
   }
 
+  private static readonly SETTING_GROUP_LABELS: Record<string, string> = {
+    recommendation: 'Recommendation behavior',
+    llm_sampling: 'Language model sampling',
+    rag_retrieval: 'Knowledge search retrieval',
+  };
+
+  wizardSettingGroups(): string[] {
+    const order = ['recommendation', 'llm_sampling', 'rag_retrieval'];
+    const present = new Set(
+      this.wizardEditableFields.map((f) => f.group || 'recommendation')
+    );
+    return order.filter((g) => present.has(g));
+  }
+
+  fieldsForWizardGroup(group: string): EditableSettingsField[] {
+    return this.wizardEditableFields.filter(
+      (f) => (f.group || 'recommendation') === group
+    );
+  }
+
+  wizardGroupLabel(group: string): string {
+    return WorkspaceDetailComponent.SETTING_GROUP_LABELS[group] || group;
+  }
+
   private applyWizardSettingDefaults(): void {
     for (const f of this.wizardEditableFields) {
       if (this.wizardSettings[f.key] !== undefined) continue;
@@ -247,6 +307,14 @@ export class WorkspaceDetailComponent implements OnInit {
         this.wizardSettings[f.key] = true;
       } else if (f.key === 'recommendation_auto_termination_minutes') {
         this.wizardSettings[f.key] = 0;
+      } else if (f.key === 'llm_temperature') {
+        this.wizardSettings[f.key] = 0;
+      } else if (f.key === 'llm_top_p') {
+        this.wizardSettings[f.key] = 1;
+      } else if (f.key === 'rag_top_k_recommendations') {
+        this.wizardSettings[f.key] = 3;
+      } else if (f.key === 'rag_top_k_jobs') {
+        this.wizardSettings[f.key] = 5;
       }
     }
   }
@@ -336,27 +404,38 @@ export class WorkspaceDetailComponent implements OnInit {
       const id = this.wizardBindings[role];
       if (id) bindings[role] = id;
     }
-    this.api
-      .createWorkspaceAgent(this.workspaceId(), {
-        environment_id: this.environmentId,
-        agent_id: this.wizardAgentId,
-        name: this.wizardName.trim(),
-        bindings,
-        agent_settings: this.buildWizardSettings(),
-        workspace_name: this.workspaceName || this.workspaceId(),
-      })
-      .subscribe({
-        next: () => {
-          this.saving = false;
-          this.message = 'Agent installed on workspace.';
-          this.cancelAgentWizard();
-          this.refresh();
-        },
-        error: (err) => {
-          this.saving = false;
-          this.error = parseApiError(err, 'Install agent failed');
-        },
-      });
+    const payload = {
+      environment_id: this.environmentId,
+      name: this.wizardName.trim(),
+      bindings,
+      agent_settings: this.buildWizardSettings(),
+      workspace_name: this.workspaceName || this.workspaceId(),
+    };
+
+    const req = this.editingAgentId
+      ? this.api.updateWorkspaceAgent(this.workspaceId(), this.editingAgentId, payload)
+      : this.api.createWorkspaceAgent(this.workspaceId(), {
+          ...payload,
+          agent_id: this.wizardAgentId,
+        });
+
+    req.subscribe({
+      next: () => {
+        this.saving = false;
+        this.message = this.editingAgentId
+          ? 'Agent configuration updated.'
+          : 'Agent installed on workspace.';
+        this.cancelAgentWizard();
+        this.refresh();
+      },
+      error: (err) => {
+        this.saving = false;
+        this.error = parseApiError(
+          err,
+          this.editingAgentId ? 'Update agent failed' : 'Install agent failed'
+        );
+      },
+    });
   }
 
   deleteWorkspaceAgent(wa: WorkspaceAgent): void {
@@ -387,6 +466,9 @@ export class WorkspaceDetailComponent implements OnInit {
       }
       const conn = this.envConnections.find((c) => c.id === id);
       parts.push(`${roleLabels[role] || role}: ${conn?.name || id}`);
+    }
+    if (!wa.bindings?.['rag'] && wa.agent_id === 'dbx_cluster_tuning_agent') {
+      parts.push('Knowledge search: not set');
     }
     return parts.length ? parts.join(' · ') : '—';
   }

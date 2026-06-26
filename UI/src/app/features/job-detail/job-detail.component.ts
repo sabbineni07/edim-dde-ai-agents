@@ -14,6 +14,10 @@ import {
   WorkspaceAgent,
 } from '../../services/api.service';
 import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
+import {
+  buildDefaultLifecycleNote,
+  buildLifecycleNoteContextFromRecommendation,
+} from '../../core/lifecycle-notes.util';
 import { parseApiError } from '../../core/api-error.util';
 import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
@@ -138,6 +142,27 @@ export class JobDetailComponent implements OnInit {
 
   setLifecycleTarget(requestId: string, value: string): void {
     this.lifecycleTargetStatus = { ...this.lifecycleTargetStatus, [requestId]: value };
+  }
+
+  onLifecycleTargetChange(rec: RecommendationHistoryEntry, value: string): void {
+    this.setLifecycleTarget(rec.request_id, value);
+    if (!value) {
+      this.setLifecycleNotes(rec.request_id, '');
+      return;
+    }
+    this.setLifecycleNotes(
+      rec.request_id,
+      buildDefaultLifecycleNote(value, this.lifecycleNoteContext(rec))
+    );
+  }
+
+  private lifecycleNoteContext(rec: RecommendationHistoryEntry) {
+    return buildLifecycleNoteContextFromRecommendation(rec, {
+      jobId: this.jobId(),
+      workspaceId: this.workspaceId(),
+      startDate: this.startDate || undefined,
+      endDate: this.endDate || undefined,
+    });
   }
 
   setLifecycleNotes(requestId: string, value: string): void {

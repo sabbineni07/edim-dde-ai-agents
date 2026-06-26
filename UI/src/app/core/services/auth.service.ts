@@ -1,5 +1,4 @@
 import { Injectable } from '@angular/core';
-import { EnvironmentSelectionService } from './environment-selection.service';
 
 export interface User {
   username: string;
@@ -14,7 +13,7 @@ export class AuthService {
   private token: string | null = null;
   private adminUsernames: string[] = ['admin'];
 
-  constructor(private environmentSelection: EnvironmentSelectionService) {
+  constructor() {
     this.token = sessionStorage.getItem(AUTH_KEY);
   }
 
@@ -42,7 +41,7 @@ export class AuthService {
   }
 
   login(username: string, _password: string): Promise<{ user: User; token: string }> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       setTimeout(() => {
         const user: User = { username, displayName: username };
         const token = 'stub-token-' + Date.now();
@@ -58,7 +57,6 @@ export class AuthService {
     this.token = null;
     sessionStorage.removeItem(AUTH_KEY);
     sessionStorage.removeItem(USER_KEY);
-    this.environmentSelection.clearSelected();
   }
 
   getToken(): string | null {

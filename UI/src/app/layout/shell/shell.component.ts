@@ -64,33 +64,7 @@ export class ShellComponent implements OnInit {
       this.selectedEnvironment = sel;
     });
 
-    this.environmentSelection.loadEnvironments().subscribe({
-      next: (list) => {
-        this.environmentsLoadError = '';
-        this.environmentsLoadFailed = false;
-        this.environmentsLoadErrorDismissed = false;
-        this.environments = list.filter((e) => e.is_enabled !== false);
-        const selected = this.environmentSelection.getSelected();
-        if (selected && selected.id !== 'local') {
-          this.connectionCache.getDatabricksConnections(selected.id).subscribe();
-        }
-        if (!selected && this.environments.length) {
-          this.showEnvPicker = true;
-        }
-        if (!this.environments.length) {
-          this.environmentsLoadError = 'No environments are available.';
-        }
-      },
-      error: (err) => {
-        console.error('loadEnvironments error', err);
-        this.environments = [];
-        this.environmentsLoadFailed = true;
-        this.environmentsLoadError = parseApiError(
-          err,
-          'Failed to load environments from the API.'
-        );
-      },
-    });
+    this.fetchEnvironments();
 
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
@@ -117,6 +91,41 @@ export class ShellComponent implements OnInit {
 
   dismissEnvironmentsLoadError(): void {
     this.environmentsLoadErrorDismissed = true;
+  }
+
+  retryLoadEnvironments(): void {
+    this.environmentsLoadErrorDismissed = false;
+    this.fetchEnvironments();
+  }
+
+  private fetchEnvironments(): void {
+    this.environmentSelection.loadEnvironments().subscribe({
+      next: (list) => {
+        this.environmentsLoadError = '';
+        this.environmentsLoadFailed = false;
+        this.environmentsLoadErrorDismissed = false;
+        this.environments = list.filter((e) => e.is_enabled !== false);
+        const selected = this.environmentSelection.getSelected();
+        if (selected && selected.id !== 'local') {
+          this.connectionCache.getDatabricksConnections(selected.id).subscribe();
+        }
+        if (!selected && this.environments.length) {
+          this.showEnvPicker = true;
+        }
+        if (!this.environments.length) {
+          this.environmentsLoadError = 'No environments are available.';
+        }
+      },
+      error: (err) => {
+        console.error('loadEnvironments error', err);
+        this.environments = [];
+        this.environmentsLoadFailed = true;
+        this.environmentsLoadError = parseApiError(
+          err,
+          'Failed to load environments from the API. Is the backend running on port 8000?'
+        );
+      },
+    });
   }
 
   manageEnvironments(): void {

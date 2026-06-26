@@ -478,6 +478,7 @@ class DbxClusterTuningAgent:
                     or cluster,
                     comparison=comparison_payload,
                     reason_codes=reason_codes,
+                    job_run_ingest=metrics,
                 )
                 try:
                     from shared.services.recommendation_lifecycle_service import (
@@ -497,28 +498,6 @@ class DbxClusterTuningAgent:
                     logger.warning("supersede_prior_recommendations_failed", error=str(e))
             except Exception as e:
                 logger.warning("recommendation_logging_failed", error=str(e))
-
-        search_service = self.search_service
-        if search_service:
-            try:
-                resolved_job_run_id = (
-                    final_state.get("job_run_id") or metrics.get("job_run_id") or ""
-                )
-                recommendation_doc = {
-                    "recommendation_id": str(request_id),
-                    "job_id": job_id,
-                    "cluster_id": cluster,
-                    "job_run_id": resolved_job_run_id,
-                    "workspace_id": metrics.get("workspace_id"),
-                    "job_type": metrics.get("job_type", "Unknown"),
-                    "rationale": recommendation.get("rationale", ""),
-                    "detailed_explanation": final_state.get("explanation", ""),
-                    **recommendation,
-                }
-                search_service.index_recommendation(recommendation_doc)
-                search_service.link_recommendation_to_job(str(request_id), job_id)
-            except Exception as e:
-                logger.warning("recommendation_indexing_failed", error=str(e))
 
         current_configuration = comparison_payload["comparison"]["current_configuration"]
         resolved_job_run_id = final_state.get("job_run_id") or metrics.get("job_run_id") or ""

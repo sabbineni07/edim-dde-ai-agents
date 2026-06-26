@@ -89,7 +89,14 @@
           <td>{{ wa.name }}</td>
           <td class="small">{{ agentCatalogName(wa.agent_id) }}</td>
           <td class="small text-muted">{{ bindingSummary(wa) }}</td>
-          <td class="text-end">
+          <td class="text-end text-nowrap">
+            <button
+              type="button"
+              class="btn btn-outline-secondary btn-sm me-1"
+              (click)="startEditAgent(wa)"
+              [disabled]="showAgentWizard">
+              Edit
+            </button>
             <button type="button" class="btn btn-outline-danger btn-sm" (click)="deleteWorkspaceAgent(wa)">Remove</button>
           </td>
         </tr>
@@ -99,7 +106,12 @@
 </div>
 
 <div class="card" *ngIf="showAgentWizard">
-  <div class="card-header"><strong>Install agent</strong></div>
+  <div class="card-header">
+    <strong>{{ isEditingAgent ? 'Edit agent' : 'Install agent' }}</strong>
+    <p class="small text-muted mb-0 mt-1" *ngIf="isEditingAgent">
+      Update bindings (e.g. add optional Knowledge search), name, or advanced settings.
+    </p>
+  </div>
   <div class="card-body">
     <div class="row g-3">
       <div class="col-md-4">
@@ -124,10 +136,12 @@
           class="form-select form-select-sm"
           [(ngModel)]="wizardAgentId"
           (ngModelChange)="onWizardAgentChange()"
+          [disabled]="isEditingAgent"
           required>
           <option value="" disabled>Select agent type…</option>
           <option *ngFor="let a of agentsCatalog" [value]="a.agent_id">{{ a.name }}</option>
         </select>
+        <p class="small text-muted mt-1 mb-0" *ngIf="isEditingAgent">Agent type cannot be changed after install.</p>
       </div>
     </div>
 
@@ -178,41 +192,46 @@
     <details class="mt-3" *ngIf="wizardEditableFields.length">
       <summary class="small fw-semibold">Advanced settings (optional)</summary>
       <p class="small text-muted mt-2 mb-2">
-        Recommendation behavior for this install only. Language model and knowledge search settings come from the connections linked above.
+        Per-install behavior overrides. Endpoint and deployment come from the Language model connection;
+        retrieval limits apply when Knowledge search is bound.
       </p>
-      <div class="row g-2 mt-1">
-        <div class="col-md-4" *ngFor="let f of wizardEditableFields">
-          <label class="form-label small mb-0">{{ f.label }}</label>
-          <p class="small text-muted mb-1" *ngIf="f.help">{{ f.help }}</p>
-          <select
-            *ngIf="f.type === 'select'"
-            class="form-select form-select-sm"
-            [(ngModel)]="wizardSettings[f.key]">
-            <option value="">Default</option>
-            <option *ngFor="let o of f.options" [value]="o">{{ o }}</option>
-          </select>
-          <div *ngIf="f.type === 'boolean'" class="form-check form-switch mt-1">
+      <div *ngFor="let group of wizardSettingGroups()" class="mb-3">
+        <p class="small fw-semibold mb-2">{{ wizardGroupLabel(group) }}</p>
+        <div class="row g-2">
+          <div class="col-md-4" *ngFor="let f of fieldsForWizardGroup(group)">
+            <label class="form-label small mb-0">{{ f.label }}</label>
+            <p class="small text-muted mb-1" *ngIf="f.help">{{ f.help }}</p>
+            <select
+              *ngIf="f.type === 'select'"
+              class="form-select form-select-sm"
+              [(ngModel)]="wizardSettings[f.key]">
+              <option value="">Default</option>
+              <option *ngFor="let o of f.options" [value]="o">{{ o }}</option>
+            </select>
+            <div *ngIf="f.type === 'boolean'" class="form-check form-switch mt-1">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                role="switch"
+                [id]="'wizard-setting-' + f.key"
+                [(ngModel)]="wizardSettings[f.key]" />
+            </div>
             <input
-              class="form-check-input"
-              type="checkbox"
-              role="switch"
-              [id]="'wizard-setting-' + f.key"
-              [(ngModel)]="wizardSettings[f.key]" />
+              *ngIf="f.type === 'number'"
+              type="number"
+              class="form-control form-control-sm"
+              [(ngModel)]="wizardSettings[f.key]"
+              [attr.min]="f.min"
+              [attr.max]="f.max"
+              [attr.step]="f.step"
+              [placeholder]="f.placeholder || ''" />
+            <input
+              *ngIf="f.type === 'string' || !f.type"
+              type="text"
+              class="form-control form-control-sm"
+              [(ngModel)]="wizardSettings[f.key]"
+              [placeholder]="f.placeholder || ''" />
           </div>
-          <input
-            *ngIf="f.type === 'number'"
-            type="number"
-            class="form-control form-control-sm"
-            [(ngModel)]="wizardSettings[f.key]"
-            [attr.min]="f.min"
-            [attr.max]="f.max"
-            [attr.step]="f.step" />
-          <input
-            *ngIf="f.type === 'string' || !f.type"
-            type="text"
-            class="form-control form-control-sm"
-            [(ngModel)]="wizardSettings[f.key]"
-            [placeholder]="f.placeholder || ''" />
         </div>
       </div>
     </details>
@@ -223,7 +242,7 @@
         class="btn btn-primary btn-sm me-2"
         (click)="saveWorkspaceAgent()"
         [disabled]="saving || !canInstallAgent()">
-        Install
+        {{ isEditingAgent ? 'Save changes' : 'Install' }}
       </button>
       <button type="button" class="btn btn-outline-secondary btn-sm" (click)="cancelAgentWizard()">Cancel</button>
     </div>

@@ -102,6 +102,7 @@ class ObservabilityService:
         request_log_request_id: Optional[UUID] = None,
         comparison: Optional[Dict] = None,
         reason_codes: Optional[List] = None,
+        job_run_ingest: Optional[Dict] = None,
     ) -> bool:
         if not DATABASE_AVAILABLE:
             return True
@@ -109,6 +110,9 @@ class ObservabilityService:
             session = get_database_session()
             try:
                 now = utc_now()
+                stored_recommendation = dict(recommendation)
+                if job_run_ingest:
+                    stored_recommendation["job_run_ingest"] = job_run_ingest
                 rec_history = RecommendationHistory(
                     request_id=request_id,
                     job_id=job_id,
@@ -117,7 +121,7 @@ class ObservabilityService:
                     workspace_id=workspace_id,
                     request_log_request_id=request_log_request_id,
                     timestamp=now,
-                    recommendation=recommendation,
+                    recommendation=stored_recommendation,
                     explanation=explanation,
                     pattern_analysis=pattern_analysis,
                     risk_assessment=risk_assessment,

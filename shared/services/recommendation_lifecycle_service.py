@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from shared.recommendation_lifecycle import (
+    LIFECYCLE_APPROVED,
     LIFECYCLE_RECOMMENDED,
     LIFECYCLE_SUPERSEDED,
     TERMINAL_LIFECYCLE_STATUSES,
@@ -136,6 +137,17 @@ class RecommendationLifecycleService:
                 to_status=new_status,
                 changed_by=changed_by,
             )
+            if new_status == LIFECYCLE_APPROVED:
+                try:
+                    from shared.rag.approved_indexing import index_approved_recommendation
+
+                    index_approved_recommendation(request_id)
+                except Exception as e:
+                    logger.warning(
+                        "approved_recommendation_indexing_failed",
+                        request_id=str(request_id),
+                        error=str(e),
+                    )
             return {
                 "request_id": str(request_id),
                 "lifecycle_status": new_status,

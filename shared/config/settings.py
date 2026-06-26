@@ -69,6 +69,16 @@ class Settings(BaseSettings):
     recommendation_auto_termination_minutes: int = 0
     recommendation_cost_retry_enabled: bool = True
 
+    llm_temperature: float = 0.0
+    llm_top_p: float = 1.0
+    sizing_llm_temperature: Optional[float] = None
+    sizing_llm_top_p: Optional[float] = None
+    explanation_llm_temperature: Optional[float] = None
+    explanation_llm_top_p: Optional[float] = None
+
+    rag_top_k_recommendations: int = 3
+    rag_top_k_jobs: int = 5
+
     guardrail_max_job_id_length: int = 256
     guardrail_max_date_range_days: int = 30
     guardrail_supported_intent: str = "cluster_recommendation"

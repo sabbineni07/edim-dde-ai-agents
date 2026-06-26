@@ -71,6 +71,52 @@ class AzureSearchService:
             self.client = None
             self.openai_service = None
 
+    def index_approved_document(self, recommendation: dict, retrieval_text: str) -> bool:
+        """Index an approved recommendation (lifecycle APPROVED) for semantic search."""
+        if not self.client:
+            logger.warning("azure_search_not_available_skipping_index")
+            return False
+
+        text = (retrieval_text or "").strip()
+        if not text:
+            logger.warning(
+                "empty_approved_recommendation_text",
+                recommendation_id=recommendation.get("recommendation_id"),
+            )
+            return False
+
+        try:
+            embedding = self.openai_service.get_embeddings().embed_query(text)
+            job_run_id = recommendation.get("job_run_id") or ""
+            document = {
+                "id": recommendation.get(
+                    "recommendation_id", f"rec-{recommendation.get('job_id', 'unknown')}"
+                ),
+                "job_id": recommendation.get("job_id", ""),
+                "job_run_id": job_run_id,
+                "workspace_id": recommendation.get("workspace_id", ""),
+                "workload_type": recommendation.get("workload_type", ""),
+                "content": text,
+                "embedding": embedding,
+                "document_type": "recommendation",
+                "is_recommendation": True,
+                "config_quality": "approved",
+                "recommendation": (
+                    json.dumps(recommendation)
+                    if isinstance(recommendation, dict)
+                    else str(recommendation)
+                ),
+            }
+            self.client.upload_documents(documents=[document])
+            logger.info(
+                "indexed_approved_recommendation",
+                recommendation_id=recommendation.get("recommendation_id"),
+            )
+            return True
+        except Exception as e:
+            logger.error("index_approved_document_error", error=str(e))
+            return False
+
     def index_recommendation(self, recommendation: dict) -> bool:
         """Index a recommendation for semantic search.
 
@@ -135,7 +181,7 @@ class AzureSearchService:
         Args:
             query: Search query text
             top_k: Number of results to return
-            filter_quality: If True, only return recommendations with config_quality="optimal"
+            filter_quality: If True, only return approved/optimal recommendations
 
         Returns:
             List of similar recommendations
@@ -158,7 +204,8 @@ class AzureSearchService:
             # Filter by quality if requested
             if filter_quality:
                 search_options["filter"] = (
-                    "config_quality eq 'optimal' and is_recommendation eq true"
+                    "(config_quality eq 'approved' or config_quality eq 'optimal') "
+                    "and is_recommendation eq true"
                 )
             else:
                 search_options["filter"] = "is_recommendation eq true"

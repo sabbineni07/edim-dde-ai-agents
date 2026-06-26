@@ -159,6 +159,18 @@ def flatten_agent_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             flat["azure_openai_api_version"] = llm["api_version"]
         if "default_model_name" in llm:
             flat["default_model_name"] = llm["default_model_name"]
+        if "temperature" in llm:
+            flat["llm_temperature"] = llm["temperature"]
+        if "top_p" in llm:
+            flat["llm_top_p"] = llm["top_p"]
+        if "sizing_temperature" in llm:
+            flat["sizing_llm_temperature"] = llm["sizing_temperature"]
+        if "sizing_top_p" in llm:
+            flat["sizing_llm_top_p"] = llm["sizing_top_p"]
+        if "explanation_temperature" in llm:
+            flat["explanation_llm_temperature"] = llm["explanation_temperature"]
+        if "explanation_top_p" in llm:
+            flat["explanation_llm_top_p"] = llm["explanation_top_p"]
 
     rag = data.get("rag") or {}
     if isinstance(rag, dict):
@@ -166,6 +178,10 @@ def flatten_agent_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             flat["vector_retrieval_backend"] = rag["backend"]
         if "enabled" in rag and rag["enabled"] is False:
             flat["vector_retrieval_backend"] = "none"
+        if "top_k_recommendations" in rag:
+            flat["rag_top_k_recommendations"] = rag["top_k_recommendations"]
+        if "top_k_jobs" in rag:
+            flat["rag_top_k_jobs"] = rag["top_k_jobs"]
 
     sizing = data.get("sizing") or {}
     if isinstance(sizing, dict):
