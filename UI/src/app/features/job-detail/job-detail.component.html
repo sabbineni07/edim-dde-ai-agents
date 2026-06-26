@@ -299,7 +299,7 @@
                     <select
                       class="form-select form-select-sm"
                       [ngModel]="getLifecycleTarget(rec.request_id)"
-                      (ngModelChange)="setLifecycleTarget(rec.request_id, $event)">
+                      (ngModelChange)="onLifecycleTargetChange(rec, $event)">
                       <option value="">Select status…</option>
                       <option *ngFor="let st of rec.allowed_next_statuses" [value]="st">
                         {{ lifecycleLabel(st) }}
@@ -307,13 +307,13 @@
                     </select>
                   </div>
                   <div class="col">
-                    <label class="form-label small mb-0">Notes (optional)</label>
+                    <label class="form-label small mb-0">Notes</label>
                     <input
                       type="text"
                       class="form-control form-control-sm"
                       [ngModel]="lifecycleNotes[rec.request_id] || ''"
                       (ngModelChange)="setLifecycleNotes(rec.request_id, $event)"
-                      placeholder="e.g. deployed via CHG-1234" />
+                      placeholder="Auto-filled when you select a status — edit as needed" />
                   </div>
                   <div class="col-auto">
                     <button

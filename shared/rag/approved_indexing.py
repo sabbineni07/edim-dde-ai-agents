@@ -21,7 +21,11 @@ logger = get_logger(__name__)
 
 try:
     from shared.database.connection import get_database_session
-    from shared.database.models import RecommendationHistory, RequestLog
+    from shared.database.models import (
+        RecommendationHistory,
+        RecommendationLifecycleEvent,
+        RequestLog,
+    )
 
     DATABASE_AVAILABLE = True
 except Exception as e:
@@ -111,7 +115,13 @@ def index_approved_recommendation(request_id: UUID) -> bool:
             return False
 
         backend = rag_backend(settings)
-        retrieval_text = build_approved_retrieval_text(rec)
+        lifecycle_events = (
+            session.query(RecommendationLifecycleEvent)
+            .filter(RecommendationLifecycleEvent.request_id == request_id)
+            .order_by(RecommendationLifecycleEvent.changed_at.asc())
+            .all()
+        )
+        retrieval_text = build_approved_retrieval_text(rec, lifecycle_events=lifecycle_events)
         if not retrieval_text:
             logger.warning("approved_indexing_empty_text", request_id=str(request_id))
             return False

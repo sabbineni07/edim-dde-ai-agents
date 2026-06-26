@@ -40,7 +40,52 @@ def extract_job_run_ingest(rec: Any) -> Dict[str, Any]:
     return _ingest_from_comparison(rec.comparison)
 
 
-def build_approved_retrieval_text(rec: Any) -> str:
+def _event_notes(event: Any) -> str:
+    if isinstance(event, dict):
+        return str(event.get("notes") or "").strip()
+    return str(getattr(event, "notes", None) or "").strip()
+
+
+def _event_to_status(event: Any) -> str:
+    if isinstance(event, dict):
+        return str(event.get("to_status") or "").strip()
+    return str(getattr(event, "to_status", None) or "").strip()
+
+
+def format_lifecycle_adoption_notes(lifecycle_events: Optional[list]) -> str:
+    """Concatenate lifecycle audit notes for embedding (indexed on approve)."""
+    if not lifecycle_events:
+        return ""
+    lines: list[str] = []
+    for event in lifecycle_events:
+        notes = _event_notes(event)
+        if not notes:
+            continue
+        status = _event_to_status(event).replace("_", " ").lower() or "update"
+        lines.append(f"{status}: {notes}")
+    return "\n".join(lines)
+
+
+def _current_config_lines(comparison: Optional[Dict[str, Any]]) -> list[str]:
+    if not comparison:
+        return []
+    current = comparison.get("current_configuration") or {}
+    autoscale = current.get("autoscale") or {}
+    lines: list[str] = []
+    node = current.get("azure_node_type") or current.get("node_type")
+    if node:
+        lines.append(f"current_node_type: {node}")
+    if autoscale.get("min_workers") is not None:
+        lines.append(f"current_min_workers: {autoscale['min_workers']}")
+    if autoscale.get("max_workers") is not None:
+        lines.append(f"current_max_workers: {autoscale['max_workers']}")
+    return lines
+
+
+def build_approved_retrieval_text(
+    rec: Any,
+    lifecycle_events: Optional[list] = None,
+) -> str:
     """Structured text for embedding similarity (not the full JSON blob)."""
     recommendation = rec.recommendation or {}
     ingest = extract_job_run_ingest(rec)
@@ -69,6 +114,8 @@ def build_approved_retrieval_text(rec: Any) -> str:
         if val is not None:
             lines.append(f"recommended_{key}: {val}")
 
+    lines.extend(_current_config_lines(rec.comparison))
+
     rationale = recommendation.get("rationale") or ""
     if rationale:
         lines.append(f"rationale: {rationale}")
@@ -76,6 +123,10 @@ def build_approved_retrieval_text(rec: Any) -> str:
         lines.append(f"explanation: {rec.explanation}")
     if rec.pattern_analysis:
         lines.append(f"pattern_analysis: {str(rec.pattern_analysis)[:800]}")
+
+    adoption_notes = format_lifecycle_adoption_notes(lifecycle_events)
+    if adoption_notes:
+        lines.append(f"adoption_notes:\n{adoption_notes}")
 
     text = "\n".join(line for line in lines if line.strip())
     return text.strip()
