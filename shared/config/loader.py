@@ -31,17 +31,32 @@ def _env_file_usable() -> bool:
         return False
 
 
-def _build_settings(flat: Dict) -> Settings:
-    """Build Settings: YAML init values, then environment overrides secrets."""
+def _settings_field_names() -> set[str]:
+    return set(Settings.model_fields.keys())
+
+
+def _filter_settings_kwargs(flat: Dict) -> Dict:
+    """Keep only declared Settings fields; drop legacy/unknown keys (e.g. api_version)."""
+    allowed = _settings_field_names()
+    return {k: v for k, v in flat.items() if k in allowed and v is not None}
+
+
+def _build_settings(flat: Dict, *, from_env: bool = True) -> Settings:
+    """Build Settings from a flat dict.
+
+    When ``from_env`` is False (workspace agent / profile overrides), values come only
+    from the merged dict so empty platform env vars cannot wipe connection config.
+    """
     resolved = resolve_value(flat)
-    clean = {k: v for k, v in resolved.items() if v is not None}
-    try:
-        if _env_file_usable():
-            return Settings(**clean)
-        return Settings(_env_file=None, **clean)
-    except Exception as e:
-        warnings.warn(f"Error loading settings: {e}. Using defaults.")
-        return Settings(_env_file=None, **clean)
+    clean = _filter_settings_kwargs(resolved)
+    if from_env:
+        try:
+            if _env_file_usable():
+                return Settings(**clean)
+            return Settings(_env_file=None, **clean)
+        except Exception as e:
+            warnings.warn(f"Error loading settings: {e}. Using merged values only.")
+    return Settings.model_validate(clean)
 
 
 def load_platform_dict() -> Dict:
@@ -60,7 +75,7 @@ def get_platform_settings() -> Settings:
     """Shared platform settings (Databricks, Azure, Postgres, API)."""
     global _platform_cache
     if _platform_cache is None:
-        _platform_cache = _build_settings(load_platform_dict())
+        _platform_cache = _build_settings(load_platform_dict(), from_env=True)
     return _platform_cache
 
 
@@ -81,11 +96,11 @@ def get_agent_settings(
         merged = {**load_platform_dict(), **load_agent_dict(agent_id), **flat_overrides}
         if secrets:
             merged = {**merged, **{k: v for k, v in secrets.items() if v is not None}}
-        return _build_settings(merged)
+        return _build_settings(merged, from_env=False)
 
     if agent_id not in _agent_cache:
         merged = {**load_platform_dict(), **load_agent_dict(agent_id)}
-        _agent_cache[agent_id] = _build_settings(merged)
+        _agent_cache[agent_id] = _build_settings(merged, from_env=True)
     return _agent_cache[agent_id]
 
 
