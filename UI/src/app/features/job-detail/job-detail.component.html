@@ -56,14 +56,14 @@
 <div class="alert alert-danger" *ngIf="loadError">{{ loadError }}</div>
 <div class="alert alert-danger" *ngIf="error">{{ error }}</div>
 <!-- Job runs -->
-<div class="card mb-4">
+<div class="card mb-4 job-runs-card">
   <div class="card-header"><strong>Job runs</strong></div>
   <div class="card-body p-0">
     <div *ngIf="loadingRuns" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
     <div *ngIf="!loadingRuns && runs.length === 0" class="p-3 text-muted small">
       No runs in this date range.
     </div>
-    <div class="table-responsive" *ngIf="!loadingRuns && runs.length > 0">
+    <div class="table-responsive job-runs-table-scroll" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
         <thead>
           <tr>
@@ -86,7 +86,7 @@
         </thead>
         <tbody>
           <tr
-            *ngFor="let run of runs"
+            *ngFor="let run of paginatedRuns"
             [class.table-active]="run.cluster_id === selectedClusterId"
             (click)="selectRun(run.cluster_id)"
             role="button">
@@ -117,6 +117,44 @@
           </tr>
         </tbody>
       </table>
+    </div>
+    <div class="card-footer job-runs-pagination bg-white" *ngIf="!loadingRuns && runs.length > 0">
+      <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+        <div class="small text-muted">
+          Showing {{ runsPageRangeStart }}–{{ runsPageRangeEnd }} of {{ totalRuns }} run{{ totalRuns === 1 ? '' : 's' }}
+        </div>
+        <div class="d-flex align-items-center flex-wrap gap-3">
+          <div class="d-flex align-items-center gap-2">
+            <label class="small mb-0 text-nowrap" for="runsPageSize">Rows per page</label>
+            <select
+              id="runsPageSize"
+              class="form-select form-select-sm job-runs-page-size-select"
+              [(ngModel)]="runsPageSize"
+              (ngModelChange)="onRunsPageSizeChange()">
+              <option *ngFor="let size of runsPageSizeOptions" [ngValue]="size">{{ size }}</option>
+            </select>
+          </div>
+          <nav aria-label="Job runs pagination">
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item" [class.disabled]="runsCurrentPage <= 1">
+                <button type="button" class="page-link" (click)="goToRunsFirstPage()" [disabled]="runsCurrentPage <= 1">First</button>
+              </li>
+              <li class="page-item" [class.disabled]="runsCurrentPage <= 1">
+                <button type="button" class="page-link" (click)="goToRunsPage(runsCurrentPage - 1)" [disabled]="runsCurrentPage <= 1">Previous</button>
+              </li>
+              <li class="page-item" *ngFor="let page of visibleRunsPageNumbers" [class.active]="page === runsCurrentPage">
+                <button type="button" class="page-link" (click)="goToRunsPage(page)">{{ page }}</button>
+              </li>
+              <li class="page-item" [class.disabled]="runsCurrentPage >= totalRunsPages">
+                <button type="button" class="page-link" (click)="goToRunsPage(runsCurrentPage + 1)" [disabled]="runsCurrentPage >= totalRunsPages">Next</button>
+              </li>
+              <li class="page-item" [class.disabled]="runsCurrentPage >= totalRunsPages">
+                <button type="button" class="page-link" (click)="goToRunsLastPage()" [disabled]="runsCurrentPage >= totalRunsPages">Last</button>
+              </li>
+            </ul>
+          </nav>
+        </div>
+      </div>
     </div>
   </div>
 </div>

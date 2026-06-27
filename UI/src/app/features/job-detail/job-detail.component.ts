@@ -13,7 +13,7 @@ import {
   RecommendationHistoryEntry,
   WorkspaceAgent,
 } from '../../services/api.service';
-import { last30DaysDateStrings, sampleDataDateStrings } from '../../core/date-range.util';
+import { defaultBrowseDateRange } from '../../core/date-range.util';
 import {
   buildDefaultLifecycleNote,
   buildLifecycleNoteContextFromRecommendation,
@@ -39,6 +39,9 @@ export class JobDetailComponent implements OnInit {
   metricsData: JobMetricsResponse | null = null;
   runs: JobRunSummary[] = [];
   selectedClusterId = '';
+  readonly runsPageSizeOptions = [10, 25, 50, 100];
+  runsPageSize = 10;
+  runsCurrentPage = 1;
   recommendations: RecommendationHistoryEntry[] = [];
   lastResult: GenerateRecommendationResponse | null = null;
 
@@ -100,9 +103,7 @@ export class JobDetailComponent implements OnInit {
       this.startDate = qs;
       this.endDate = qe;
     } else if (this.uiHints) {
-      const fallback = this.uiHints.use_local_data
-        ? sampleDataDateStrings()
-        : last30DaysDateStrings();
+      const fallback = defaultBrowseDateRange(this.uiHints);
       this.startDate = fallback.startDate;
       this.endDate = fallback.endDate;
     } else {
@@ -115,6 +116,7 @@ export class JobDetailComponent implements OnInit {
     }
     this.lastLoadKey = loadKey;
     this.loadError = '';
+    this.runsCurrentPage = 1;
 
     this.loadMetrics();
     this.loadRuns();
@@ -345,6 +347,10 @@ export class JobDetailComponent implements OnInit {
         next: (list) => {
           this.runs = list;
           this.loadingRuns = false;
+          if (!force) {
+            this.runsCurrentPage = 1;
+          }
+          this.clampRunsPage();
           if (list.length && !this.selectedClusterId) {
             this.selectedClusterId = list[0].cluster_id;
           } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
@@ -378,6 +384,70 @@ export class JobDetailComponent implements OnInit {
           this.recommendations = [];
         },
       });
+  }
+
+  get totalRuns(): number {
+    return this.runs.length;
+  }
+
+  get totalRunsPages(): number {
+    if (this.totalRuns === 0) return 1;
+    return Math.ceil(this.totalRuns / this.runsPageSize);
+  }
+
+  get paginatedRuns(): JobRunSummary[] {
+    const start = (this.runsCurrentPage - 1) * this.runsPageSize;
+    return this.runs.slice(start, start + this.runsPageSize);
+  }
+
+  get runsPageRangeStart(): number {
+    if (this.totalRuns === 0) return 0;
+    return (this.runsCurrentPage - 1) * this.runsPageSize + 1;
+  }
+
+  get runsPageRangeEnd(): number {
+    return Math.min(this.runsCurrentPage * this.runsPageSize, this.totalRuns);
+  }
+
+  get visibleRunsPageNumbers(): number[] {
+    const total = this.totalRunsPages;
+    if (total <= 1) {
+      return total === 1 ? [1] : [];
+    }
+    const windowSize = 5;
+    let start = Math.max(1, this.runsCurrentPage - Math.floor(windowSize / 2));
+    let end = Math.min(total, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }
+
+  onRunsPageSizeChange(): void {
+    this.runsCurrentPage = 1;
+    this.clampRunsPage();
+  }
+
+  goToRunsPage(page: number): void {
+    const next = Math.min(Math.max(1, page), this.totalRunsPages);
+    if (next !== this.runsCurrentPage) {
+      this.runsCurrentPage = next;
+    }
+  }
+
+  goToRunsFirstPage(): void {
+    this.goToRunsPage(1);
+  }
+
+  goToRunsLastPage(): void {
+    this.goToRunsPage(this.totalRunsPages);
+  }
+
+  private clampRunsPage(): void {
+    if (this.runsCurrentPage > this.totalRunsPages) {
+      this.runsCurrentPage = this.totalRunsPages;
+    }
+    if (this.runsCurrentPage < 1) {
+      this.runsCurrentPage = 1;
+    }
   }
 
   selectRun(clusterId: string): void {

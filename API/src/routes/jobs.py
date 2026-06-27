@@ -48,12 +48,12 @@ def _resolve_collector(
 
 
 def _default_date_range(start_date: Optional[date], end_date: Optional[date]) -> Dict[str, str]:
-    """Normalize and default date range to the last 30 days (inclusive)."""
+    """Normalize and default date range to the last 7 days (inclusive)."""
     today = date.today()
     if end_date is None:
         end_date = today
     if start_date is None:
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=6)
     if start_date > end_date:
         raise HTTPException(
             status_code=400,

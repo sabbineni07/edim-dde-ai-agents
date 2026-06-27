@@ -5,8 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, JobSummary, UiHints, Workspace } from '../../services/api.service';
 import {
   daysBetween,
-  last30DaysDateStrings,
-  sampleDataDateStrings,
+  defaultBrowseDateRange,
 } from '../../core/date-range.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
@@ -188,10 +187,7 @@ export class JobsListComponent implements OnInit {
   }
 
   private defaultDateRange(): { startDate: string; endDate: string } {
-    if (this.uiHints && !this.uiHints.use_local_data) {
-      return last30DaysDateStrings();
-    }
-    return sampleDataDateStrings();
+    return defaultBrowseDateRange(this.uiHints);
   }
 
   onWorkspaceChange(workspaceId: string): void {

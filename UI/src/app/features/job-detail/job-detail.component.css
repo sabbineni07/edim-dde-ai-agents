@@ -19,3 +19,24 @@
   white-space: nowrap;
   vertical-align: bottom;
 }
+
+.job-runs-table-scroll {
+  max-height: min(50vh, 32rem);
+  overflow: auto;
+}
+
+.job-runs-page-size-select {
+  width: 4.5rem;
+}
+
+.job-runs-pagination .page-link {
+  cursor: pointer;
+}
+
+.job-runs-pagination .page-item.disabled .page-link {
+  cursor: default;
+}
+
+.job-runs-pagination .page-item.active .page-link {
+  pointer-events: none;
+}
