@@ -18,3 +18,13 @@ def reset_metrics_collector(token: Token) -> None:
 
 def get_metrics_collector() -> Optional[Any]:
     return _metrics_collector.get()
+
+
+def get_active_collector():
+    """Return request-scoped collector when set, else platform default from settings."""
+    scoped = get_metrics_collector()
+    if scoped is not None:
+        return scoped
+    from shared.factories.data_collector_factory import get_data_collector
+
+    return get_data_collector()

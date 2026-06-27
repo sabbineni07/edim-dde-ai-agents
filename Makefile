@@ -1,5 +1,5 @@
-.PHONY: help install install-dev dev-setup setup up down restart logs logs-api logs-db ps build rebuild shell shell-db \
-	init-db migrate psql backup-db restore-db reset-db run-api run-api-docker \
+.PHONY: help install install-dev dev-setup setup up up-postgres down restart logs logs-api logs-db ps build rebuild shell shell-db \
+	init-db init-db-local migrate psql backup-db restore-db reset-db run-api run-api-docker ui-install run-ui local-dev local-quickstart \
 	test test-verbose test-cov test-docker test-unit test-integration test-config \
 	lint format type-check pgadmin health docs agents health-docker validate validate-azure validate-api-docker smoke-docker \
 	clean clean-docker clean-all quickstart info recreate-api
@@ -71,6 +71,7 @@ dev-setup: ## One-shot dev setup: venv + deps + dev deps + pre-commit hook
 	.venv/bin/pre-commit install
 	@echo "$(GREEN)Dev setup complete.$(NC)"
 	@echo "$(YELLOW)Activate venv: source .venv/bin/activate$(NC)"
+	@echo "$(YELLOW)Local dev (Postgres Docker + host API/UI): make local-dev$(NC)"
 
 setup: ## Create venv only (then: make install or make dev-setup)
 	@echo "$(BLUE)Setting up project...$(NC)"
@@ -88,6 +89,13 @@ up: ## Start postgres + api (loads .env; optional az token injection)
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d postgres $(API_SERVICE)
 	@echo "$(GREEN)Services started. API: $(API_URL)$(NC)"
 	@echo "$(YELLOW)Recreate api after .env changes: make recreate-api$(NC)"
+
+up-postgres: ## Start Postgres only (Docker); pair with run-api + run-ui on host
+	@echo "$(BLUE)Starting Postgres (Docker only)...$(NC)"
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d $(DB_SERVICE)
+	@echo "$(GREEN)Postgres started on localhost:5432$(NC)"
+	@echo "$(YELLOW)First time: make init-db-local$(NC)"
+	@echo "$(YELLOW)Then: make run-api (terminal 2), make run-ui (terminal 3)$(NC)"
 
 down: ## Stop all services (includes pgAdmin profile)
 	@echo "$(BLUE)Stopping Docker services...$(NC)"
@@ -132,6 +140,11 @@ init-db: ## Create/update tables via SQLAlchemy (api container must be running)
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) exec $(API_SERVICE) python scripts/migrate-db.py
 	@echo "$(GREEN)Database initialized$(NC)"
 
+init-db-local: ## Migrate schema from host (Postgres in Docker; API on host)
+	@echo "$(BLUE)Initializing database schema (host)...$(NC)"
+	USE_POSTGRES=true $(PYTHON) scripts/migrate-db.py
+	@echo "$(GREEN)Database initialized$(NC)"
+
 migrate: init-db ## Alias for init-db
 
 psql: ## Connect to PostgreSQL (host via compose)
@@ -157,12 +170,30 @@ reset-db: ## Drop and recreate database (interactive confirm)
 
 ##@ Development
 
-run-api: ## Run API locally with hot reload (uses .env + CONFIG_DIR)
+local-dev: ## Print local dev workflow (Postgres Docker + host API + UI)
+	@echo "$(BLUE)Local development (use separate terminals):$(NC)"
+	@echo "  1. make up-postgres"
+	@echo "  2. make init-db-local          # first time only"
+	@echo "  3. make run-api"
+	@echo "  4. make ui-install && make run-ui"
+
+local-quickstart: up-postgres init-db-local ## Postgres + migrate; then run-api and run-ui elsewhere
+	@echo "$(GREEN)Postgres ready.$(NC)"
+	@echo "$(YELLOW)Terminal 2: make run-api$(NC)"
+	@echo "$(YELLOW)Terminal 3: make ui-install && make run-ui$(NC)"
+
+run-api: ## Run API on host with hot reload (127.0.0.1:8000)
 	@echo "$(BLUE)Starting API (local)...$(NC)"
-	USE_POSTGRES=$${USE_POSTGRES:-false} $(PYTHON) -m uvicorn API.src.main:app --host 0.0.0.0 --port 8000 --reload
+	USE_POSTGRES=$${USE_POSTGRES:-true} $(PYTHON) -m uvicorn API.src.main:app --host 127.0.0.1 --port 8000 --reload
 
 run-api-docker: ## Foreground api + postgres (compose)
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up postgres $(API_SERVICE)
+
+ui-install: ## npm install in UI/
+	cd UI && npm install
+
+run-ui: ## Angular dev server (http://localhost:4200)
+	cd UI && npm start
 
 ##@ Testing
 

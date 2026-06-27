@@ -285,20 +285,20 @@ async def generate_recommendation(
             settings_override = {"vector_retrieval_backend": "none"}
 
         metrics_override = request.job_cluster_metrics
+        if request.environment_id:
+            from DE.src.access.environment_job_metrics_collector import (
+                get_collector as get_job_metrics_collector,
+            )
+
+            collector = get_job_metrics_collector(
+                request.environment_id,
+                (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
+                connection_id=request.connection_id,
+                dataset_id=effective_dataset_id,
+            )
+            collector_token = set_metrics_collector(collector)
+
         if not metrics_override:
-            if request.environment_id:
-                from DE.src.access.environment_job_metrics_collector import (
-                    get_collector as get_job_metrics_collector,
-                )
-
-                collector = get_job_metrics_collector(
-                    request.environment_id,
-                    (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
-                    connection_id=request.connection_id,
-                    dataset_id=effective_dataset_id,
-                )
-                collector_token = set_metrics_collector(collector)
-
             metrics_override = fetch_job_run_metrics_for_recommendation(
                 environment_id=request.environment_id,
                 user_id=x_user_id or x_user_name,
