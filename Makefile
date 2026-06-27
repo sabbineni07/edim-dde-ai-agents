@@ -26,7 +26,6 @@ PYTEST := $(PYTHON) -m pytest
 # Local test / validation env (override in shell if needed)
 export USE_LOCAL_DATA ?= true
 export LOCAL_DATA_PATH ?= $(SAMPLE_CSV)
-export USE_POSTGRES ?= false
 export USE_MOCK_LLM ?= true
 export CONFIG_DIR ?= $(ROOT)/config
 export PYTHONPATH := $(ROOT)
@@ -182,8 +181,9 @@ local-quickstart: up-postgres init-db-local ## Postgres + migrate; then run-api 
 	@echo "$(YELLOW)Terminal 2: make run-api$(NC)"
 	@echo "$(YELLOW)Terminal 3: make ui-install && make run-ui$(NC)"
 
-run-api: ## Run API on host with hot reload (127.0.0.1:8000)
+run-api: ## Run API on host with hot reload (127.0.0.1:8000; loads .env)
 	@echo "$(BLUE)Starting API (local)...$(NC)"
+	@set -a; [ -f .env ] && . ./.env; set +a; \
 	USE_POSTGRES=$${USE_POSTGRES:-true} $(PYTHON) -m uvicorn API.src.main:app --host 127.0.0.1 --port 8000 --reload
 
 run-api-docker: ## Foreground api + postgres (compose)
@@ -200,7 +200,7 @@ run-ui: ## Angular dev server (http://localhost:4200)
 test: ## Run all tests (mock LLM, local CSV, no postgres)
 	@echo "$(BLUE)Running tests...$(NC)"
 	@echo "$(YELLOW)USE_MOCK_LLM=$(USE_MOCK_LLM) LOCAL_DATA_PATH=$(LOCAL_DATA_PATH)$(NC)"
-	$(PYTEST) -q
+	USE_POSTGRES=false $(PYTEST) -q
 
 test-verbose: ## Run all tests (verbose)
 	$(PYTEST) -v --tb=short
