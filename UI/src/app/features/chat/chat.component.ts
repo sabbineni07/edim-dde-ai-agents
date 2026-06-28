@@ -1,4 +1,4 @@
-import { Component, OnDestroy, OnInit } from '@angular/core';
+import { Component, ElementRef, OnDestroy, OnInit, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -12,6 +12,7 @@ import {
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
 import { parseApiError } from '../../core/api-error.util';
+import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -22,11 +23,13 @@ interface Message {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, MarkdownContentComponent],
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],
 })
 export class ChatComponent implements OnInit, OnDestroy {
+  @ViewChild('messageList') private messageListRef?: ElementRef<HTMLElement>;
+
   question = '';
   messages: Message[] = [];
   loading = false;
@@ -122,6 +125,7 @@ export class ChatComponent implements OnInit, OnDestroy {
     this.question = '';
     this.loading = true;
     this.error = '';
+    this.scrollToBottom();
 
     this.api
       .chat({
@@ -138,12 +142,24 @@ export class ChatComponent implements OnInit, OnDestroy {
             sources: res.sources,
           });
           this.loading = false;
+          this.scrollToBottom();
         },
         error: (err) => {
           this.error = parseApiError(err, 'Request failed');
           this.loading = false;
+          this.scrollToBottom();
         },
       });
+  }
+
+  private scrollToBottom(): void {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const el = this.messageListRef?.nativeElement;
+        if (!el) return;
+        el.scrollTop = el.scrollHeight;
+      });
+    });
   }
 
   connectionLabel(c: EnvironmentConnection): string {

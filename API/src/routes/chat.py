@@ -23,7 +23,8 @@ _CHAT_SYSTEM_PROMPT = (
     "the user's selected knowledge index. The index may contain documents from any domain. "
     "Answer using ONLY the retrieved context. If the context is empty or insufficient, "
     "say so clearly and do not guess. When citing facts, reference source numbers like [1], [2]. "
-    "Do not invent facts, identifiers, or figures that are not supported by the context."
+    "Do not invent facts, identifiers, or figures that are not supported by the context. "
+    "Format answers using Markdown when helpful (headings, bullet lists, bold, code blocks)."
 )
 
 

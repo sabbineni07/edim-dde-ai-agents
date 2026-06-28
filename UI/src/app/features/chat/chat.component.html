@@ -46,20 +46,22 @@
 
 <div class="card chat-card">
   <div class="card-body d-flex flex-column" style="min-height: 400px;">
-    <div class="flex-grow-1 overflow-auto mb-3">
-      <div *ngFor="let m of messages" class="mb-3" [class.text-end]="m.role === 'user'">
+    <div #messageList class="flex-grow-1 overflow-auto mb-3 chat-messages">
+      <div *ngFor="let m of messages" class="mb-3 chat-message" [class.text-end]="m.role === 'user'">
         <span
           class="badge"
           [class.bg-primary]="m.role === 'user'"
           [class.bg-secondary]="m.role === 'assistant'"
         >{{ m.role }}</span>
         <div
-          class="mt-1"
-          [class.bg-light]="m.role === 'assistant'"
-          [class.p-2]="m.role === 'assistant'"
-          [class.rounded]="m.role === 'assistant'"
+          class="mt-1 chat-bubble"
+          [class.chat-bubble-user]="m.role === 'user'"
+          [class.chat-bubble-assistant]="m.role === 'assistant'"
         >
-          {{ m.content }}
+          <ng-container *ngIf="m.role === 'assistant'; else userMessage">
+            <app-markdown-content [content]="m.content"></app-markdown-content>
+          </ng-container>
+          <ng-template #userMessage>{{ m.content }}</ng-template>
         </div>
         <div class="small text-muted mt-2" *ngIf="m.sources?.length && m.role === 'assistant'">
           <div class="fw-semibold mb-1">Sources ({{ m.sources!.length }})</div>
@@ -72,7 +74,7 @@
           </ul>
         </div>
       </div>
-      <div *ngIf="loading" class="text-muted">
+      <div *ngIf="loading" class="text-muted chat-thinking">
         <span class="spinner-border spinner-border-sm me-1"></span>Thinking...
       </div>
     </div>
