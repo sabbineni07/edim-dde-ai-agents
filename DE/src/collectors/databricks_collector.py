@@ -61,7 +61,7 @@ _METRICS_SELECT_BODY = """
   CAST(worker_node_provisioning_efficiency_pct AS DOUBLE) AS worker_node_provisioning_efficiency_pct,
   CAST(worker_cpu_utilization_efficiency_pct AS DOUBLE) AS worker_cpu_utilization_efficiency_pct,
   CAST(worker_memory_utilization_efficiency_pct AS DOUBLE) AS worker_memory_utilization_efficiency_pct,
-  CAST(delta_tables_ingested AS BIGINT) AS delta_tables_ingested,
+  CAST(array_size(delta_tables_ingested) AS BIGINT) AS delta_tables_ingested,
   CAST(processed_bytes AS BIGINT) AS processed_bytes,
   CAST(processed_row_count AS BIGINT) AS processed_row_count
 """

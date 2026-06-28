@@ -90,13 +90,6 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
                 "required": False,
                 "placeholder": "text-embedding-3-small",
             },
-            {
-                "key": "azure_openai_api_version",
-                "label": "API version",
-                "type": "string",
-                "required": False,
-                "placeholder": "2024-05-01-preview",
-            },
         ],
         "auth_note": _AUTH_MI,
     },

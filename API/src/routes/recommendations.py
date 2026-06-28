@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
+from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError
 from API.src.deps import get_agent, get_cost_logger
 from DE.src.access.recommendation_metrics import fetch_job_run_metrics_for_recommendation
 from shared.config.loader import get_agent_settings
@@ -285,20 +285,20 @@ async def generate_recommendation(
             settings_override = {"vector_retrieval_backend": "none"}
 
         metrics_override = request.job_cluster_metrics
+        if request.environment_id:
+            from DE.src.access.environment_job_metrics_collector import (
+                get_collector as get_job_metrics_collector,
+            )
+
+            collector = get_job_metrics_collector(
+                request.environment_id,
+                (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
+                connection_id=request.connection_id,
+                dataset_id=effective_dataset_id,
+            )
+            collector_token = set_metrics_collector(collector)
+
         if not metrics_override:
-            if request.environment_id:
-                from DE.src.access.environment_job_metrics_collector import (
-                    get_collector as get_job_metrics_collector,
-                )
-
-                collector = get_job_metrics_collector(
-                    request.environment_id,
-                    (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
-                    connection_id=request.connection_id,
-                    dataset_id=effective_dataset_id,
-                )
-                collector_token = set_metrics_collector(collector)
-
             metrics_override = fetch_job_run_metrics_for_recommendation(
                 environment_id=request.environment_id,
                 user_id=x_user_id or x_user_name,
@@ -382,14 +382,14 @@ async def generate_recommendation(
             error_message=e.message,
         )
         raise
-    except AzureOpenAINotConfiguredError:
+    except FoundryLLMNotConfiguredError:
         duration_ms = int((time.perf_counter() - start_time) * 1000)
         cost_logger.update_request(
             request_id=request_id,
             status="error",
             duration_ms=duration_ms,
-            error_code="AZURE_OPENAI_NOT_CONFIGURED",
-            error_message="Azure OpenAI is not configured",
+            error_code="FOUNDRY_LLM_NOT_CONFIGURED",
+            error_message="Azure AI Foundry LLM is not configured",
         )
         raise
     except Exception as e:

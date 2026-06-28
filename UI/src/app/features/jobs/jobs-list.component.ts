@@ -5,8 +5,7 @@ import { FormsModule } from '@angular/forms';
 import { ApiService, JobSummary, UiHints, Workspace } from '../../services/api.service';
 import {
   daysBetween,
-  last30DaysDateStrings,
-  sampleDataDateStrings,
+  defaultBrowseDateRange,
 } from '../../core/date-range.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
@@ -188,10 +187,7 @@ export class JobsListComponent implements OnInit {
   }
 
   private defaultDateRange(): { startDate: string; endDate: string } {
-    if (this.uiHints && !this.uiHints.use_local_data) {
-      return last30DaysDateStrings();
-    }
-    return sampleDataDateStrings();
+    return defaultBrowseDateRange(this.uiHints);
   }
 
   onWorkspaceChange(workspaceId: string): void {
@@ -272,6 +268,7 @@ export class JobsListComponent implements OnInit {
         next: (list) => {
           this.jobs = list;
           this.loading = false;
+          this.clampCurrentPage();
         },
         error: (err) => {
           this.error = err?.message || 'Failed to load jobs';
@@ -316,16 +313,47 @@ export class JobsListComponent implements OnInit {
 
   onFilterChange(): void {
     this.currentPage = 1;
+    this.clampCurrentPage();
   }
 
   onPageSizeChange(): void {
     this.currentPage = 1;
+    this.clampCurrentPage();
   }
 
   goToPage(page: number): void {
     const next = Math.min(Math.max(1, page), this.totalPages);
     if (next !== this.currentPage) {
       this.currentPage = next;
+    }
+  }
+
+  goToFirstPage(): void {
+    this.goToPage(1);
+  }
+
+  goToLastPage(): void {
+    this.goToPage(this.totalPages);
+  }
+
+  get visiblePageNumbers(): number[] {
+    const total = this.totalPages;
+    if (total <= 1) {
+      return total === 1 ? [1] : [];
+    }
+    const windowSize = 5;
+    let start = Math.max(1, this.currentPage - Math.floor(windowSize / 2));
+    let end = Math.min(total, start + windowSize - 1);
+    start = Math.max(1, end - windowSize + 1);
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }
+
+  private clampCurrentPage(): void {
+    if (this.currentPage > this.totalPages) {
+      this.currentPage = this.totalPages;
+    }
+    if (this.currentPage < 1) {
+      this.currentPage = 1;
     }
   }
 

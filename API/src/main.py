@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError
+from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError
 from API.src.routes import (
     agents,
     chat,
@@ -35,15 +35,15 @@ logger = get_logger(__name__)
 def _register_exception_handlers(app: FastAPI) -> None:
     """Register exception handlers for domain errors."""
 
-    @app.exception_handler(AzureOpenAINotConfiguredError)
-    async def azure_openai_not_configured_handler(
-        request: Request, exc: AzureOpenAINotConfiguredError
+    @app.exception_handler(FoundryLLMNotConfiguredError)
+    async def foundry_llm_not_configured_handler(
+        request: Request, exc: FoundryLLMNotConfiguredError
     ):
         return JSONResponse(
             status_code=503,
             content={
                 "detail": str(exc),
-                "error_code": "AZURE_OPENAI_NOT_CONFIGURED",
+                "error_code": "FOUNDRY_LLM_NOT_CONFIGURED",
             },
         )
 

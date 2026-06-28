@@ -79,3 +79,17 @@ def test_config_dir_from_env(tmp_path, monkeypatch):
     assert plat.app_env == "test-env"
     agent = get_agent_settings("dbx_cluster_tuning_agent")
     assert agent.recommendation_cost_retry_enabled is True
+
+
+def test_workspace_overrides_ignore_empty_platform_env(monkeypatch):
+    monkeypatch.setenv("AZURE_OPENAI_ENDPOINT", "")
+    monkeypatch.setenv("AZURE_OPENAI_API_VERSION", "2024-02-15-preview")
+    settings = get_agent_settings(
+        "dbx_cluster_tuning_agent",
+        overrides={
+            "azure_openai_endpoint": "https://workspace.openai.azure.com",
+            "azure_openai_deployment_name": "gpt-4o",
+        },
+    )
+    assert settings.azure_openai_endpoint == "https://workspace.openai.azure.com"
+    assert settings.azure_openai_deployment_name == "gpt-4o"

@@ -105,7 +105,6 @@ def flatten_platform_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             "endpoint": "azure_openai_endpoint",
             "api_key": "azure_openai_api_key",
             "access_token": "azure_openai_access_token",
-            "api_version": "azure_openai_api_version",
             "deployment": "azure_openai_deployment_name",
             "embedding_deployment": "azure_openai_embedding_deployment",
         }
@@ -155,8 +154,6 @@ def flatten_agent_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             flat["azure_openai_deployment_name"] = llm["deployment"]
         if "embedding_deployment" in llm:
             flat["azure_openai_embedding_deployment"] = llm["embedding_deployment"]
-        if "api_version" in llm:
-            flat["azure_openai_api_version"] = llm["api_version"]
         if "default_model_name" in llm:
             flat["default_model_name"] = llm["default_model_name"]
         if "temperature" in llm:

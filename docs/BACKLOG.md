@@ -4,6 +4,8 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 **Platform data model (connections → datasets):** see [BACKLOG_CONNECTIONS_AND_DATASETS.md](./BACKLOG_CONNECTIONS_AND_DATASETS.md) for phased design, flows, and checkboxes (Phases 0–5 done; Phase 6 pending).
 
+**AI Foundry / LangChain upgrade:** see [BACKLOG_AI_FOUNDRY_UPGRADE.md](./BACKLOG_AI_FOUNDRY_UPGRADE.md) for phased design, diagrams, and progress (Phases 0–7 not started).
+
 ---
 
 ## AI platform & data (Postgres-first)
@@ -19,8 +21,9 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 ## Azure & Foundry alignment
 
+- [x] **AI Foundry LLM upgrade (v1 API)** — Done. See [BACKLOG_AI_FOUNDRY_UPGRADE.md](./BACKLOG_AI_FOUNDRY_UPGRADE.md).
 - [ ] **Azure AI Search endpoint** — Confirm `AZURE_SEARCH_ENDPOINT` uses the Search resource hostname (`*.search.windows.net`); do not use `cognitiveservices.azure.com` as a drop-in for `SearchClient`.
-- [ ] **Foundry project API** — If required, design a separate integration for `services.ai.azure.com/.../projects/...` (not the same as raw `openai.azure.com` chat path used by LangChain today).
+- [ ] **Foundry project API** — If required, design a separate integration for `services.ai.azure.com/.../projects/...` via `langchain-azure-ai` (deferred; see upgrade backlog §7).
 
 ---
 
@@ -57,4 +60,4 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: Phase 5.2–5.6 and UI polish implemented.*
+*Last updated: 2026-06-25 — added AI Foundry upgrade backlog link.*

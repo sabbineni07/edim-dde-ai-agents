@@ -48,11 +48,10 @@ services:
 #      CONFIG_DIR: ${CONFIG_DIR:-/app/config}
       # Use mock LLM provider (tests/local) instead of Azure OpenAI
       USE_MOCK_LLM: ${USE_MOCK_LLM:-false}
-      # Azure OpenAI
+      # Azure OpenAI / Foundry (optional platform defaults; workspace connections override)
       AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT:-}
       AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY:-}
       AZURE_OPENAI_ACCESS_TOKEN: ${AZURE_OPENAI_ACCESS_TOKEN:-}
-      AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION:-2024-05-01-preview}
       AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-4o}
       AZURE_OPENAI_EMBEDDING_DEPLOYMENT: ${AZURE_OPENAI_EMBEDDING_DEPLOYMENT:-text-embedding-3-small}
       # Databricks
@@ -75,6 +74,18 @@ services:
     networks:
       - edim-dde-ai-agents-network
     command: uvicorn API.src.main:app --host 0.0.0.0 --port 8000 --reload
+
+  ui:
+    build:
+      context: ./UI
+      dockerfile: Dockerfile
+    container_name: edim-dde-ai-agents-ui
+    ports:
+      - "${UI_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - edim-dde-ai-agents-network
 
   pgadmin:
     image: dpage/pgadmin4:latest

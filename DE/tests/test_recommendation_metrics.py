@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from DE.src.access import recommendation_metrics as mod
 from DE.src.access.recommendation_metrics import fetch_job_run_metrics_for_recommendation
+from shared.factories.data_collector_context import reset_metrics_collector, set_metrics_collector
 
 
 def test_fetch_by_cluster_id_without_dates():
@@ -50,3 +51,24 @@ def test_fetch_by_cluster_id_without_dates():
         cluster_id="cluster-abc",
         job_run_id=None,
     )
+
+
+def test_fetch_reuses_request_scoped_collector():
+    scoped = MagicMock(name="scoped_collector")
+    scoped.collect_job_cluster_metrics.return_value = []
+    token = set_metrics_collector(scoped)
+    try:
+        with patch(
+            "DE.src.access.environment_job_metrics_collector.get_collector"
+        ) as get_collector_mock:
+            fetch_job_run_metrics_for_recommendation(
+                environment_id="dim_dev",
+                user_id="user-1",
+                connection_id="conn-1",
+                job_id="job-1",
+                cluster_id="cluster-abc",
+            )
+        get_collector_mock.assert_not_called()
+        scoped.collect_job_cluster_metrics.assert_called_once()
+    finally:
+        reset_metrics_collector(token)

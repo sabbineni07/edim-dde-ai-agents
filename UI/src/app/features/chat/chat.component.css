@@ -1,1 +1,35 @@
-.chat-card .flex-grow-1 { max-height: 360px; }
+.chat-card .chat-messages {
+  max-height: 360px;
+  scroll-behavior: smooth;
+}
+
+.chat-bubble {
+  display: inline-block;
+  max-width: 92%;
+  text-align: left;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+}
+
+.chat-bubble-user {
+  background: var(--bs-primary);
+  color: #fff;
+}
+
+.chat-bubble-assistant {
+  background: var(--bs-light);
+  color: var(--bs-body-color);
+}
+
+.chat-message.text-end .chat-bubble {
+  text-align: left;
+}
+
+.chat-sources li {
+  font-size: 0.85rem;
+  line-height: 1.35;
+}
+
+.chat-thinking {
+  padding-bottom: 0.25rem;
+}

@@ -93,10 +93,10 @@ def validate_profile_overrides(
     if not flat:
         return {}
 
-    settings_fields: Set[str] = set(Settings.model_fields.keys())  # pydantic v2
-    unknown = sorted(k for k in flat.keys() if k not in settings_fields)
-    if unknown:
-        raise ValueError(f"Unknown settings override fields: {unknown}")
+    settings_fields: Set[str] = set(Settings.model_fields.keys())
+    flat = {k: v for k, v in flat.items() if k in settings_fields}
+    if not flat:
+        return {}
 
     blocked = sorted(
         k for k in flat.keys() if any(hint in k.lower() for hint in _SECRET_FIELD_HINTS)

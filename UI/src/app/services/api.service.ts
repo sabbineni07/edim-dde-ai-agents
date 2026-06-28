@@ -308,14 +308,23 @@ export interface LifecycleTransitionRequest {
 
 export interface ChatRequest {
   question: string;
-  workspace_id?: string;
-  job_id?: string;
-  start_date?: string;
-  end_date?: string;
+  environment_id: string;
+  llm_connection_id: string;
+  rag_connection_id?: string;
+  top_k?: number;
+}
+
+export interface ChatSource {
+  id: string;
+  document_type: string;
+  score?: number | null;
+  excerpt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatResponse {
   answer: string;
+  sources: ChatSource[];
   context_summary: Record<string, unknown>;
 }
 

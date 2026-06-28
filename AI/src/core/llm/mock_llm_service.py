@@ -61,6 +61,11 @@ class MockChatModel(BaseChatModel):
                 "This recommendation is based on analysis of historical job execution metrics. "
                 "The recommended configuration maintains performance while improving utilization."
             )
+        elif "Retrieved context:" in prompt_text or "User question:" in prompt_text:
+            response = (
+                "Based on the retrieved knowledge index context (mock LLM). "
+                "Configure USE_MOCK_LLM=false and valid Foundry credentials for real answers."
+            )
         else:
             response = "Mock LLM response for local testing."
 

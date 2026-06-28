@@ -23,3 +23,17 @@ htmlcov/
 logs/
 .DS_Store
 docker-compose.override.yml
+
+# Frontend (not used by API container)
+UI/
+UI/.angular/
+
+# Docs, scripts, and dev tooling
+docs/
+scripts/
+Makefile
+*.md
+README.md
+
+# User uploads (mounted at runtime)
+data/uploads/

@@ -8,8 +8,8 @@ from typing import Callable
 # Azure Databricks first-party app (same resource as `az account get-access-token --resource …`)
 DATABRICKS_AAD_SCOPE = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default"
 
-# Azure OpenAI / Cognitive Services
-AZURE_OPENAI_AAD_SCOPE = "https://cognitiveservices.azure.com/.default"
+# Azure AI Foundry / OpenAI v1 (chat + embeddings)
+AZURE_FOUNDRY_AAD_SCOPE = "https://ai.azure.com/.default"
 
 # Azure AI Search
 AZURE_SEARCH_AAD_SCOPE = "https://search.azure.com/.default"

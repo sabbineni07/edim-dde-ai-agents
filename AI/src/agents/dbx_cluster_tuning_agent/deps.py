@@ -21,7 +21,6 @@ def get_sizing_chain(
     agent_id: str = AGENT_ID,
     settings: Optional[Settings] = None,
 ) -> ClusterSizingChain:
-    llm = llm_provider or get_llm_provider()
     agent_settings = settings or get_agent_settings(agent_id)
     if rag_provider is None and is_rag_enabled(agent_settings):
         rag_provider = create_rag_context_provider(
@@ -31,7 +30,7 @@ def get_sizing_chain(
         )
     use_rag = rag_provider is not None and is_rag_enabled(agent_settings)
     return ClusterSizingChain(
-        llm_provider=llm,
+        llm_provider=llm_provider,
         rag_provider=rag_provider,
         use_rag=use_rag,
         settings=agent_settings,
@@ -43,9 +42,8 @@ def get_explanation_chain(
     settings: Optional[Settings] = None,
     agent_id: str = AGENT_ID,
 ) -> RecommendationExplanationChain:
-    llm = llm_provider or get_llm_provider()
     agent_settings = settings or get_agent_settings(agent_id)
-    return RecommendationExplanationChain(llm_provider=llm, settings=agent_settings)
+    return RecommendationExplanationChain(llm_provider=llm_provider, settings=agent_settings)
 
 
 def build_agent_runtime_deps(

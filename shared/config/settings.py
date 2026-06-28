@@ -18,7 +18,6 @@ class Settings(BaseSettings):
     azure_openai_endpoint: Optional[str] = None
     azure_openai_api_key: Optional[str] = None
     azure_openai_access_token: Optional[str] = None
-    azure_openai_api_version: Optional[str] = None
     azure_openai_deployment_name: Optional[str] = None
     azure_openai_embedding_deployment: Optional[str] = None
 
@@ -90,6 +89,8 @@ class Settings(BaseSettings):
         env_file_encoding="utf-8",
         case_sensitive=False,
         populate_by_name=True,
+        extra="ignore",
+        env_ignore_empty=True,
     )
 
 

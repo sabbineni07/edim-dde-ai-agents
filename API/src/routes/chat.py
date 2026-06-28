@@ -1,122 +1,114 @@
-"""Chat API over job cost and cluster metrics."""
+"""Chat API: connection-scoped LLM + optional RAG over Azure Search / FAISS."""
 
-from datetime import date, timedelta
+from __future__ import annotations
+
+import os
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAINotConfiguredError, AzureOpenAIService
-from DE.src.processors.metrics_processor import MetricsProcessor
-from shared.factories.data_collector_factory import get_data_collector
+from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError, FoundryLLMService
+from AI.src.core.llm.mock_llm_service import MockLLMService
+from AI.src.core.retrieval.chat_retriever import format_chunks_for_prompt, retrieve_for_chat
+from shared.config.chat_settings_resolver import resolve_chat_settings
+from shared.services.platform_environment_service import get_environment
 from shared.utils.logging import get_logger
 
 router = APIRouter()
 logger = get_logger(__name__)
 
+_CHAT_SYSTEM_PROMPT = (
+    "You are a helpful assistant that answers questions using the retrieved context from "
+    "the user's selected knowledge index. The index may contain documents from any domain. "
+    "Answer using ONLY the retrieved context. If the context is empty or insufficient, "
+    "say so clearly and do not guess. When citing facts, reference source numbers like [1], [2]. "
+    "Do not invent facts, identifiers, or figures that are not supported by the context. "
+    "Format answers using Markdown when helpful (headings, bullet lists, bold, code blocks)."
+)
+
 
 class ChatRequest(BaseModel):
-    question: str
-    workspace_id: Optional[str] = None
-    job_id: Optional[str] = None
-    start_date: Optional[date] = None
-    end_date: Optional[date] = None
+    question: str = Field(..., min_length=1)
+    environment_id: str = Field(..., min_length=1)
+    llm_connection_id: str = Field(..., min_length=1)
+    rag_connection_id: Optional[str] = None
+    top_k: int = Field(default=5, ge=1, le=20)
+
+
+class ChatSource(BaseModel):
+    id: str
+    document_type: str
+    score: Optional[float] = None
+    excerpt: str
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class ChatResponse(BaseModel):
     answer: str
+    sources: List[ChatSource]
     context_summary: Dict[str, Any]
 
 
-def _default_date_range(req: ChatRequest) -> Dict[str, str]:
-    today = date.today()
-    end_date = req.end_date or today
-    start_date = req.start_date or (end_date - timedelta(days=30))
-    if start_date > end_date:
-        raise HTTPException(
-            status_code=400,
-            detail="start_date must be on or before end_date",
-        )
-    return {
-        "start_date": start_date.strftime("%Y-%m-%d"),
-        "end_date": end_date.strftime("%Y-%m-%d"),
-    }
+def _use_mock_llm() -> bool:
+    return os.environ.get("USE_MOCK_LLM", "").lower() in ("true", "1", "yes")
+
+
+def _get_chat_llm(settings):
+    if _use_mock_llm():
+        logger.info("chat_using_mock_llm")
+        return MockLLMService().get_llm()
+    svc = FoundryLLMService(config=settings)
+    return svc.get_llm()
 
 
 @router.post("/", response_model=ChatResponse)
 async def chat(req: ChatRequest) -> ChatResponse:
-    """Chat endpoint that answers questions using job cost and cluster metrics.
+    """Answer a question using the selected Foundry LLM and optional knowledge index."""
+    question = req.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="question is required")
 
-    This is intentionally simple for now: it pulls recent aggregated job metrics
-    (and optionally narrows to a workspace/job), summarizes them, and passes both
-    the metrics summary and the user's question to the LLM.
-    """
-    dr = _default_date_range(req)
-    collector = get_data_collector()
+    if not get_environment(req.environment_id):
+        raise HTTPException(status_code=404, detail="Environment not found")
 
-    try:
-        metrics = collector.collect_job_cluster_metrics(
-            start_date=dr["start_date"],
-            end_date=dr["end_date"],
-            job_ids=[req.job_id] if req.job_id else None,
-            workspace_id=req.workspace_id,
-        )
-    except Exception as e:
-        logger.error("chat_collect_metrics_error", error=str(e))
-        raise HTTPException(status_code=500, detail="Failed to read job metrics") from e
-
-    processor = MetricsProcessor()
-    aggregated: Dict[str, Dict[str, Any]] = {}
-    if metrics:
-        aggregated = processor.aggregate_by_job(metrics)
-
-    # Build a compact summary to send to the LLM
-    jobs_summary: List[Dict[str, Any]] = []
-    for job_id, agg in aggregated.items():
-        jobs_summary.append(
-            {
-                "job_id": job_id,
-                "job_name": agg.get("job_name"),
-                "workspace_id": req.workspace_id,
-                "workload_type": agg.get("workload_type"),
-                "avg_cpu_utilization_pct": agg.get("avg_cpu_utilization"),
-                "avg_memory_utilization_pct": agg.get("avg_memory_utilization"),
-                "avg_duration_seconds": agg.get("avg_duration_seconds"),
-                "total_runs": agg.get("total_runs"),
-                "current_node_type": agg.get("current_node_type"),
-                "current_min_workers": agg.get("current_min_workers"),
-                "current_max_workers": agg.get("current_max_workers"),
-                "last_run_date": agg.get("last_run_date"),
-            }
-        )
+    from uuid import UUID
 
     try:
-        aos = AzureOpenAIService()
-        llm = aos.get_llm()
-    except AzureOpenAINotConfiguredError as e:
-        logger.error("chat_azure_not_configured", error=str(e))
+        llm_uuid = UUID(req.llm_connection_id)
+        rag_uuid = UUID(req.rag_connection_id) if req.rag_connection_id else None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail="Invalid connection id") from e
+
+    try:
+        settings, conn_meta = resolve_chat_settings(
+            environment_id=req.environment_id,
+            llm_connection_id=llm_uuid,
+            rag_connection_id=rag_uuid,
+        )
+    except LookupError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    chunks = retrieve_for_chat(settings, question, top_k=req.top_k)
+    context_text = format_chunks_for_prompt(chunks)
+
+    try:
+        llm = _get_chat_llm(settings)
+    except FoundryLLMNotConfiguredError as e:
+        logger.error("chat_foundry_llm_not_configured", error=str(e))
         raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
-        logger.error("chat_azure_init_error", error=str(e))
+        logger.error("chat_foundry_llm_init_error", error=str(e))
         raise HTTPException(status_code=500, detail="LLM not available") from e
 
-    system_prompt = (
-        "You are an assistant that answers questions about Databricks job cost and "
-        "cluster metrics. Use only the metrics summary provided. When you talk about "
-        "specific jobs, cite job_id and any relevant utilization or cost numbers."
-    )
-    user_content = (
-        f"Date range: {dr['start_date']} to {dr['end_date']}\n"
-        f"Workspace: {req.workspace_id or 'ALL'}\n"
-        f"Job filter: {req.job_id or 'ALL'}\n\n"
-        f"Job metrics summary (JSON): {jobs_summary}\n\n"
-        f"User question: {req.question}"
-    )
+    user_content = f"Retrieved context:\n{context_text}\n\n" f"User question: {question}"
 
     try:
         resp = await llm.ainvoke(
             [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": _CHAT_SYSTEM_PROMPT},
                 {"role": "user", "content": user_content},
             ]
         )
@@ -125,13 +117,24 @@ async def chat(req: ChatRequest) -> ChatResponse:
         logger.error("chat_llm_error", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to generate answer") from e
 
+    sources = [
+        ChatSource(
+            id=c.id or f"chunk-{i}",
+            document_type=c.document_type,
+            score=c.score,
+            excerpt=c.excerpt(),
+            metadata=c.metadata,
+        )
+        for i, c in enumerate(chunks, start=1)
+    ]
+
     return ChatResponse(
         answer=answer_text,
+        sources=sources,
         context_summary={
-            "workspace_id": req.workspace_id,
-            "job_id": req.job_id,
-            "start_date": dr["start_date"],
-            "end_date": dr["end_date"],
-            "job_count": len(jobs_summary),
+            **conn_meta,
+            "source_count": len(sources),
+            "top_k": req.top_k,
+            "mock_llm": _use_mock_llm(),
         },
     )

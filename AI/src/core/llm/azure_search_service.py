@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Union
 from azure.core.credentials import AzureKeyCredential, TokenCredential
 from azure.search.documents import SearchClient
 
-from AI.src.core.llm.azure_openai_service import AzureOpenAIService
+from AI.src.core.llm.foundry_llm_service import FoundryLLMService
 from shared.auth.azure_tokens import get_default_azure_credential
 from shared.config.settings import Settings, settings
 from shared.models.job_cluster_metrics import JobClusterMetrics
@@ -64,7 +64,7 @@ class AzureSearchService:
                 index_name=index_name,
                 credential=credential,
             )
-            self.openai_service = AzureOpenAIService()
+            self.openai_service = FoundryLLMService(config=cfg)
             logger.info("azure_search_service_initialized", auth=auth)
         except Exception as e:
             logger.warning("azure_search_init_failed", error=str(e))
@@ -300,6 +300,37 @@ class AzureSearchService:
         except Exception as e:
             logger.error("index_job_cluster_metrics_error", error=str(e))
             return False
+
+    def search_for_chat(self, query: str, top_k: int = 5) -> List[Dict]:
+        """Vector search across all indexed document types for natural-language chat."""
+        if not self.client:
+            logger.warning("azure_search_not_available_skipping_search")
+            return []
+
+        q = (query or "").strip()
+        if not q:
+            return []
+
+        try:
+            query_embedding = self.openai_service.get_embeddings().embed_query(q)
+            search_options = {
+                "top": top_k,
+                "vector_queries": [
+                    {
+                        "kind": "vector",
+                        "vector": query_embedding,
+                        "k_nearest_neighbors": top_k,
+                        "fields": "embedding",
+                    }
+                ],
+            }
+            results = self.client.search(search_text=q, **search_options)
+            hits = [dict(r) for r in results]
+            logger.info("search_for_chat_complete", query=q[:100], results_count=len(hits))
+            return hits
+        except Exception as e:
+            logger.error("search_for_chat_error", error=str(e))
+            return []
 
     def search_similar_jobs(
         self, job_cluster_metrics: dict, top_k: int = 5, filter_recommendations: bool = False

@@ -21,7 +21,6 @@ def _connection_to_settings_flat(
             "azure_openai_endpoint",
             "azure_openai_deployment_name",
             "azure_openai_embedding_deployment",
-            "azure_openai_api_version",
         ):
             if config.get(k):
                 flat[k] = config[k]

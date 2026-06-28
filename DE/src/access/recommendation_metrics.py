@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from DE.src.processors.run_metrics import select_job_run_metrics
+from shared.factories.data_collector_context import get_metrics_collector
 from shared.factories.data_collector_factory import get_data_collector
 from shared.models.job_run_ingest import to_llm_ingest_dict
 from shared.utils.logging import get_logger
@@ -19,6 +20,9 @@ def _resolve_collector(
     connection_id: Optional[str],
     dataset_id: Optional[str] = None,
 ):
+    scoped = get_metrics_collector()
+    if scoped is not None:
+        return scoped
     if environment_id:
         from DE.src.access.environment_job_metrics_collector import get_collector
 

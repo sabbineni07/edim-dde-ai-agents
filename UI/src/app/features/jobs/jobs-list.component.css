@@ -15,12 +15,25 @@
   width: 4.5rem;
 }
 
+.jobs-list-card {
+  overflow: hidden;
+}
+
+.jobs-table-scroll {
+  max-height: min(65vh, 42rem);
+  overflow: auto;
+}
+
 .jobs-pagination .page-link {
   cursor: pointer;
 }
 
 .jobs-pagination .page-item.disabled .page-link {
   cursor: default;
+}
+
+.jobs-pagination .page-item.active .page-link {
+  pointer-events: none;
 }
 
 .jobs-col-name {
