@@ -77,6 +77,9 @@ def flatten_platform_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
     db = data.get("databricks") or {}
     if isinstance(db, dict):
         mapping = {
+            "host": "databricks_host",
+            "client_id": "databricks_client_id",
+            "client_secret": "databricks_client_secret",
             "server_hostname": "databricks_server_hostname",
             "http_path": "databricks_http_path",
             "token": "databricks_token",
@@ -89,12 +92,14 @@ def flatten_platform_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
     pg = data.get("postgres") or {}
     if isinstance(pg, dict):
         for k in (
+            "backend",
             "host",
             "port",
             "user",
             "password",
             "database",
             "ssl_mode",
+            "lakebase_endpoint",
         ):
             if k in pg:
                 flat[f"postgres_{k}" if k != "database" else "postgres_database"] = pg[k]

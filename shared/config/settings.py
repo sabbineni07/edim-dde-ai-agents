@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     azure_search_api_key: Optional[str] = None
     azure_search_index_name: Optional[str] = None
 
+    postgres_backend: str = "local"
     postgres_host: Optional[str] = None
     postgres_port: int = 5432
     postgres_user: Optional[str] = None
@@ -34,6 +35,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("POSTGRES_DATABASE", "POSTGRES_DB"),
     )
     postgres_ssl_mode: str = "prefer"
+    postgres_lakebase_endpoint: Optional[str] = None
 
     azure_sql_server: Optional[str] = None
     azure_sql_database: Optional[str] = None
@@ -47,6 +49,9 @@ class Settings(BaseSettings):
     azure_storage_container: Optional[str] = None
     azure_key_vault_name: Optional[str] = None
 
+    databricks_host: Optional[str] = None
+    databricks_client_id: Optional[str] = None
+    databricks_client_secret: Optional[str] = None
     databricks_server_hostname: Optional[str] = None
     databricks_http_path: Optional[str] = None
     databricks_token: Optional[str] = None

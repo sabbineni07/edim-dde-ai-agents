@@ -11,18 +11,23 @@ platform:
   local_data_path: ${resolve:default_local_data_csv}
 
 databricks:
+  host: ${env:DATABRICKS_HOST}
+  client_id: ${env:DATABRICKS_CLIENT_ID}
+  client_secret: ${env:DATABRICKS_CLIENT_SECRET}
   server_hostname: ${env:DATABRICKS_SERVER_HOSTNAME}
   http_path: ${env:DATABRICKS_HTTP_PATH}
   token: ${env:DATABRICKS_TOKEN}
   metrics_table: ${env:DATABRICKS_JOB_CLUSTER_METRICS_TABLE}
 
 postgres:
+  backend: ${env:POSTGRES_BACKEND}
   host: ${env:POSTGRES_HOST}
   port: ${env:POSTGRES_PORT}
   user: ${env:POSTGRES_USER}
   password: ${env:POSTGRES_PASSWORD}
   database: ${env:POSTGRES_DATABASE}
-  ssl_mode: prefer
+  ssl_mode: ${env:POSTGRES_SSL_MODE}
+  lakebase_endpoint: ${env:POSTGRES_LAKEBASE_ENDPOINT}
 
 azure_openai:
   endpoint: ${env:AZURE_OPENAI_ENDPOINT}
