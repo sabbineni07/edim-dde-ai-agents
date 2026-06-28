@@ -1,4 +1,4 @@
-.PHONY: help install install-dev dev-setup setup up up-postgres down restart logs logs-api logs-db ps build rebuild shell shell-db \
+.PHONY: help install install-dev dev-setup setup up up-api up-postgres down restart logs logs-api logs-ui logs-db ps build rebuild shell shell-db \
 	init-db init-db-local migrate psql backup-db restore-db reset-db run-api run-api-docker ui-install run-ui local-dev local-quickstart \
 	test test-verbose test-cov test-docker test-unit test-integration test-config \
 	lint format type-check pgadmin health docs agents health-docker validate validate-azure validate-api-docker smoke-docker \
@@ -9,12 +9,14 @@
 # --- Paths & services ---
 COMPOSE_FILE := docker-compose.yml
 API_SERVICE := api
+UI_SERVICE := ui
 DB_SERVICE := postgres
 DB_NAME := ai_agents
 DB_USER := postgres
 ROOT := $(CURDIR)
 SAMPLE_CSV := $(ROOT)/data/sample_job_metrics.csv
 API_URL := http://localhost:8000
+UI_URL := http://localhost:8080
 
 DOCKER_COMPOSE := $(shell command -v docker-compose 2> /dev/null || echo "docker compose")
 
@@ -79,15 +81,24 @@ setup: ## Create venv only (then: make install or make dev-setup)
 
 ##@ Docker
 
-up: ## Start postgres + api (loads .env; optional az token injection)
+up: ## Start postgres + api + ui (loads .env; optional az token injection)
 	@echo "$(BLUE)Starting Docker services...$(NC)"
+	@if command -v az >/dev/null 2>&1; then \
+		export AZURE_OPENAI_ACCESS_TOKEN=$$(az account get-access-token --scope https://ai.azure.com/.default --query accessToken -o tsv 2>/dev/null) || true; \
+		export DATABRICKS_TOKEN=$$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query accessToken -o tsv 2>/dev/null) || true; \
+	fi; \
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d postgres $(API_SERVICE) $(UI_SERVICE)
+	@echo "$(GREEN)Services started. UI: $(UI_URL)  API: $(API_URL)$(NC)"
+	@echo "$(YELLOW)Recreate api after .env changes: make recreate-api$(NC)"
+
+up-api: ## Start postgres + api only (no UI container)
+	@echo "$(BLUE)Starting postgres + api...$(NC)"
 	@if command -v az >/dev/null 2>&1; then \
 		export AZURE_OPENAI_ACCESS_TOKEN=$$(az account get-access-token --scope https://ai.azure.com/.default --query accessToken -o tsv 2>/dev/null) || true; \
 		export DATABRICKS_TOKEN=$$(az account get-access-token --resource 2ff814a6-3304-4ab8-85cb-cd0e6f879c1d --query accessToken -o tsv 2>/dev/null) || true; \
 	fi; \
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d postgres $(API_SERVICE)
 	@echo "$(GREEN)Services started. API: $(API_URL)$(NC)"
-	@echo "$(YELLOW)Recreate api after .env changes: make recreate-api$(NC)"
 
 up-postgres: ## Start Postgres only (Docker); pair with run-api + run-ui on host
 	@echo "$(BLUE)Starting Postgres (Docker only)...$(NC)"
@@ -112,6 +123,9 @@ logs: ## Follow logs (all services)
 
 logs-api: ## Follow API logs
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f $(API_SERVICE)
+
+logs-ui: ## Follow UI logs
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f $(UI_SERVICE)
 
 logs-db: ## Follow Postgres logs
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f $(DB_SERVICE)
@@ -306,7 +320,7 @@ clean-all: clean ## clean + optional docker (run clean-docker separately)
 ##@ Quick Start
 
 quickstart: up init-db health ## Start docker, init DB, health check
-	@echo "$(GREEN)API: $(API_URL)/docs$(NC)"
+	@echo "$(GREEN)UI: $(UI_URL)  API docs: $(API_URL)/docs$(NC)"
 
 ##@ Information
 

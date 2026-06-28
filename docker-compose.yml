@@ -75,6 +75,18 @@ services:
       - edim-dde-ai-agents-network
     command: uvicorn API.src.main:app --host 0.0.0.0 --port 8000 --reload
 
+  ui:
+    build:
+      context: ./UI
+      dockerfile: Dockerfile
+    container_name: edim-dde-ai-agents-ui
+    ports:
+      - "${UI_PORT:-8080}:80"
+    depends_on:
+      - api
+    networks:
+      - edim-dde-ai-agents-network
+
   pgadmin:
     image: dpage/pgadmin4:latest
     container_name: edim-dde-ai-agents-pgadmin
