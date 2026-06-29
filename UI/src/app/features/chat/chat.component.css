@@ -12,8 +12,10 @@
 }
 
 .chat-bubble-user {
-  background: var(--bs-primary);
-  color: #fff;
+  background: transparent;
+  color: var(--bs-body-color);
+  padding-left: 5px;
+  padding-right: 5px;
 }
 
 .chat-bubble-assistant {

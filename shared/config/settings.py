@@ -25,15 +25,35 @@ class Settings(BaseSettings):
     azure_search_api_key: Optional[str] = None
     azure_search_index_name: Optional[str] = None
 
-    postgres_host: Optional[str] = None
-    postgres_port: int = 5432
-    postgres_user: Optional[str] = None
+    postgres_backend: str = "local"
+    postgres_host: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("POSTGRES_HOST", "PGHOST"),
+    )
+    postgres_port: int = Field(
+        default=5432, validation_alias=AliasChoices("POSTGRES_PORT", "PGPORT")
+    )
+    postgres_user: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices("POSTGRES_USER", "PGUSER"),
+    )
     postgres_password: Optional[str] = None
     postgres_database: Optional[str] = Field(
         default=None,
-        validation_alias=AliasChoices("POSTGRES_DATABASE", "POSTGRES_DB"),
+        validation_alias=AliasChoices("POSTGRES_DATABASE", "POSTGRES_DB", "PGDATABASE"),
     )
-    postgres_ssl_mode: str = "prefer"
+    postgres_ssl_mode: str = Field(
+        default="prefer",
+        validation_alias=AliasChoices("POSTGRES_SSL_MODE", "PGSSLMODE"),
+    )
+    postgres_lakebase_endpoint: Optional[str] = Field(
+        default=None,
+        validation_alias=AliasChoices(
+            "POSTGRES_LAKEBASE_ENDPOINT",
+            "LAKEBASE_ENDPOINT",
+            "ENDPOINT_NAME",
+        ),
+    )
 
     azure_sql_server: Optional[str] = None
     azure_sql_database: Optional[str] = None
@@ -47,6 +67,9 @@ class Settings(BaseSettings):
     azure_storage_container: Optional[str] = None
     azure_key_vault_name: Optional[str] = None
 
+    databricks_host: Optional[str] = None
+    databricks_client_id: Optional[str] = None
+    databricks_client_secret: Optional[str] = None
     databricks_server_hostname: Optional[str] = None
     databricks_http_path: Optional[str] = None
     databricks_token: Optional[str] = None
@@ -55,7 +78,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
     api_host: str = "0.0.0.0"
-    api_port: int = 8000
+    api_port: int = Field(
+        default=8000, validation_alias=AliasChoices("API_PORT", "DATABRICKS_APP_PORT")
+    )
     use_local_data: bool = True
     local_data_path: Optional[str] = None
 

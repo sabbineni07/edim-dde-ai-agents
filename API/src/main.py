@@ -84,7 +84,8 @@ async def lifespan(app: FastAPI):
             seed_platform_environments_if_empty()
             logger.info("database_initialized")
         except Exception as e:
-            logger.warning("database_initialization_failed", error=str(e))
+            logger.error("database_initialization_failed", error=str(e))
+            raise
     yield
     logger.info("application_shutdown")
 

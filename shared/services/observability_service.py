@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from shared.config.settings import settings
+from shared.database.availability import handle_database_error, require_database_import
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -32,6 +33,11 @@ class ObservabilityService:
     def __init__(self):
         self.enable_app_insights = settings.app_env != "development"
 
+    def _ensure_database(self) -> bool:
+        """Return False when Postgres is off and DB is optional; raise when required."""
+        require_database_import(DATABASE_AVAILABLE)
+        return DATABASE_AVAILABLE
+
     def log_token_usage(
         self,
         request_id: UUID,
@@ -57,7 +63,7 @@ class ObservabilityService:
                     cost_usd=cost_usd,
                     job_id=job_id,
                 )
-            if not DATABASE_AVAILABLE:
+            if not self._ensure_database():
                 return True
             session = get_database_session()
             try:
@@ -79,12 +85,12 @@ class ObservabilityService:
                 return True
             except Exception as e:
                 session.rollback()
-                logger.error("database_logging_error", error=str(e))
+                handle_database_error("database_logging_error", e)
                 return False
             finally:
                 session.close()
         except Exception as e:
-            logger.error("cost_logging_error", error=str(e))
+            handle_database_error("cost_logging_error", e)
             return False
 
     def log_recommendation(
@@ -104,7 +110,7 @@ class ObservabilityService:
         reason_codes: Optional[List] = None,
         job_run_ingest: Optional[Dict] = None,
     ) -> bool:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return True
         try:
             session = get_database_session()
@@ -140,12 +146,12 @@ class ObservabilityService:
                 return True
             except Exception as e:
                 session.rollback()
-                logger.error("recommendation_logging_error", error=str(e))
+                handle_database_error("recommendation_logging_error", e)
                 return False
             finally:
                 session.close()
         except Exception as e:
-            logger.error("recommendation_logging_error", error=str(e))
+            handle_database_error("recommendation_logging_error", e)
             return False
 
     def log_request(
@@ -162,7 +168,7 @@ class ObservabilityService:
         workspace_id: Optional[str] = None,
     ) -> bool:
         """Log an API request (creates a row). Call at request start with status='processing'; use update_request to set final status."""
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return True
         try:
             session = get_database_session()
@@ -184,12 +190,12 @@ class ObservabilityService:
                 return True
             except Exception as e:
                 session.rollback()
-                logger.error("request_logging_error", error=str(e))
+                handle_database_error("request_logging_error", e)
                 return False
             finally:
                 session.close()
         except Exception as e:
-            logger.error("request_logging_error", error=str(e))
+            handle_database_error("request_logging_error", e)
             return False
 
     def update_request(
@@ -201,7 +207,7 @@ class ObservabilityService:
         error_message: Optional[str] = None,
     ) -> bool:
         """Update an existing request_log row (e.g. from 'processing' to 'success' or 'error')."""
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return True
         try:
             from sqlalchemy import update
@@ -223,12 +229,12 @@ class ObservabilityService:
                 return True
             except Exception as e:
                 session.rollback()
-                logger.error("request_update_error", error=str(e))
+                handle_database_error("request_update_error", e)
                 return False
             finally:
                 session.close()
         except Exception as e:
-            logger.error("request_update_error", error=str(e))
+            handle_database_error("request_update_error", e)
             return False
 
     def _log_to_app_insights(
@@ -255,7 +261,7 @@ class ObservabilityService:
         )
 
     def get_daily_summary(self, date: date) -> Optional[Dict]:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return None
         try:
             session = get_database_session()
@@ -275,11 +281,11 @@ class ObservabilityService:
             finally:
                 session.close()
         except Exception as e:
-            logger.error("get_daily_summary_error", error=str(e))
+            handle_database_error("get_daily_summary_error", e)
             return None
 
     def get_cost_by_job(self, job_id: str, days: int = 30) -> List[Dict]:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return []
         try:
             session = get_database_session()
@@ -308,5 +314,5 @@ class ObservabilityService:
             finally:
                 session.close()
         except Exception as e:
-            logger.error("get_cost_by_job_error", error=str(e))
+            handle_database_error("get_cost_by_job_error", e)
             return []
