@@ -4,6 +4,7 @@ import pytest
 
 from shared.config.loader import reset_settings_cache
 from shared.database.connection import (
+    _generate_lakebase_database_credential,
     get_database_url,
     postgres_backend,
     reset_database_connection,
@@ -125,3 +126,49 @@ def test_get_database_url_lakebase_reads_pghost_alias(monkeypatch):
     assert "ep-apps.database.westus2.cloud.databricks.com" in url
     assert "sp-client-id%40apps" in url
     assert use_lakebase_oauth() is True
+
+
+def test_generate_lakebase_credential_uses_rest_when_postgres_attr_missing(monkeypatch):
+    class FakeApiClient:
+        def do(self, method, path, body=None):
+            assert method == "POST"
+            assert path == "/api/2.0/postgres/credentials"
+            assert body == {"endpoint": "projects/p/branches/b/endpoints/e"}
+            return {"token": "oauth-token", "expire_time": "2026-06-29T12:00:00Z"}
+
+    class FakeWorkspaceClient:
+        api_client = FakeApiClient()
+
+    monkeypatch.setattr(
+        "shared.database.connection._get_workspace_client",
+        lambda: FakeWorkspaceClient(),
+    )
+
+    token, expire_time = _generate_lakebase_database_credential("projects/p/branches/b/endpoints/e")
+
+    assert token == "oauth-token"
+    assert expire_time == "2026-06-29T12:00:00Z"
+
+
+def test_generate_lakebase_credential_prefers_client_postgres(monkeypatch):
+    class FakeCredential:
+        token = "sdk-token"
+        expire_time = None
+
+    class FakePostgres:
+        def generate_database_credential(self, endpoint):
+            assert endpoint == "projects/p/branches/b/endpoints/e"
+            return FakeCredential()
+
+    class FakeWorkspaceClient:
+        postgres = FakePostgres()
+
+    monkeypatch.setattr(
+        "shared.database.connection._get_workspace_client",
+        lambda: FakeWorkspaceClient(),
+    )
+
+    token, expire_time = _generate_lakebase_database_credential("projects/p/branches/b/endpoints/e")
+
+    assert token == "sdk-token"
+    assert expire_time is None

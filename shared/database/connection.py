@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import os
 import time
-from typing import Any, Optional
+from datetime import datetime
+from typing import Any, Optional, Tuple
 from urllib.parse import quote_plus
 
 from sqlalchemy import Engine, create_engine, event
@@ -80,6 +82,10 @@ def get_database_url() -> str:
     )
 
 
+def _is_databricks_app_runtime() -> bool:
+    return bool(os.environ.get("DATABRICKS_APP_NAME"))
+
+
 def _databricks_workspace_host() -> Optional[str]:
     host = (settings.databricks_host or "").strip()
     if host:
@@ -93,6 +99,9 @@ def _databricks_workspace_host() -> Optional[str]:
 def _get_workspace_client():
     from databricks.sdk import WorkspaceClient
 
+    if _is_databricks_app_runtime():
+        return WorkspaceClient()
+
     kwargs: dict[str, Any] = {}
     host = _databricks_workspace_host()
     if host:
@@ -105,6 +114,48 @@ def _get_workspace_client():
     return WorkspaceClient(**kwargs)
 
 
+def _parse_credential_expiry(expire_time: Any) -> float:
+    if expire_time is None:
+        return time.time() + 3600
+    if hasattr(expire_time, "timestamp"):
+        return float(expire_time.timestamp())
+    if isinstance(expire_time, str):
+        normalized = expire_time.replace("Z", "+00:00")
+        return datetime.fromisoformat(normalized).timestamp()
+    if hasattr(expire_time, "seconds"):
+        return float(expire_time.seconds)
+    return time.time() + 3600
+
+
+def _generate_lakebase_database_credential(endpoint: str) -> Tuple[str, Any]:
+    """Mint a Lakebase OAuth password token for the given endpoint path."""
+    client = _get_workspace_client()
+
+    postgres_api = getattr(client, "postgres", None)
+    if postgres_api is not None:
+        credential = postgres_api.generate_database_credential(endpoint=endpoint)
+        return credential.token, credential.expire_time
+
+    try:
+        from databricks.sdk.service.postgres import PostgresAPI
+
+        postgres_api = PostgresAPI(client.api_client)
+        credential = postgres_api.generate_database_credential(endpoint=endpoint)
+        return credential.token, credential.expire_time
+    except (ImportError, AttributeError) as exc:
+        logger.debug("lakebase_postgres_api_unavailable", error=str(exc))
+
+    logger.info("lakebase_oauth_using_rest_fallback", endpoint=endpoint)
+    response = client.api_client.do(
+        "POST",
+        "/api/2.0/postgres/credentials",
+        body={"endpoint": endpoint},
+    )
+    if not isinstance(response, dict) or not response.get("token"):
+        raise RuntimeError("Lakebase credential API returned no token")
+    return response["token"], response.get("expire_time")
+
+
 def _refresh_oauth_token() -> str:
     global _oauth_token, _oauth_token_expiry
 
@@ -115,18 +166,9 @@ def _refresh_oauth_token() -> str:
     if not endpoint:
         raise ValueError("POSTGRES_LAKEBASE_ENDPOINT is required for Lakebase OAuth")
 
-    client = _get_workspace_client()
-    credential = client.postgres.generate_database_credential(endpoint=endpoint)
-    _oauth_token = credential.token
-    expire_time = credential.expire_time
-    if expire_time is None:
-        _oauth_token_expiry = time.time() + 3600
-    elif hasattr(expire_time, "timestamp"):
-        _oauth_token_expiry = float(expire_time.timestamp())
-    elif hasattr(expire_time, "seconds"):
-        _oauth_token_expiry = float(expire_time.seconds)
-    else:
-        _oauth_token_expiry = time.time() + 3600
+    token, expire_time = _generate_lakebase_database_credential(endpoint)
+    _oauth_token = token
+    _oauth_token_expiry = _parse_credential_expiry(expire_time)
     logger.debug(
         "lakebase_oauth_token_refreshed",
         endpoint=endpoint,
