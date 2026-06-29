@@ -59,7 +59,7 @@ def _lakebase_postgres_url() -> str:
     user = quote_plus(settings.postgres_user)
     database = settings.postgres_database or "databricks_postgres"
     ssl_mode = settings.postgres_ssl_mode or "require"
-    return f"postgresql+psycopg://{user}:@{host}:{port}/{database}?sslmode={ssl_mode}"
+    return f"postgresql+psycopg2://{user}:@{host}:{port}/{database}?sslmode={ssl_mode}"
 
 
 def get_database_url() -> str:
@@ -199,4 +199,6 @@ def init_database():
         if inserted:
             logger.info("platform_environments_seeded_on_init", count=inserted)
     except Exception as e:
-        logger.warning("platform_environments_seed_skipped", error=str(e))
+        from shared.database.availability import handle_database_error
+
+        handle_database_error("platform_environments_seed_failed", e)

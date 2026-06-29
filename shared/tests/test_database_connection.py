@@ -75,13 +75,13 @@ def test_get_database_url_local_ssl_disabled(monkeypatch):
     assert "sslmode" not in url
 
 
-def test_get_database_url_lakebase_uses_psycopg_without_password(monkeypatch):
+def test_get_database_url_lakebase_uses_psycopg2_without_password(monkeypatch):
     _set_lakebase_postgres_env(monkeypatch)
     reset_settings_cache()
 
     url = get_database_url()
 
-    assert url.startswith("postgresql+psycopg://me%40example.com:@")
+    assert url.startswith("postgresql+psycopg2://me%40example.com:@")
     assert "ep-abc-123.databricks.com:5432/databricks_postgres" in url
     assert "sslmode=require" in url
     assert use_lakebase_oauth() is True

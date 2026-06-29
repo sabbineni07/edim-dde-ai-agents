@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
+from shared.database.availability import handle_database_error, require_database_import
 from shared.recommendation_lifecycle import (
     LIFECYCLE_APPROVED,
     LIFECYCLE_RECOMMENDED,
@@ -34,52 +35,68 @@ except Exception as e:
 class RecommendationLifecycleService:
     """Update adoption lifecycle on recommendation history rows."""
 
+    def _ensure_database(self) -> bool:
+        require_database_import(DATABASE_AVAILABLE)
+        return DATABASE_AVAILABLE
+
     def get_history(self, request_id: UUID) -> Optional[Any]:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return None
-        session = get_database_session()
         try:
-            return (
-                session.query(RecommendationHistory)
-                .filter(RecommendationHistory.request_id == request_id)
-                .first()
-            )
-        finally:
-            session.close()
+            session = get_database_session()
+            try:
+                return (
+                    session.query(RecommendationHistory)
+                    .filter(RecommendationHistory.request_id == request_id)
+                    .first()
+                )
+            finally:
+                session.close()
+        except Exception as e:
+            handle_database_error("get_recommendation_history_error", e)
+            return None
 
     def list_events(self, request_id: UUID) -> List[Dict[str, Any]]:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return []
-        session = get_database_session()
         try:
-            rows = (
-                session.query(RecommendationLifecycleEvent)
-                .filter(RecommendationLifecycleEvent.request_id == request_id)
-                .order_by(RecommendationLifecycleEvent.changed_at.asc())
-                .all()
-            )
-            return [self._event_to_dict(e) for e in rows]
-        finally:
-            session.close()
+            session = get_database_session()
+            try:
+                rows = (
+                    session.query(RecommendationLifecycleEvent)
+                    .filter(RecommendationLifecycleEvent.request_id == request_id)
+                    .order_by(RecommendationLifecycleEvent.changed_at.asc())
+                    .all()
+                )
+                return [self._event_to_dict(e) for e in rows]
+            finally:
+                session.close()
+        except Exception as e:
+            handle_database_error("list_lifecycle_events_error", e)
+            return []
 
     def list_events_for_requests(self, request_ids: List[UUID]) -> Dict[str, List[Dict[str, Any]]]:
-        if not DATABASE_AVAILABLE or not request_ids:
+        if not self._ensure_database() or not request_ids:
             return {}
-        session = get_database_session()
         try:
-            rows = (
-                session.query(RecommendationLifecycleEvent)
-                .filter(RecommendationLifecycleEvent.request_id.in_(request_ids))
-                .order_by(RecommendationLifecycleEvent.changed_at.asc())
-                .all()
-            )
-            out: Dict[str, List[Dict[str, Any]]] = {}
-            for row in rows:
-                key = str(row.request_id)
-                out.setdefault(key, []).append(self._event_to_dict(row))
-            return out
-        finally:
-            session.close()
+            session = get_database_session()
+            try:
+                rows = (
+                    session.query(RecommendationLifecycleEvent)
+                    .filter(RecommendationLifecycleEvent.request_id.in_(request_ids))
+                    .order_by(RecommendationLifecycleEvent.changed_at.asc())
+                    .all()
+                )
+                out: Dict[str, List[Dict[str, Any]]] = {}
+                for row in rows:
+                    key = str(row.request_id)
+                    out.setdefault(key, []).append(self._event_to_dict(row))
+                return out
+            finally:
+                session.close()
+        except Exception as e:
+            handle_database_error("list_lifecycle_events_for_requests_error", e)
+            return {}
 
     def transition(
         self,
@@ -88,7 +105,7 @@ class RecommendationLifecycleService:
         changed_by: str,
         notes: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             raise RuntimeError("Database not available for lifecycle updates")
 
         changed_by = (changed_by or "").strip()
@@ -199,7 +216,7 @@ class RecommendationLifecycleService:
         except_request_id: UUID,
     ) -> int:
         """Mark non-terminal prior recommendations for the same run as SUPERSEDED."""
-        if not DATABASE_AVAILABLE:
+        if not self._ensure_database():
             return 0
         session = get_database_session()
         count = 0
@@ -253,7 +270,7 @@ class RecommendationLifecycleService:
             return count
         except Exception as e:
             session.rollback()
-            logger.warning("supersede_prior_recommendations_failed", error=str(e))
+            handle_database_error("supersede_prior_recommendations_failed", e)
             return 0
         finally:
             session.close()
