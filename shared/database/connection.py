@@ -228,11 +228,36 @@ def reset_database_connection() -> None:
     _oauth_token_expiry = 0.0
 
 
+def _is_insufficient_privilege_error(exc: BaseException) -> bool:
+    text = str(exc).lower()
+    if "insufficientprivilege" in text or "permission denied for schema" in text:
+        return True
+    orig = getattr(exc, "orig", None)
+    if orig is not None and orig is not exc:
+        return _is_insufficient_privilege_error(orig)
+    return False
+
+
+def _lakebase_privilege_setup_hint() -> str:
+    user = settings.postgres_user or "<PGUSER / DATABRICKS_CLIENT_ID>"
+    return (
+        f"Lakebase OAuth role {user!r} cannot CREATE objects in schema public. "
+        "Run scripts/lakebase_bootstrap_grants.sql in the Lakebase SQL Editor "
+        "(as a database owner), replacing <DATABRICKS_CLIENT_ID> with the app "
+        "service principal client ID, then redeploy the app."
+    )
+
+
 def init_database():
     from shared.database.models import Base
 
     engine = get_database_engine()
-    Base.metadata.create_all(bind=engine)
+    try:
+        Base.metadata.create_all(bind=engine)
+    except Exception as exc:
+        if use_lakebase_oauth() and _is_insufficient_privilege_error(exc):
+            raise RuntimeError(_lakebase_privilege_setup_hint()) from exc
+        raise
     logger.info("database_tables_initialized")
     try:
         from shared.services.platform_environment_service import seed_platform_environments_if_empty

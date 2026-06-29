@@ -172,3 +172,25 @@ def test_generate_lakebase_credential_prefers_client_postgres(monkeypatch):
 
     assert token == "sdk-token"
     assert expire_time is None
+
+
+def test_lakebase_privilege_error_detected():
+    from shared.database.connection import _is_insufficient_privilege_error
+
+    err = RuntimeError(
+        "(psycopg2.errors.InsufficientPrivilege) permission denied for schema public"
+    )
+    assert _is_insufficient_privilege_error(err) is True
+
+
+def test_lakebase_privilege_hint_mentions_bootstrap_script(monkeypatch):
+    from shared.database.connection import _lakebase_privilege_setup_hint
+
+    _set_lakebase_postgres_env(monkeypatch)
+    monkeypatch.setenv("POSTGRES_USER", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee")
+    reset_settings_cache()
+
+    hint = _lakebase_privilege_setup_hint()
+
+    assert "lakebase_bootstrap_grants.sql" in hint
+    assert "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" in hint
