@@ -1,0 +1,29 @@
+command:
+  - uvicorn
+  - API.src.main:app
+  - --host
+  - 0.0.0.0
+  - --port
+  - "8000"
+
+env:
+  - name: PYTHONPATH
+    value: "."
+  - name: CONFIG_DIR
+    value: "config"
+  - name: USE_POSTGRES
+    value: "true"
+  - name: POSTGRES_BACKEND
+    value: "lakebase"
+  - name: POSTGRES_LAKEBASE_ENDPOINT
+    valueFrom: postgres
+  - name: USE_LOCAL_DATA
+    value: "true"
+  - name: LOCAL_DATA_PATH
+    value: "data/sample_job_metrics.csv"
+  - name: USE_MOCK_LLM
+    value: "true"
+  - name: APP_ENV
+    value: "production"
+  - name: LOG_LEVEL
+    value: "INFO"

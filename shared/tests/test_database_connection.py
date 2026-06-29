@@ -103,3 +103,25 @@ def test_get_database_url_lakebase_requires_host(monkeypatch):
 
     with pytest.raises(ValueError, match="POSTGRES_HOST"):
         get_database_url()
+
+
+def test_get_database_url_lakebase_reads_pghost_alias(monkeypatch):
+    _set_lakebase_postgres_env(monkeypatch)
+    monkeypatch.delenv("POSTGRES_HOST", raising=False)
+    monkeypatch.delenv("POSTGRES_USER", raising=False)
+    monkeypatch.setenv("PGHOST", "ep-apps.database.westus2.cloud.databricks.com")
+    monkeypatch.setenv("PGUSER", "sp-client-id@apps")
+    monkeypatch.setenv("PGDATABASE", "databricks_postgres")
+    monkeypatch.setenv("PGSSLMODE", "require")
+    monkeypatch.setenv(
+        "POSTGRES_LAKEBASE_ENDPOINT",
+        "projects/my-project/branches/production/endpoints/primary",
+    )
+    monkeypatch.setattr("shared.config.loader._env_file_usable", lambda: False)
+    reset_settings_cache()
+
+    url = get_database_url()
+
+    assert "ep-apps.database.westus2.cloud.databricks.com" in url
+    assert "sp-client-id%40apps" in url
+    assert use_lakebase_oauth() is True
