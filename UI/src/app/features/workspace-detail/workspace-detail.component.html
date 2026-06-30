@@ -11,24 +11,40 @@
   </div>
 </app-page-header>
 
-<div class="alert alert-info py-2 small mb-2">
-  <strong>How setup works</strong>
-  <ol class="mb-0 ps-3 mt-1">
-    <li>
-      <strong>Datasets</strong> — job metrics tables/CSV are managed in
-      <a routerLink="/app/datasets" class="alert-link">Datasets</a>.
-    </li>
-    <li>
-      <strong>Connections</strong> — SQL warehouses, LLM endpoints, and search indexes in
-      <a routerLink="/app/connections" class="alert-link">Connections</a>.
-    </li>
-    <li>
-      <strong>Agents</strong> — choose which AI agent runs on this workspace, which dataset it reads, and which LLM connection it uses.
-    </li>
-  </ol>
-  <span class="d-block mt-2 text-muted">
-    Authentication uses your Azure identity (<code>az login</code> or Managed Identity). No tokens or API keys are stored in this UI.
-  </span>
+<div class="setup-checklist card mb-2" *ngIf="environmentId">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+      <h2 class="setup-checklist-title mb-0">Setup checklist</h2>
+      <span class="badge" [class.bg-success]="setupComplete" [class.bg-secondary]="!setupComplete">
+        {{ setupComplete ? 'Complete' : 'In progress' }}
+      </span>
+    </div>
+    <ul class="setup-checklist-items list-unstyled mb-0">
+      <li class="setup-checklist-item" [class.done]="hasMetricsDataset">
+        <i class="bi setup-check-icon" [ngClass]="hasMetricsDataset ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>Metrics dataset</strong> — configure in
+          <a routerLink="/app/datasets">Datasets</a>
+        </span>
+      </li>
+      <li class="setup-checklist-item" [class.done]="hasLlmConnection">
+        <i class="bi setup-check-icon" [ngClass]="hasLlmConnection ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>LLM connection</strong> — add AI Foundry in
+          <a routerLink="/app/connections">Connections</a>
+        </span>
+      </li>
+      <li class="setup-checklist-item" [class.done]="hasInstalledAgent">
+        <i class="bi setup-check-icon" [ngClass]="hasInstalledAgent ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>Workspace agent</strong> — install below to run recommendations
+        </span>
+      </li>
+    </ul>
+    <p class="setup-checklist-note mb-0 mt-2">
+      Authentication uses Azure identity (<code>az login</code> or Managed Identity). No API keys are stored in this UI.
+    </p>
+  </div>
 </div>
 
 <div class="alert alert-warning small" *ngIf="!environmentId">

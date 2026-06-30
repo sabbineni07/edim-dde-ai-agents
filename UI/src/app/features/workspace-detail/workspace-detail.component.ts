@@ -78,6 +78,22 @@ export class WorkspaceDetailComponent implements OnInit {
     return `${this.workspaceId()} — install agents and bind connections${env}`;
   }
 
+  get hasMetricsDataset(): boolean {
+    return this.envDatasets.length > 0;
+  }
+
+  get hasLlmConnection(): boolean {
+    return this.envConnections.some((c) => c.connection_type === 'ai_foundry');
+  }
+
+  get hasInstalledAgent(): boolean {
+    return this.workspaceAgents.length > 0;
+  }
+
+  get setupComplete(): boolean {
+    return this.hasMetricsDataset && this.hasLlmConnection && this.hasInstalledAgent;
+  }
+
   ngOnInit(): void {
     this.environmentSelection
       .watchSelectedId()

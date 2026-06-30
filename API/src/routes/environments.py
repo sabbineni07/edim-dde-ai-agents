@@ -83,7 +83,7 @@ def _env_payload(env, user: str, *, admin_view: bool = False) -> Dict[str, Any]:
         metrics_connection_count=metrics_count,
         metrics_dataset_count=dataset_count,
         default_dataset_name=default_ds.name if default_ds else None,
-        default_dataset_ref=default_ds.table_ref if default_ds else env.table_fqn,
+        default_dataset_ref=default_ds.table_ref if default_ds else None,
     )
 
 

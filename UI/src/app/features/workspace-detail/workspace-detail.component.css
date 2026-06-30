@@ -1,3 +1,51 @@
+.setup-checklist {
+  border-color: var(--color-border-subtle);
+}
+
+.setup-checklist-title {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.setup-checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.setup-checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.setup-checklist-item.done {
+  color: var(--color-text);
+}
+
+.setup-check-icon {
+  flex-shrink: 0;
+  margin-top: 1px;
+  font-size: 1rem;
+  color: var(--color-border);
+}
+
+.setup-checklist-item.done .setup-check-icon {
+  color: var(--color-success);
+}
+
+.setup-check-text strong {
+  font-weight: 600;
+}
+
+.setup-checklist-note {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+}
+
 .nav-link {
   cursor: pointer;
 }

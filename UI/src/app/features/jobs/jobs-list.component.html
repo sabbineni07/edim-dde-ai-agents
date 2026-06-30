@@ -1,6 +1,7 @@
 <app-page-header
   title="Jobs"
   icon="list-task"
+  [subtitle]="jobsSubtitle"
   [breadcrumbs]="breadcrumbs"
 ></app-page-header>
 
@@ -84,15 +85,35 @@
 <app-loading-card *ngIf="(loading || workspacesLoading) && workspaceId" message="Loading jobs…" variant="skeleton" [skeletonRows]="6"></app-loading-card>
 
 <div class="card" *ngIf="!workspacesLoading && !workspaces.length && !error">
-  <div class="card-body text-center py-5 text-muted">No workspaces found. Ensure the data source has job metrics.</div>
+  <div class="card-body">
+    <app-empty-state
+      icon="building"
+      title="No workspaces found"
+      description="Configure a metrics dataset and Databricks connection, then browse from Workspaces."
+      actionLabel="Go to Connections"
+      actionLink="/app/connections"
+    ></app-empty-state>
+  </div>
 </div>
 
 <div class="card" *ngIf="!loading && workspaceId && !jobs.length && !error">
-  <div class="card-body text-center py-5 text-muted">No jobs in this workspace for the selected date range.</div>
+  <div class="card-body">
+    <app-empty-state
+      icon="briefcase"
+      title="No jobs in this range"
+      description="Try widening the date range or verify the metrics dataset has data for this workspace."
+    ></app-empty-state>
+  </div>
 </div>
 
 <div class="card" *ngIf="!loading && workspaceId && jobs.length && !filteredJobs.length && !error">
-  <div class="card-body text-center py-5 text-muted">No jobs match your filter.</div>
+  <div class="card-body">
+    <app-empty-state
+      icon="search"
+      title="No matching jobs"
+      description="Clear the search filter or adjust your search terms."
+    ></app-empty-state>
+  </div>
 </div>
 
 <div class="card jobs-list-card" *ngIf="!loading && workspaceId && filteredJobs.length > 0">
