@@ -9,7 +9,7 @@ export const routes: Routes = [
     loadComponent: () => import('./layout/shell/shell.component').then(m => m.ShellComponent),
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'workspaces', pathMatch: 'full' },
+      { path: '', redirectTo: 'connections', pathMatch: 'full' },
       { path: 'environments', loadComponent: () => import('./features/environments/environments.component').then(m => m.EnvironmentsComponent) },
       { path: 'admin/environments', loadComponent: () => import('./features/manage-environments/manage-environments.component').then(m => m.ManageEnvironmentsComponent) },
       { path: 'connections', loadComponent: () => import('./features/connections/connections.component').then(m => m.ConnectionsComponent) },
@@ -20,7 +20,7 @@ export const routes: Routes = [
       { path: 'jobs/:workspaceId/:jobId', loadComponent: () => import('./features/job-detail/job-detail.component').then(m => m.JobDetailComponent) },
       { path: 'chat', loadComponent: () => import('./features/chat/chat.component').then(m => m.ChatComponent) },
       { path: 'agents', loadComponent: () => import('./features/agents/agents.component').then(m => m.AgentsComponent) },
-      { path: '**', redirectTo: 'workspaces' },
+      { path: '**', redirectTo: 'connections' },
     ],
   },
   { path: '**', redirectTo: 'login' },

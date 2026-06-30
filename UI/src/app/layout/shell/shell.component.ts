@@ -39,7 +39,7 @@ export class ShellComponent implements OnInit {
     { label: 'Agents', route: '/app/agents', icon: 'robot', group: 'ai' },
     { label: 'Chat', route: '/app/chat', icon: 'chat-dots', group: 'ai' },
   ];
-  activeMenuItem: MenuItem = this.menuItems[2];
+  activeMenuItem: MenuItem = this.menuItems[0];
 
   constructor(
     private router: Router,
@@ -53,6 +53,8 @@ export class ShellComponent implements OnInit {
   ngOnInit(): void {
     const user = this.auth.currentUser;
     this.username = user?.displayName || user?.username || 'User';
+
+    this.environmentSelection.initializeForCurrentUser();
 
     this.api.getUiHints().subscribe({
       next: (hints) => {
@@ -164,7 +166,7 @@ export class ShellComponent implements OnInit {
   }
 
   logout(): void {
-    this.environmentSelection.clearSelected();
+    this.environmentSelection.clearSession();
     this.auth.logout();
     this.router.navigate(['/login']);
   }
