@@ -562,7 +562,7 @@ For repeatable deploys, add `databricks.yml` declaring app, Lakebase resource, s
 
 ---
 
-### Phase C — UI (future)
+### Phase C — UI
 
 The Angular UI uses `API_BASE = '/api'`. Options:
 
@@ -570,9 +570,11 @@ The Angular UI uses `API_BASE = '/api'`. Options:
 |--------|-------------|
 | **C1. API only** | Use Swagger (`/docs`) until UI is deployed |
 | **C2. Static UI from FastAPI** | Build `UI/dist`, mount with `StaticFiles` in `API.src.main` |
-| **C3. Second Databricks App** | Node/nginx app; configure proxy to API app URL |
+| **C3. Second Databricks App** | Node `server.js` + `UI/app.yaml`; proxy `/api` to API app URL |
 
-Recommended: **C2** for single URL inside workspace auth boundary.
+**Recommended for separate deploy cycles:** **C3** — see **[DATABRICKS_APPS_UI_DEPLOY.md](./DATABRICKS_APPS_UI_DEPLOY.md)** (step-by-step).
+
+**Recommended for single URL:** **C2** — one app, one deploy.
 
 ---
 

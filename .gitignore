@@ -12,6 +12,7 @@ env/
 .coverage
 htmlcov/
 dist/
+deploy/databricks-ui/
 build/
 *.egg-info/
 *.log
