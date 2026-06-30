@@ -72,12 +72,14 @@ def _env_payload(env, user: str, *, admin_view: bool = False) -> Dict[str, Any]:
     )
     local_dataset = _local_dataset_info(user) if env.source_type == "local_csv" else None
     metrics_count = len(_conn_svc.list_connections(environment_id=env.id, purpose="metrics"))
+    connection_count = len(_conn_svc.list_connections(environment_id=env.id))
     dataset_count = len(_dataset_svc.list_datasets(environment_id=env.id))
     default_ds = _dataset_svc.get_default_dataset(env.id)
     return env.to_dict(
         readiness=readiness,
         local_dataset=local_dataset,
         is_admin=admin_view,
+        connection_count=connection_count,
         metrics_connection_count=metrics_count,
         metrics_dataset_count=dataset_count,
         default_dataset_name=default_ds.name if default_ds else None,

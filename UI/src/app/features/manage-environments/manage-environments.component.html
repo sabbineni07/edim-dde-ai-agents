@@ -1,10 +1,11 @@
 <app-page-header
   title="Manage environments"
   icon="sliders"
-  subtitle="Enable, rename, and sort platform environments."
+  subtitle="Enable, rename, and sort platform environments. Configure connections and datasets on their respective pages."
 >
   <div actions class="page-actions">
-    <a routerLink="/app/workspaces" class="btn btn-outline-secondary btn-sm">Workspaces</a>
+    <a routerLink="/app/connections" class="btn btn-outline-secondary btn-sm">Connections</a>
+    <a routerLink="/app/datasets" class="btn btn-outline-secondary btn-sm">Datasets</a>
   </div>
 </app-page-header>
 
@@ -18,25 +19,51 @@
       <tr>
         <th>Name</th>
         <th>Tier</th>
-        <th>Source</th>
         <th>Order</th>
         <th>Enabled</th>
-        <th>Readiness</th>
+        <th>Setup</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
       <tr *ngFor="let env of environments">
-        <td>{{ env.display_name }}</td>
-        <td><span class="badge bg-secondary">{{ env.environment_tier }}</span></td>
-        <td><code class="small">{{ env.source_type }}</code></td>
+        <td>
+          <div class="fw-medium">{{ env.display_name }}</div>
+          <div class="small text-muted"><code>{{ env.id }}</code></div>
+        </td>
+        <td><span class="badge" [ngClass]="tierBadgeClass(env.environment_tier)">{{ env.environment_tier }}</span></td>
         <td>{{ env.sort_order }}</td>
         <td>
           <span class="badge" [class.bg-success]="env.is_enabled !== false" [class.bg-secondary]="env.is_enabled === false">
             {{ env.is_enabled !== false ? 'Yes' : 'No' }}
           </span>
         </td>
-        <td>{{ env.readiness }}</td>
+        <td class="setup-cell">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+            <span class="small text-muted">{{ setupSummary(env) }}</span>
+            <span class="badge" [ngClass]="setupStatusClass(env)">{{ setupStatusLabel(env) }}</span>
+          </div>
+          <div class="small mb-1" *ngIf="env.default_dataset_name">
+            Default dataset:
+            <button
+              type="button"
+              class="btn btn-link btn-sm p-0 align-baseline"
+              (click)="openConfigure(env, 'datasets')"
+            >
+              {{ env.default_dataset_name }}
+            </button>
+          </div>
+          <div class="small text-muted" *ngIf="!env.default_dataset_name">No default dataset</div>
+          <div class="setup-links">
+            <button type="button" class="btn btn-link btn-sm p-0" (click)="openConfigure(env, 'connections')">
+              Connections
+            </button>
+            <span class="text-muted mx-1">·</span>
+            <button type="button" class="btn btn-link btn-sm p-0" (click)="openConfigure(env, 'datasets')">
+              Datasets
+            </button>
+          </div>
+        </td>
         <td class="text-end">
           <button class="btn btn-outline-primary btn-sm" type="button" (click)="openEdit(env)">Edit</button>
         </td>
@@ -45,48 +72,135 @@
   </table>
 </div>
 
-<div class="modal fade show d-block" tabindex="-1" *ngIf="editing" style="background: rgba(0,0,0,0.4);">
-  <div class="modal-dialog">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Edit {{ editing.display_name }}</h5>
-        <button type="button" class="btn-close" (click)="closeEdit()"></button>
-      </div>
-      <div class="modal-body">
-        <div class="alert alert-warning" *ngIf="saveError">{{ saveError }}</div>
-        <div class="mb-3">
-          <label class="form-label">Display name</label>
-          <input class="form-control" [(ngModel)]="editForm.display_name" />
+<ng-container *ngIf="editing">
+  <div class="env-edit-backdrop" (click)="closeEdit()" aria-hidden="true"></div>
+  <div class="env-edit-modal card shadow-lg" role="dialog" aria-labelledby="envEditTitle" (click)="$event.stopPropagation()">
+    <div class="env-edit-header">
+      <div class="env-edit-preview">
+        <div class="env-icon-preview" aria-hidden="true">
+          <i class="bi" [ngClass]="'bi-' + (editForm.icon || 'cloud')"></i>
         </div>
-        <div class="mb-3">
-          <label class="form-label">Description</label>
-          <textarea class="form-control" rows="2" [(ngModel)]="editForm.description"></textarea>
-        </div>
-        <div class="row g-2">
-          <div class="col-6">
-            <label class="form-label">Tier</label>
-            <input class="form-control" [(ngModel)]="editForm.environment_tier" />
-          </div>
-          <div class="col-6">
-            <label class="form-label">Sort order</label>
-            <input class="form-control" type="number" [(ngModel)]="editForm.sort_order" />
+        <div class="env-edit-title-wrap">
+          <h2 class="env-edit-title" id="envEditTitle">{{ editForm.display_name || editing.display_name }}</h2>
+          <div class="env-edit-meta">
+            <code>{{ editing.id }}</code>
+            <span class="badge" [ngClass]="tierBadgeClass(editForm.environment_tier || editing.environment_tier)">
+              {{ editForm.environment_tier || editing.environment_tier }}
+            </span>
+            <span class="badge" [ngClass]="setupStatusClass(editing)">{{ setupStatusLabel(editing) }}</span>
           </div>
         </div>
-        <div class="mb-3 mt-2">
-          <label class="form-label">Icon (Bootstrap icon name)</label>
-          <input class="form-control" [(ngModel)]="editForm.icon" />
+      </div>
+      <button type="button" class="btn-close" aria-label="Close" (click)="closeEdit()"></button>
+    </div>
+
+    <div class="env-edit-body">
+      <div class="alert alert-warning py-2 mb-3" *ngIf="saveError">{{ saveError }}</div>
+
+      <div class="env-edit-setup-card">
+        <div class="env-edit-setup-stats">
+          <span>{{ setupSummary(editing) }}</span>
+          <span *ngIf="editing.default_dataset_name">
+            · Default: <strong>{{ editing.default_dataset_name }}</strong>
+          </span>
         </div>
-        <div class="form-check">
-          <input class="form-check-input" type="checkbox" id="enabled" [(ngModel)]="editForm.is_enabled" />
-          <label class="form-check-label" for="enabled">Enabled</label>
+        <div class="env-edit-setup-actions">
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="configureFromEdit('connections')">
+            <i class="bi bi-plug me-1"></i> Connections
+          </button>
+          <button type="button" class="btn btn-outline-secondary btn-sm" (click)="configureFromEdit('datasets')">
+            <i class="bi bi-table me-1"></i> Datasets
+          </button>
         </div>
       </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" (click)="closeEdit()">Cancel</button>
-        <button type="button" class="btn btn-primary" (click)="saveEdit()" [disabled]="saving">
-          {{ saving ? 'Saving…' : 'Save' }}
+
+      <div class="env-edit-section">
+        <h3 class="env-edit-section-title">Identity</h3>
+        <div class="mb-3">
+          <label class="form-label" for="envDisplayName">Display name</label>
+          <input id="envDisplayName" class="form-control form-control-sm" [(ngModel)]="editForm.display_name" />
+        </div>
+        <div class="mb-0">
+          <label class="form-label" for="envDescription">Description</label>
+          <textarea
+            id="envDescription"
+            class="form-control form-control-sm"
+            rows="2"
+            [(ngModel)]="editForm.description"
+          ></textarea>
+        </div>
+      </div>
+
+      <div class="env-edit-section">
+        <h3 class="env-edit-section-title">Display &amp; ordering</h3>
+        <div class="row g-3 mb-3">
+          <div class="col-sm-6">
+            <label class="form-label" for="envTier">Tier</label>
+            <select id="envTier" class="form-select form-select-sm" [(ngModel)]="editForm.environment_tier">
+              <option *ngFor="let tier of tierOptionsForEdit" [value]="tier">{{ tier }}</option>
+            </select>
+          </div>
+          <div class="col-sm-6">
+            <label class="form-label" for="envSortOrder">Sort order</label>
+            <input
+              id="envSortOrder"
+              class="form-control form-control-sm"
+              type="number"
+              min="0"
+              step="1"
+              [(ngModel)]="editForm.sort_order"
+            />
+            <div class="form-text">Lower numbers appear first in the environment list.</div>
+          </div>
+        </div>
+        <div>
+          <label class="form-label">Icon</label>
+          <div class="icon-picker" role="group" aria-label="Environment icon">
+            <button
+              type="button"
+              class="icon-picker-btn"
+              *ngFor="let icon of iconOptions"
+              [class.active]="editForm.icon === icon"
+              [title]="icon"
+              (click)="selectIcon(icon)"
+            >
+              <i class="bi" [ngClass]="'bi-' + icon"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="env-edit-enabled">
+        <div>
+          <div class="env-edit-enabled-label">Environment enabled</div>
+          <p class="env-edit-enabled-hint">
+            Disabled environments are hidden from the header picker and cannot be selected by users.
+          </p>
+        </div>
+        <div class="form-check form-switch mb-0">
+          <input
+            class="form-check-input"
+            type="checkbox"
+            role="switch"
+            id="envEnabled"
+            [(ngModel)]="editForm.is_enabled"
+          />
+          <label class="form-check-label visually-hidden" for="envEnabled">Enabled</label>
+        </div>
+      </div>
+    </div>
+
+    <div class="env-edit-footer">
+      <p class="env-edit-footer-note">Changes apply to all users immediately.</p>
+      <div class="env-edit-footer-actions">
+        <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeEdit()" [disabled]="saving">
+          Cancel
+        </button>
+        <button type="button" class="btn btn-primary btn-sm" (click)="saveEdit()" [disabled]="saving || !canSave">
+          <span *ngIf="saving" class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+          {{ saving ? 'Saving…' : 'Save changes' }}
         </button>
       </div>
     </div>
   </div>
-</div>
+</ng-container>

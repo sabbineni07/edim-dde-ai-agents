@@ -37,6 +37,7 @@ export interface PlatformEnvironment {
   default_metrics_connection_id?: string | null;
   default_llm_connection_id?: string | null;
   default_dataset_id?: string | null;
+  connection_count?: number;
   metrics_connection_count?: number;
   metrics_dataset_count?: number;
   default_dataset_name?: string | null;
