@@ -1,7 +1,7 @@
 <app-page-header
   title="Workspaces"
   icon="building"
-  [subtitle]="environmentName ? 'Environment: ' + environmentName : 'Select an environment from the header to browse workspaces.'"
+  [subtitle]="environmentName ? 'Browse Databricks workspaces in ' + environmentName : 'Select an environment from the header to browse workspaces.'"
 >
   <div subtitle-extra *ngIf="environmentName && metricsDatasetName" class="page-subtitle">
     Dataset: <strong>{{ metricsDatasetName }}</strong>
@@ -41,8 +41,19 @@
   </div>
 </app-page-header>
 
-<div class="alert alert-info py-2" *ngIf="!environmentId && !loading">
-  Select an environment from the header to browse workspaces.
+<div class="workspaces-context" *ngIf="environmentId && !loading">
+  <span class="context-chip">
+    <i class="bi bi-layers"></i>
+    {{ environmentName }}
+  </span>
+  <span class="context-chip" *ngIf="metricsDatasetName">
+    <i class="bi bi-table"></i>
+    {{ metricsDatasetName }}
+  </span>
+  <span class="context-chip" *ngIf="selectedConnectionName">
+    <i class="bi bi-plug"></i>
+    {{ selectedConnectionName }}
+  </span>
 </div>
 
 <div
@@ -57,42 +68,61 @@
   <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismissError()"></button>
 </div>
 
-<app-loading-card *ngIf="loading" message="Loading workspaces…"></app-loading-card>
+<app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="6"></app-loading-card>
+
+<div class="card" *ngIf="!environmentId && !loading">
+  <div class="card-body">
+    <app-empty-state
+      icon="layers"
+      title="No environment selected"
+      description="Choose an environment from the header dropdown to browse workspaces and jobs."
+    ></app-empty-state>
+  </div>
+</div>
 
 <div class="card" *ngIf="!loading && workspaces.length === 0 && !error && environmentId">
   <div class="card-body">
     <app-empty-state
       icon="building"
       title="No workspaces found"
-      description="Configure a Databricks connection, then refresh."
+      description="Configure a Databricks connection and metrics dataset, then refresh."
       actionLabel="Go to Connections"
       actionLink="/app/connections"
     ></app-empty-state>
   </div>
 </div>
 
-<div class="table-responsive card" *ngIf="!loading && workspaces.length > 0">
-  <table class="table table-hover table-compact table-sticky align-middle mb-0">
-    <thead>
-      <tr>
-        <th>Workspace</th>
-        <th>ID</th>
-        <th>Jobs</th>
-        <th></th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let w of workspaces">
-        <td>{{ w.workspace_name || w.workspace_id }}</td>
-        <td><code class="small">{{ w.workspace_id }}</code></td>
-        <td>{{ w.job_count }}</td>
-        <td class="text-nowrap text-end">
-          <button class="btn btn-primary btn-sm me-1" (click)="openJobs(w)">Jobs</button>
-          <button class="btn btn-outline-secondary btn-sm" (click)="openWorkspaceSetup(w)" title="Workspace settings">
-            <i class="bi bi-gear"></i>
-          </button>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+<div class="workspace-grid" *ngIf="!loading && workspaces.length > 0">
+  <div class="workspace-card card" *ngFor="let w of workspaces">
+    <div class="card-body d-flex flex-column">
+      <div class="workspace-card-header">
+        <div class="workspace-icon" aria-hidden="true">
+          <i class="bi bi-building"></i>
+        </div>
+        <div class="workspace-card-meta">
+          <h3 class="workspace-card-title">{{ w.workspace_name || w.workspace_id }}</h3>
+          <code class="workspace-card-id">{{ w.workspace_id }}</code>
+        </div>
+      </div>
+      <div class="workspace-card-stats">
+        <span class="workspace-stat">
+          <i class="bi bi-briefcase"></i>
+          <strong>{{ w.job_count }}</strong>
+          {{ w.job_count === 1 ? 'job' : 'jobs' }}
+        </span>
+        <span class="workspace-stat text-muted" *ngIf="w.last_seen_date">
+          <i class="bi bi-calendar3"></i>
+          Last seen {{ w.last_seen_date }}
+        </span>
+      </div>
+      <div class="workspace-card-actions mt-auto">
+        <button class="btn btn-primary btn-sm" type="button" (click)="openJobs(w)">
+          <i class="bi bi-briefcase me-1"></i> Jobs
+        </button>
+        <button class="btn btn-outline-secondary btn-sm" type="button" (click)="openWorkspaceSetup(w)" title="Workspace settings">
+          <i class="bi bi-gear me-1"></i> Setup
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
