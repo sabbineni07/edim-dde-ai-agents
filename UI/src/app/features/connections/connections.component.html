@@ -6,7 +6,7 @@
     : 'Select an environment from the header to manage connections.'"
 >
   <div actions class="page-actions">
-    <button class="btn btn-outline-secondary btn-sm" type="button" (click)="loadConnections(true)" [disabled]="loading || !environmentId">
+    <button class="btn btn-refresh btn-sm" type="button" (click)="loadConnections(true)" [disabled]="loading || !environmentId">
       <i class="bi bi-arrow-clockwise"></i> Refresh
     </button>
     <button *ngIf="isAdmin" class="btn btn-primary btn-sm" type="button" (click)="startCreate()" [disabled]="!environmentId">

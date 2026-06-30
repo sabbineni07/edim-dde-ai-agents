@@ -21,7 +21,7 @@
 }
 
 .context-chip .bi {
-  color: var(--navy-primary);
+  color: var(--page-icon-color);
   font-size: 0.75rem;
 }
 

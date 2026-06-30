@@ -16,21 +16,22 @@
 }
 
 .job-metrics-table .metric-label {
-  color: var(--bs-secondary-color);
+  color: var(--color-text-muted);
   font-weight: 500;
   white-space: nowrap;
 }
 
 .job-metrics-table td:not(.metric-label) {
   font-variant-numeric: tabular-nums;
+  color: var(--color-text);
 }
 
 .job-metrics-table thead th {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  color: var(--bs-secondary-color);
-  background: var(--bs-tertiary-bg, #f8f9fa);
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
 }
 
 .job-metrics-card .card-header {

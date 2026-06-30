@@ -10,7 +10,8 @@
 
 .empty-state-icon {
   font-size: 2rem;
-  opacity: 0.45;
+  color: var(--page-icon-color);
+  opacity: 0.65;
   display: block;
   margin-bottom: var(--space-3);
 }
