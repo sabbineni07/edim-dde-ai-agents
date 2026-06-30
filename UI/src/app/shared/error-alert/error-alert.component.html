@@ -1,0 +1,16 @@
+<div
+  *ngIf="message"
+  class="alert alert-dismissible fade show py-2"
+  [ngClass]="'alert-' + variant"
+  role="alert"
+>
+  {{ message }}
+  <ng-content></ng-content>
+  <button
+    *ngIf="dismissible"
+    type="button"
+    class="btn-close"
+    aria-label="Dismiss"
+    (click)="onDismiss()"
+  ></button>
+</div>
