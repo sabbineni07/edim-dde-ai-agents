@@ -156,7 +156,181 @@ The UI app **does not** need Lakebase, SQL warehouse, or secrets for a minimal d
 
 ## Step 5 — Upload source and deploy
 
-### Option 5a — Deploy script (recommended)
+### Option 5a — Databricks workspace UI (no CLI)
+
+You can create, configure, and deploy the UI app entirely from the **Databricks workspace UI**. You still **build the Angular bundle on your laptop** (Databricks does not run `ng build` for you unless you add CI).
+
+**Two UI paths:**
+
+| Path | Best for |
+|------|----------|
+| **A — Workspace folder** | First deploy, air-gapped upload, no Git integration |
+| **B — Git repository** | Repeatable deploys from a branch; optional auto-deploy on push |
+
+---
+
+#### Prepare the deploy bundle locally (both paths)
+
+Run once before every UI deploy:
+
+```bash
+cd UI
+npm ci
+npm run build
+```
+
+Then stage the runtime bundle (pick one):
+
+```bash
+# A — Use deploy script (requires databricks CLI; stops before sync if you Ctrl+C after "Preparing slim")
+API_PROXY_TARGET=https://your-api-app.databricksapps.com \
+WORKSPACE_USER=you@company.com \
+./scripts/deploy-databricks-ui.sh
+# Upload deploy/databricks-ui/ via Workspace Import instead of letting sync finish — or use Path B Git
+
+# B — Manual copy after build (no CLI)
+mkdir -p deploy/databricks-ui/dist/cluster-advisor-ui
+cp UI/server.js deploy/databricks-ui/
+cp -R UI/dist/cluster-advisor-ui/. deploy/databricks-ui/dist/cluster-advisor-ui/
+# Write app.yaml + minimal package.json — see scripts/deploy-databricks-ui.sh or UI/app.yaml
+cd deploy/databricks-ui && npm install --omit=dev
+```
+
+```text
+deploy/databricks-ui/
+  app.yaml          # command: node server.js + API_PROXY_TARGET
+  server.js
+  package.json      # express + http-proxy-middleware only
+  package-lock.json # optional; platform can npm install
+  node_modules/     # optional; run npm install --omit=dev here
+  dist/cluster-advisor-ui/
+    index.html
+    *.js, *.css
+```
+
+> **Upload this folder**, not raw `UI/src/` — the runtime needs **built** static files in `dist/`.
+
+---
+
+#### Path A — Deploy from a workspace folder (UI steps)
+
+**1. Upload files to Workspace**
+
+1. In Databricks: **Workspace** (left rail) → your user folder (e.g. `/Users/you@company.com/`).
+2. Create folder: `edim-dde-ai-agents-ui`.
+3. Upload the contents of `deploy/databricks-ui/`:
+   - **Workspace UI:** right-click folder → **Import** → upload files/folders.
+   - Or drag-and-drop if your workspace supports it.
+4. Confirm these files exist at the folder root:
+   - `app.yaml`, `server.js`, `package.json`
+   - `dist/cluster-advisor-ui/index.html`
+
+**2. Create the app**
+
+1. **Compute → Apps** (or app switcher → **Databricks Apps**).
+2. **+ Create app** → **Create a custom app**.
+3. **Name:** `edim-dde-ai-agents-ui`.
+4. Skip Git configuration if prompted (workspace-folder deploy).
+5. **Create** (do not deploy yet if you want to set permissions first).
+
+**3. Permissions (optional but recommended)**
+
+1. Open the app → **Permissions**.
+2. Grant your team **Can manage**; end users **Can use**.
+3. No Lakebase / SQL warehouse resources needed for the UI app.
+
+**4. Environment variables (optional alternative to `app.yaml`)**
+
+You can set `API_PROXY_TARGET` in the UI instead of editing `app.yaml`:
+
+1. App → **Environment** tab.
+2. **+ Add variable**:
+   - **Name:** `API_PROXY_TARGET`
+   - **Value:** `https://your-api-app-….databricksapps.com` (API App URL, no trailing slash)
+3. **+ Add variable:** `NODE_ENV` = `production` (optional if already in `app.yaml`).
+
+If both `app.yaml` and the Environment tab define the same variable, prefer one source to avoid confusion (Environment tab overrides are common — check app logs if proxy fails).
+
+**5. Deploy**
+
+1. On the app overview page, click **Deploy**.
+2. Choose **From workspace** (or **Workspace folder** — label varies by platform).
+3. Browse to `/Workspace/Users/you@company.com/edim-dde-ai-agents-ui` (your upload path).
+4. Click **Deploy** / **Select**.
+
+**6. Wait and verify**
+
+1. Status should become **Running** (2–5 minutes).
+2. Copy the **App URL** from the overview page.
+3. Open the URL → Insights Hub login page.
+4. App → **Logs** tab: look for  
+   `Insights Hub UI on 0.0.0.0:…; /api -> https://…`
+5. Browser DevTools → Network → `GET /api/environments` should return **200**.
+
+**7. Redeploy after UI changes**
+
+1. Locally: `npm run build` (and refresh `deploy/databricks-ui/`).
+2. Re-upload changed files to the same workspace folder (at minimum `dist/`).
+3. App overview → **Deploy** → same workspace folder → **Deploy** again.
+
+---
+
+#### Path B — Deploy from Git (UI steps)
+
+Use this when the repo (or a deploy branch) contains the **runtime bundle** including `dist/`.
+
+**Git caveat for this repo:** `dist/` is **gitignored**. A deploy from `UI/` on `main` **will fail** unless you either:
+
+- Push `dist/` on a **`deploy/ui`** branch (CI builds and commits artifacts), or
+- Use **Path A** (workspace upload), or
+- Use the **CLI script** locally.
+
+**1. Prepare Git (one-time)**
+
+1. Create branch `deploy/ui` (example).
+2. CI or manual step runs `npm ci && npm run build` and commits:
+   - `deploy/databricks-ui/` contents **or** `UI/` with `dist/` included on that branch only.
+3. Ensure `app.yaml` at the deploy root has a real `API_PROXY_TARGET` (or set via Environment tab).
+
+**2. Configure Git on the app**
+
+1. **Compute → Apps → + Create app** (or edit existing).
+2. **Configure Git:**
+   - **Repository URL:** your GitHub/GitLab/Bitbucket URL.
+   - **Provider:** GitHub / GitLab / etc.
+3. For **private repos:** app → note **Git credential** prompt → **Configure Git credential** for the app service principal ([Connect Git provider](https://docs.databricks.com/aws/en/repos/get-started)).
+
+**3. Deploy from Git**
+
+1. App overview → **Deploy**.
+2. Select **From Git**.
+3. **Git reference:** branch name (e.g. `deploy/ui`) or tag/commit SHA.
+4. **Source code path:** `deploy/databricks-ui` (or `UI` if bundle lives there).
+5. **Deploy**.
+
+**4. Optional — auto-deploy on push (Beta)**
+
+When creating/editing the app, enable **Auto deploy on push** for the branch (GitHub only in some workspaces). Each push to that branch triggers a redeploy.
+
+---
+
+#### UI vs CLI — same outcome
+
+| Step | CLI (`deploy-databricks-ui.sh`) | Databricks UI |
+|------|----------------------------------|---------------|
+| Build Angular | Script runs `npm run build` | You run locally |
+| Stage bundle | `deploy/databricks-ui/` | Same folder; upload or Git push |
+| Upload | `databricks sync` | Workspace Import or Git pull on deploy |
+| Create app | `CREATE_APP=1` or UI | **Create app** |
+| Set API URL | `API_PROXY_TARGET` / `app.yaml` | `app.yaml` or **Environment** tab |
+| Deploy | `databricks apps deploy` | **Deploy** button |
+| Logs | `databricks apps logs` | App → **Logs** tab |
+
+Reference: [Deploy a Databricks app](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/deploy) (workspace folder + Git).
+
+---
+
+### Option 5b — Deploy script (CLI)
 
 From the repo root:
 
@@ -178,7 +352,7 @@ The script will:
 
 **Optional env vars:** `UI_WS_PATH`, `DATABRICKS_UI_APP_NAME`, `DATABRICKS_PROFILE`, `SKIP_BUILD=1`, `SKIP_SYNC=1`, `DEPLOY_MODE=full` (sync entire `UI/` folder instead of slim bundle).
 
-### Option 5b — Manual `databricks sync`
+### Option 5c — Manual `databricks sync` (CLI)
 
 ```bash
 # From repo root — after UI build (Step 2)
@@ -196,7 +370,7 @@ databricks apps deploy edim-dde-ai-agents-ui --source-code-path "${UI_WS_PATH}"
 
 Wait until status is **Running** (2–5 minutes).
 
-### Option 5c — Git-connected app
+### Option 5d — Git-connected app (CLI or UI)
 
 1. App → **Settings → Git** → connect repo + branch.
 2. Set **Source code path** to `UI` (subfolder).
@@ -361,4 +535,5 @@ if UI_DIST.is_dir():
 
 | Date | Change |
 |------|--------|
+| 2026-06-30 | Databricks UI deploy path (workspace folder + Git) |
 | 2026-06-30 | Initial UI deploy guide; `UI/server.js`, `UI/app.yaml` |
