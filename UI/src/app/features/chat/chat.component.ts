@@ -13,6 +13,7 @@ import { EnvironmentSelectionService } from '../../core/services/environment-sel
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
 import { parseApiError } from '../../core/api-error.util';
 import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -23,7 +24,7 @@ interface Message {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MarkdownContentComponent],
+  imports: [CommonModule, FormsModule, RouterLink, MarkdownContentComponent, PageHeaderComponent],
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],
 })

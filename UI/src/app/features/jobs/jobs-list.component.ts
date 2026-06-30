@@ -10,11 +10,14 @@ import {
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-jobs-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent, LoadingCardComponent],
   templateUrl: './jobs-list.component.html',
   styleUrls: ['./jobs-list.component.css'],
 })
@@ -31,6 +34,10 @@ export class JobsListComponent implements OnInit {
   filterText = '';
   uiHints: UiHints | null = null;
   readonly pageSizeOptions = [10, 25, 50, 100];
+  readonly breadcrumbs: BreadcrumbItem[] = [
+    { label: 'Workspaces', link: '/app/workspaces' },
+    { label: 'Jobs' },
+  ];
   pageSize = 25;
   currentPage = 1;
   private forceNextLoad = false;

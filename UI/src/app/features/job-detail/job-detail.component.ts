@@ -19,16 +19,27 @@ import {
   buildLifecycleNoteContextFromRecommendation,
 } from '../../core/lifecycle-notes.util';
 import { parseApiError } from '../../core/api-error.util';
+import {
+  buildHistoryRecommendationExport,
+  buildLatestRecommendationExport,
+  copyTextToClipboard,
+  downloadJsonFile,
+  recommendationExportFilename,
+  recommendationExportJson,
+} from '../../core/recommendation-export.util';
 import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
+import { ToastService } from '../../core/services/toast.service';
 import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent],
+  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent, PageHeaderComponent],
   templateUrl: './job-detail.component.html',
   styleUrls: ['./job-detail.component.css'],
 })
@@ -74,13 +85,30 @@ export class JobDetailComponent implements OnInit {
     private route: ActivatedRoute,
     private auth: AuthService,
     private environmentSelection: EnvironmentSelectionService,
-    private browseCache: BrowseDataCacheService
+    private browseCache: BrowseDataCacheService,
+    private toast: ToastService
   ) {}
 
   /** Signed-in user for lifecycle audit (from login session). */
   get signedInUser(): string {
     const u = this.auth.currentUser;
     return (u?.displayName || u?.username || '').trim();
+  }
+
+  get breadcrumbs(): BreadcrumbItem[] {
+    return [
+      { label: 'Workspaces', link: '/app/workspaces' },
+      {
+        label: 'Jobs',
+        link: ['/app/jobs'],
+        queryParams: {
+          workspaceId: this.workspaceId(),
+          start_date: this.startDate,
+          end_date: this.endDate,
+        },
+      },
+      { label: this.jobId() },
+    ];
   }
 
   ngOnInit(): void {
@@ -306,6 +334,10 @@ export class JobDetailComponent implements OnInit {
         error: (err) => {
           this.loadingMetrics = false;
           this.metricsData = null;
+          const status = (err as { status?: number })?.status;
+          if (status === 404) {
+            return;
+          }
           this.reportLoadError(err, 'Failed to load job metrics');
         },
       });
@@ -454,6 +486,47 @@ export class JobDetailComponent implements OnInit {
     this.selectedClusterId = clusterId;
   }
 
+  /** Aggregated metrics dict when loaded. */
+  get jobAggregateMetrics(): Record<string, unknown> | null {
+    return this.metricsData?.metrics ?? null;
+  }
+
+  /** One-line context for the metrics card header. */
+  get metricsSummaryLine(): string {
+    const data = this.metricsData;
+    const m = data?.metrics;
+    if (!m) return '';
+    const parts: string[] = [];
+    const name = m['job_name'];
+    if (typeof name === 'string' && name.trim()) parts.push(name.trim());
+    const runs = m['total_runs'];
+    if (typeof runs === 'number') parts.push(`${runs} run${runs === 1 ? '' : 's'}`);
+    if (data?.start_date && data?.end_date) {
+      parts.push(`${data.start_date} – ${data.end_date}`);
+    }
+    const dur = m['avg_job_run_duration_seconds'];
+    if (typeof dur === 'number') parts.push(`avg run ${this.formatDuration(dur)}`);
+    return parts.join(' · ');
+  }
+
+  metricNumber(key: string): number | null {
+    const v = this.jobAggregateMetrics?.[key];
+    return typeof v === 'number' && !Number.isNaN(v) ? v : null;
+  }
+
+  metricText(key: string): string | null {
+    const v = this.jobAggregateMetrics?.[key];
+    if (v == null || v === '') return null;
+    return String(v);
+  }
+
+  formatDuration(seconds: number): string {
+    if (seconds < 60) return `${Math.round(seconds)}s`;
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.round(seconds % 60);
+    return secs ? `${mins}m ${secs}s` : `${mins}m`;
+  }
+
   private reportLoadError(err: unknown, fallback: string): void {
     if (this.loadError) return;
     this.loadError = parseApiError(err, fallback);
@@ -536,5 +609,55 @@ export class JobDetailComponent implements OnInit {
     const comp = this.lastResult?.comparison as Record<string, unknown> | undefined;
     const inner = comp?.['recommended_configuration'] as Record<string, unknown> | undefined;
     return inner ?? null;
+  }
+
+  async copyLatestRecommendation(): Promise<void> {
+    if (!this.lastResult) return;
+    await this.copyRecommendationPayload(
+      buildLatestRecommendationExport(this.lastResult, {
+        workspaceId: this.workspaceId(),
+        jobId: this.jobId(),
+      })
+    );
+  }
+
+  exportLatestRecommendation(): void {
+    if (!this.lastResult) return;
+    this.exportRecommendationPayload(
+      buildLatestRecommendationExport(this.lastResult, {
+        workspaceId: this.workspaceId(),
+        jobId: this.jobId(),
+      })
+    );
+  }
+
+  async copyHistoryRecommendation(rec: RecommendationHistoryEntry): Promise<void> {
+    await this.copyRecommendationPayload(buildHistoryRecommendationExport(rec));
+  }
+
+  exportHistoryRecommendation(rec: RecommendationHistoryEntry): void {
+    this.exportRecommendationPayload(buildHistoryRecommendationExport(rec));
+  }
+
+  private async copyRecommendationPayload(
+    payload: ReturnType<typeof buildLatestRecommendationExport>
+  ): Promise<void> {
+    try {
+      await copyTextToClipboard(recommendationExportJson(payload));
+      this.toast.success('Recommendation copied to clipboard');
+    } catch {
+      this.toast.error('Could not copy to clipboard');
+    }
+  }
+
+  private exportRecommendationPayload(
+    payload: ReturnType<typeof buildLatestRecommendationExport>
+  ): void {
+    try {
+      downloadJsonFile(recommendationExportFilename(payload), payload);
+      this.toast.success('Recommendation exported');
+    } catch {
+      this.toast.error('Could not export recommendation');
+    }
   }
 }

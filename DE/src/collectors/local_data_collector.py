@@ -15,6 +15,19 @@ logger = get_logger(__name__)
 _READ_CSV_KWARGS = {"encoding": "utf-8-sig"}
 
 
+def _json_safe_value(value: Any) -> Any:
+    """Convert pandas/numpy scalars to native Python types for JSON/API responses."""
+    if value is None:
+        return None
+    if isinstance(value, (str, bool, int, float)):
+        return value
+    if hasattr(value, "item"):
+        return value.item()
+    if pd.isna(value):
+        return None
+    return value
+
+
 class LocalDataCollector:
     """Collects data from local CSV files for local development and testing."""
 
@@ -653,8 +666,8 @@ class LocalDataCollector:
             )
             for key in optional_map:
                 if key in df_filtered.columns and pd.notna(first.get(key)):
-                    result[key] = first.get(key)
-            return result
+                    result[key] = _json_safe_value(first.get(key))
+            return {k: _json_safe_value(v) for k, v in result.items()}
         except Exception as e:
             logger.error(
                 "get_job_metrics_from_csv_error",

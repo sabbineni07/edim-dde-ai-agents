@@ -17,11 +17,14 @@ import {
 import { parseApiError } from '../../core/api-error.util';
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
+import { ToastService } from '../../core/services/toast.service';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-workspace-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent],
   templateUrl: './workspace-detail.component.html',
   styleUrls: ['./workspace-detail.component.css'],
 })
@@ -43,7 +46,6 @@ export class WorkspaceDetailComponent implements OnInit {
   loadingConnections = true;
   loadingAgents = true;
   saving = false;
-  message = '';
   error = '';
 
   showAgentWizard = false;
@@ -60,8 +62,21 @@ export class WorkspaceDetailComponent implements OnInit {
     private api: ApiService,
     private router: Router,
     private workspaceSelection: WorkspaceSelectionService,
-    private environmentSelection: EnvironmentSelectionService
+    private environmentSelection: EnvironmentSelectionService,
+    private toast: ToastService
   ) {}
+
+  get breadcrumbs(): BreadcrumbItem[] {
+    return [
+      { label: 'Workspaces', link: '/app/workspaces' },
+      { label: this.workspaceName || this.workspaceId() },
+    ];
+  }
+
+  get workspaceSubtitle(): string {
+    const env = this.environmentDisplayName ? ` for ${this.environmentDisplayName}` : '';
+    return `${this.workspaceId()} — install agents and bind connections${env}`;
+  }
 
   ngOnInit(): void {
     this.environmentSelection
@@ -182,7 +197,6 @@ export class WorkspaceDetailComponent implements OnInit {
     this.wizardManifest = null;
     this.wizardEditableFields = [];
     this.error = '';
-    this.message = '';
     this.applyDefaultWizardAgentId();
   }
 
@@ -196,7 +210,6 @@ export class WorkspaceDetailComponent implements OnInit {
     this.wizardManifest = null;
     this.wizardEditableFields = [];
     this.error = '';
-    this.message = '';
     this.loadWizardManifest();
     this.loadWizardEditableFields();
   }
@@ -422,9 +435,9 @@ export class WorkspaceDetailComponent implements OnInit {
     req.subscribe({
       next: () => {
         this.saving = false;
-        this.message = this.editingAgentId
-          ? 'Agent configuration updated.'
-          : 'Agent installed on workspace.';
+        this.toast.success(
+          this.editingAgentId ? 'Agent configuration updated.' : 'Agent installed on workspace.'
+        );
         this.cancelAgentWizard();
         this.refresh();
       },
@@ -442,7 +455,7 @@ export class WorkspaceDetailComponent implements OnInit {
     if (!confirm(`Remove "${wa.name}" from this workspace?`)) return;
     this.api.deleteWorkspaceAgent(this.workspaceId(), wa.id).subscribe({
       next: () => {
-        this.message = 'Workspace agent removed.';
+        this.toast.success('Workspace agent removed.');
         this.refresh();
       },
       error: (err) => {

@@ -9,11 +9,13 @@ import {
 } from '../../services/api.service';
 import { AuthService } from '../../core/services/auth.service';
 import { parseApiError } from '../../core/api-error.util';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
 
 @Component({
   selector: 'app-manage-environments',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PageHeaderComponent, LoadingCardComponent],
   templateUrl: './manage-environments.component.html',
   styleUrls: ['./manage-environments.component.css'],
 })

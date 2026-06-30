@@ -1,21 +1,19 @@
-<div class="page-header d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <h2 class="mb-0"><i class="bi bi-sliders me-2"></i>Manage environments</h2>
-    <p class="text-muted small mb-0">Enable, rename, and sort platform environments. Configure data sources in <a routerLink="/app/connections">Connections</a>.</p>
+<app-page-header
+  title="Manage environments"
+  icon="sliders"
+  subtitle="Enable, rename, and sort platform environments."
+>
+  <div actions class="page-actions">
+    <a routerLink="/app/workspaces" class="btn btn-outline-secondary btn-sm">Workspaces</a>
   </div>
-  <a routerLink="/app/workspaces" class="btn btn-outline-secondary btn-sm">Back to workspaces</a>
-</div>
+</app-page-header>
 
-<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
 
-<div class="card" *ngIf="loading">
-  <div class="card-body text-center py-4">
-    <div class="spinner-border text-primary spinner-border-sm"></div>
-  </div>
-</div>
+<app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="5"></app-loading-card>
 
 <div class="table-responsive" *ngIf="!loading">
-  <table class="table table-hover align-middle">
+  <table class="table table-hover table-compact align-middle">
     <thead class="table-light">
       <tr>
         <th>Name</th>

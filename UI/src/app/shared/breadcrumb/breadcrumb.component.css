@@ -1,0 +1,40 @@
+.app-breadcrumb {
+  margin-bottom: var(--space-2);
+}
+
+.breadcrumb-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: var(--text-xs);
+}
+
+.breadcrumb-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.breadcrumb-link {
+  color: var(--color-text-muted);
+  text-decoration: none;
+}
+
+.breadcrumb-link:hover {
+  color: var(--navy-accent);
+  text-decoration: underline;
+}
+
+.breadcrumb-current {
+  color: var(--color-text);
+  font-weight: 500;
+}
+
+.breadcrumb-sep {
+  color: var(--color-text-muted);
+  user-select: none;
+}

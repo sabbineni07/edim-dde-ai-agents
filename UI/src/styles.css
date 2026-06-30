@@ -1,13 +1,90 @@
-:root {
+/* ── NFCU design tokens (compact density) ── */
+:root,
+[data-theme='light'] {
   --navy-primary: #003087;
-  --navy-secondary: #004C97;
-  --navy-dark: #001F5C;
-  --navy-accent: #0066CC;
-  --navy-text: #1A1A1A;
-  --navy-text-light: #666666;
-  --navy-bg: #F5F5F5;
-  --navy-white: #FFFFFF;
-  --navy-border: #CCCCCC;
+  --navy-secondary: #004c97;
+  --navy-dark: #001f5c;
+  --navy-accent: #0066cc;
+
+  --color-text: #1a1a1a;
+  --color-text-muted: #5c5c5c;
+  --color-text-inverse: #ffffff;
+
+  --color-surface-page: #eceef1;
+  --color-surface-card: #ffffff;
+  --color-surface-elevated: #ffffff;
+  --color-surface-muted: #f4f5f7;
+  --color-border: #d0d4da;
+  --color-border-subtle: #e4e7ec;
+
+  --color-success: #198754;
+  --color-warning: #b8860b;
+  --color-danger: #c41e3a;
+  --color-info: #0066cc;
+
+  --bs-primary: var(--navy-primary);
+  --bs-primary-rgb: 0, 48, 135;
+  --bs-link-color: var(--navy-accent);
+  --bs-link-hover-color: var(--navy-secondary);
+  --bs-body-bg: var(--color-surface-page);
+  --bs-body-color: var(--color-text);
+  --bs-border-color: var(--color-border);
+
+  --space-1: 0.125rem;
+  --space-2: 0.25rem;
+  --space-3: 0.375rem;
+  --space-4: 0.5rem;
+  --space-5: 0.75rem;
+  --space-6: 1rem;
+
+  --text-xs: 0.6875rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+  --text-md: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+
+  --radius-sm: 0.2rem;
+  --radius-md: 0.35rem;
+  --radius-lg: 0.5rem;
+
+  --shadow-sm: 0 1px 2px rgba(0, 31, 92, 0.06);
+  --shadow-md: 0 2px 6px rgba(0, 31, 92, 0.1);
+  --shadow-lg: 0 4px 12px rgba(0, 31, 92, 0.12);
+
+  --transition-fast: 120ms ease;
+  --transition-base: 200ms ease;
+
+  --shell-header-height: 2.5rem;
+  --sidebar-width: 11.5rem;
+  --sidebar-rail-width: 3.25rem;
+  --content-padding-x: 0.625rem;
+  --content-padding-y: 0.5rem;
+  --page-gap: 0.5rem;
+
+  --table-cell-py: 0.3rem;
+  --table-cell-px: 0.5rem;
+  --card-body-py: 0.5rem;
+  --card-body-px: 0.625rem;
+}
+
+[data-theme='dark'] {
+  --color-text: #e8eaed;
+  --color-text-muted: #a8adb8;
+  --color-text-inverse: #ffffff;
+
+  --color-surface-page: #0f1419;
+  --color-surface-card: #1a2332;
+  --color-surface-elevated: #243044;
+  --color-surface-muted: #151d28;
+  --color-border: #2d3a4d;
+  --color-border-subtle: #243044;
+
+  --bs-body-bg: var(--color-surface-page);
+  --bs-body-color: var(--color-text);
+  --bs-border-color: var(--color-border);
+  --bs-link-color: #6eb3ff;
+  --bs-link-hover-color: #9ccaff;
 }
 
 * {
@@ -16,21 +93,244 @@
   box-sizing: border-box;
 }
 
+html {
+  font-size: 14px;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  color: var(--navy-text);
-  background-color: var(--navy-bg);
+  font-size: var(--text-base);
+  line-height: 1.4;
+  color: var(--color-text);
+  background-color: var(--color-surface-page);
+}
+
+/* ── Bootstrap overrides (compact) ── */
+.btn {
+  --bs-btn-padding-y: 0.25rem;
+  --bs-btn-padding-x: 0.5rem;
+  --bs-btn-font-size: var(--text-sm);
+  --bs-btn-border-radius: var(--radius-sm);
+}
+
+.btn-sm {
+  --bs-btn-padding-y: 0.15rem;
+  --bs-btn-padding-x: 0.4rem;
+  --bs-btn-font-size: var(--text-xs);
 }
 
 .btn-primary {
   background-color: var(--navy-primary);
   border-color: var(--navy-primary);
 }
-.btn-primary:hover {
+.btn-primary:hover,
+.btn-primary:focus {
   background-color: var(--navy-secondary);
   border-color: var(--navy-secondary);
 }
-.form-control:focus {
+
+.form-control,
+.form-select {
+  font-size: var(--text-sm);
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-card);
+  color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.form-control:focus,
+.form-select:focus {
   border-color: var(--navy-accent);
-  box-shadow: 0 0 0 0.2rem rgba(0, 102, 204, 0.25);
+  box-shadow: 0 0 0 0.15rem rgba(0, 102, 204, 0.2);
+}
+
+.form-control-sm,
+.form-select-sm {
+  font-size: var(--text-xs);
+  padding: 0.15rem 0.4rem;
+}
+
+.form-label {
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-2);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.form-text {
+  font-size: var(--text-xs);
+  margin-top: var(--space-1);
+}
+
+.card {
+  border-color: var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+  background-color: var(--color-surface-card);
+}
+
+.card-header {
+  padding: var(--space-3) var(--card-body-px);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  background-color: var(--color-surface-muted);
+  border-bottom-color: var(--color-border-subtle);
+}
+
+.card-body {
+  padding: var(--card-body-py) var(--card-body-px);
+}
+
+.card-footer {
+  padding: var(--space-3) var(--card-body-px);
+  background-color: var(--color-surface-card);
+  border-top-color: var(--color-border-subtle);
+}
+
+.alert {
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
+  margin-bottom: var(--page-gap);
+  border-radius: var(--radius-sm);
+}
+
+.badge {
+  font-size: var(--text-xs);
+  font-weight: 600;
+}
+
+.table {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--color-text);
+  --bs-table-hover-bg: rgba(0, 102, 204, 0.05);
+  font-size: var(--text-sm);
+  margin-bottom: 0;
+}
+
+.table > :not(caption) > * > * {
+  padding: var(--table-cell-py) var(--table-cell-px);
+}
+
+.table thead th {
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  background-color: var(--color-surface-muted);
+  border-bottom-color: var(--color-border);
+  white-space: nowrap;
+}
+
+.table-compact > :not(caption) > * > * {
+  padding: 0.2rem 0.4rem;
+}
+
+.table-sticky thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background-color: var(--color-surface-muted);
+}
+
+.table-hover > tbody > tr:hover > * {
+  background-color: rgba(0, 102, 204, 0.06);
+}
+
+[data-theme='dark'] .table-hover > tbody > tr:hover > * {
+  background-color: rgba(110, 179, 255, 0.08);
+}
+
+.dropdown-menu {
+  font-size: var(--text-sm);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
+  background-color: var(--color-surface-card);
+  border-color: var(--color-border);
+}
+
+.dropdown-item {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
+
+.pagination {
+  --bs-pagination-padding-y: 0.2rem;
+  --bs-pagination-padding-x: 0.45rem;
+  --bs-pagination-font-size: var(--text-xs);
+}
+
+.spinner-border-sm {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+:focus-visible {
+  outline: 2px solid var(--navy-accent);
+  outline-offset: 1px;
+}
+
+/* ── App layout utilities ── */
+.page-header {
+  margin-bottom: var(--page-gap);
+}
+
+.page-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  line-height: 1.25;
+  margin: 0;
+  color: var(--color-text);
+}
+
+.page-subtitle {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin: var(--space-1) 0 0;
+  line-height: 1.35;
+}
+
+.page-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.skeleton-line {
+  height: 0.65rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-border-subtle);
+  animation: skeleton-pulse 1.2s ease-in-out infinite;
+}
+
+/* ── ngx-toastr compact ── */
+.toast-container .ngx-toastr {
+  font-size: var(--text-sm);
+  padding: 0.5rem 0.75rem 0.5rem 2.5rem;
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md);
 }

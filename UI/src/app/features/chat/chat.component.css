@@ -1,5 +1,10 @@
+.chat-card-body {
+  min-height: calc(100vh - 14rem);
+}
+
 .chat-card .chat-messages {
-  max-height: 360px;
+  max-height: none;
+  min-height: 12rem;
   scroll-behavior: smooth;
 }
 
@@ -7,20 +12,19 @@
   display: inline-block;
   max-width: 92%;
   text-align: left;
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+  font-size: var(--text-sm);
 }
 
 .chat-bubble-user {
-  background: transparent;
-  color: var(--bs-body-color);
-  padding-left: 5px;
-  padding-right: 5px;
+  background: rgba(0, 48, 135, 0.08);
+  color: var(--color-text);
 }
 
 .chat-bubble-assistant {
-  background: var(--bs-light);
-  color: var(--bs-body-color);
+  background: var(--color-surface-muted);
+  color: var(--color-text);
 }
 
 .chat-message.text-end .chat-bubble {
@@ -28,10 +32,11 @@
 }
 
 .chat-sources li {
-  font-size: 0.85rem;
+  font-size: var(--text-xs);
   line-height: 1.35;
 }
 
 .chat-thinking {
-  padding-bottom: 0.25rem;
+  padding-bottom: var(--space-1);
+  font-size: var(--text-sm);
 }

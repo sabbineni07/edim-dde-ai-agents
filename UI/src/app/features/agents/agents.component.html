@@ -1,22 +1,26 @@
-<div class="page-header mb-4">
-  <h2 class="mb-0"><i class="bi bi-robot me-2"></i>AI Agents</h2>
-  <p class="text-muted small mb-0 mt-1">
-    Agent catalog. Install agents per workspace with connections — open
-    <a routerLink="/app/workspaces">Workspaces</a> → <strong>Setup</strong>.
-  </p>
-</div>
+<app-page-header
+  title="AI Agents"
+  icon="robot"
+  subtitle="Agent catalog. Install agents per workspace via Workspaces → Settings."
+></app-page-header>
 
-<div *ngIf="loading" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>
+<app-loading-card *ngIf="loading"></app-loading-card>
 
-<div class="row g-3" *ngIf="!loading">
+<div class="row g-2" *ngIf="!loading">
   <div class="col-md-6 col-lg-4" *ngFor="let a of agents">
     <div class="card h-100">
       <div class="card-body">
-        <h5 class="card-title">{{ a.name }}</h5>
-        <p class="card-text small text-muted mb-2"><code>{{ a.agent_id }}</code></p>
-        <p class="card-text small">{{ a.description }}</p>
+        <h3 class="h6 mb-1">{{ a.name }}</h3>
+        <p class="small text-muted mb-1"><code>{{ a.agent_id }}</code></p>
+        <p class="small mb-2">{{ a.description }}</p>
         <a class="btn btn-primary btn-sm" routerLink="/app/workspaces">Choose workspace</a>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && !agents.length">
+  <div class="card-body">
+    <app-empty-state icon="robot" title="No agents in catalog" description="Agents will appear when registered on the platform."></app-empty-state>
   </div>
 </div>

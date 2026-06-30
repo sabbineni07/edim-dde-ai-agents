@@ -12,11 +12,24 @@ import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
 import { parseApiError } from '../../core/api-error.util';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { StatusBadgeComponent } from '../../shared/status-badge/status-badge.component';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-connections',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    LoadingCardComponent,
+    StatusBadgeComponent,
+  ],
   templateUrl: './connections.component.html',
   styleUrls: ['./connections.component.css'],
 })
@@ -28,7 +41,6 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
   connectionTypes: ConnectionTypeMeta[] = [];
   loading = true;
   error = '';
-  message = '';
 
   showForm = false;
   editingId: string | null = null;
@@ -43,7 +55,8 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     private api: ApiService,
     private auth: AuthService,
     private environmentSelection: EnvironmentSelectionService,
-    private connectionCache: EnvironmentConnectionCacheService
+    private connectionCache: EnvironmentConnectionCacheService,
+    private toast: ToastService
   ) {}
 
   get isAdmin(): boolean {
@@ -125,7 +138,6 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     this.formType = 'databricks';
     this.formConfig = {};
     this.formSetDefault = false;
-    this.message = '';
     this.error = '';
   }
 
@@ -141,7 +153,6 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
       if (v != null) this.formConfig[f.key] = String(v);
     }
     this.formSetDefault = c.is_default;
-    this.message = '';
     this.error = '';
   }
 
@@ -183,7 +194,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
           next: () => {
             this.saving = false;
             this.showForm = false;
-            this.message = 'Connection updated.';
+            this.toast.success('Connection updated.');
             this.afterMutation();
           },
           error: (err) => {
@@ -204,7 +215,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         next: () => {
           this.saving = false;
           this.showForm = false;
-          this.message = 'Connection created.';
+          this.toast.success('Connection created.');
           this.afterMutation();
         },
         error: (err) => {
@@ -218,7 +229,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     if (!this.isAdmin) return;
     this.api.setDefaultEnvironmentConnection(this.environmentId, c.id).subscribe({
       next: () => {
-        this.message = `"${c.name}" set as default.`;
+        this.toast.success(`"${c.name}" set as default.`);
         this.afterMutation();
       },
       error: (err) => {
@@ -231,7 +242,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     if (!this.isAdmin || !confirm(`Delete connection "${c.name}"?`)) return;
     this.api.deleteEnvironmentConnection(this.environmentId, c.id).subscribe({
       next: () => {
-        this.message = 'Connection deleted.';
+        this.toast.success('Connection deleted.');
         if (this.environmentSelection.getSelectedConnectionId() === c.id) {
           this.environmentSelection.setSelectedConnection(null);
         }

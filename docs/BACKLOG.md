@@ -29,6 +29,8 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 ## Product / UX
 
+**UI/UX modernization (Options A → B → C):** see [BACKLOG_UI_UX_MODERNIZATION.md](./BACKLOG_UI_UX_MODERNIZATION.md) for phased design, review gates, and progress (Option A Phases 1–4 not started).
+
 Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 - [x] **Phase 5.0–5.1** — Run-centric UI, structured recommend response
@@ -60,4 +62,4 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: 2026-06-25 — added AI Foundry upgrade backlog link.*
+*Last updated: 2026-06-29 — added UI/UX modernization backlog link.*

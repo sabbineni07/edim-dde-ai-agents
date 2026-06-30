@@ -1,36 +1,31 @@
-<div class="page-header d-flex justify-content-between align-items-center flex-wrap gap-2 mb-4">
-  <div>
-    <h2 class="mb-0"><i class="bi bi-plug me-2"></i>Connections</h2>
-    <p class="text-muted small mb-0" *ngIf="environmentName">
-      Environment: <strong>{{ environmentName }}</strong> — use the header to switch environments.
-    </p>
-    <p class="text-muted small mb-0" *ngIf="!environmentName">
-      Select an environment from the header to manage its connections.
-    </p>
-  </div>
-  <div class="d-flex gap-2">
+<app-page-header
+  title="Connections"
+  icon="plug"
+  [subtitle]="environmentName
+    ? 'Environment: ' + environmentName + ' — use the header to switch.'
+    : 'Select an environment from the header to manage connections.'"
+>
+  <div actions class="page-actions">
     <button class="btn btn-outline-secondary btn-sm" type="button" (click)="loadConnections(true)" [disabled]="loading || !environmentId">
       <i class="bi bi-arrow-clockwise"></i> Refresh
     </button>
     <button *ngIf="isAdmin" class="btn btn-primary btn-sm" type="button" (click)="startCreate()" [disabled]="!environmentId">
-      <i class="bi bi-plus-lg me-1"></i>New connection
+      <i class="bi bi-plus-lg me-1"></i>New
     </button>
   </div>
+</app-page-header>
+
+<div class="alert alert-info py-2 small mb-2" *ngIf="environmentId && metricsTableFqn && environmentId !== 'local'">
+  Default metrics table: <code>{{ metricsTableFqn }}</code>
+  <a routerLink="/app/datasets" class="ms-1">Datasets</a>
 </div>
 
-<div class="alert alert-info small mb-3" *ngIf="environmentId && metricsTableFqn && environmentId !== 'local'">
-  Default metrics dataset table:
-  <code class="ms-1">{{ metricsTableFqn }}</code>
-  <span class="text-muted ms-1">— manage datasets on the <a routerLink="/app/datasets">Datasets</a> page.</span>
-</div>
+<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
 
-<div class="alert alert-success" *ngIf="message">{{ message }}</div>
-<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
-
-<div class="card mb-3" *ngIf="showForm && isAdmin">
+<div class="card mb-2" *ngIf="showForm && isAdmin">
   <div class="card-header">{{ editingId ? 'Edit connection' : 'New connection' }}</div>
   <div class="card-body">
-    <div class="row g-3">
+    <div class="row g-2">
       <div class="col-md-4">
         <label class="form-label">Name</label>
         <input class="form-control form-control-sm" [(ngModel)]="formName" />
@@ -45,25 +40,21 @@
       <div class="col-md-4 d-flex align-items-end" *ngIf="!editingId">
         <div class="form-check">
           <input class="form-check-input" type="checkbox" id="setDefault" [(ngModel)]="formSetDefault" />
-          <label class="form-check-label small" for="setDefault">Set as default for this type</label>
+          <label class="form-check-label small" for="setDefault">Default for type</label>
         </div>
       </div>
     </div>
-    <div class="row g-3 mt-1" *ngIf="typeMeta(formType) as meta">
+    <div class="row g-2 mt-1" *ngIf="typeMeta(formType) as meta">
       <div class="col-md-6" *ngFor="let f of meta.fields">
-        <label class="form-label small">{{ f.label }}</label>
-        <input
-          class="form-control form-control-sm"
-          [(ngModel)]="formConfig[f.key]"
-          [placeholder]="f.placeholder || ''"
-        />
+        <label class="form-label">{{ f.label }}</label>
+        <input class="form-control form-control-sm" [(ngModel)]="formConfig[f.key]" [placeholder]="f.placeholder || ''" />
         <div class="form-text" *ngIf="f.help">{{ f.help }}</div>
       </div>
       <div class="col-12" *ngIf="meta.auth_note">
         <p class="text-muted small mb-0"><i class="bi bi-shield-lock me-1"></i>{{ meta.auth_note }}</p>
       </div>
     </div>
-    <div class="mt-3 d-flex gap-2">
+    <div class="mt-2 d-flex gap-2">
       <button class="btn btn-primary btn-sm" type="button" (click)="save()" [disabled]="saving">
         {{ saving ? 'Saving…' : 'Save' }}
       </button>
@@ -72,15 +63,11 @@
   </div>
 </div>
 
-<div class="card" *ngIf="loading">
-  <div class="card-body text-center py-4">
-    <div class="spinner-border text-primary spinner-border-sm"></div>
-  </div>
-</div>
+<app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="4"></app-loading-card>
 
-<div class="table-responsive" *ngIf="!loading && connections.length">
-  <table class="table table-hover align-middle">
-    <thead class="table-light">
+<div class="table-responsive card" *ngIf="!loading && connections.length">
+  <table class="table table-hover table-compact align-middle mb-0">
+    <thead>
       <tr>
         <th>Name</th>
         <th>Type</th>
@@ -93,13 +80,8 @@
         <td>{{ c.name }}</td>
         <td>{{ typeLabel(c.connection_type) }}</td>
         <td>
-          <span class="badge bg-success" *ngIf="c.is_default">Default</span>
-          <button
-            *ngIf="isAdmin && !c.is_default"
-            class="btn btn-link btn-sm p-0"
-            type="button"
-            (click)="setDefault(c)"
-          >Set default</button>
+          <app-status-badge *ngIf="c.is_default" label="Default" variant="success"></app-status-badge>
+          <button *ngIf="isAdmin && !c.is_default" class="btn btn-link btn-sm p-0" type="button" (click)="setDefault(c)">Set default</button>
         </td>
         <td class="text-end text-nowrap">
           <button *ngIf="isAdmin" class="btn btn-outline-secondary btn-sm me-1" type="button" (click)="startEdit(c)">Edit</button>
@@ -111,8 +93,11 @@
 </div>
 
 <div class="card" *ngIf="!loading && !connections.length && environmentId">
-  <div class="card-body text-center text-muted py-4">
-    No connections for {{ environmentName }}.
-    <span *ngIf="isAdmin"> Click <strong>New connection</strong> to add one.</span>
+  <div class="card-body">
+    <app-empty-state
+      icon="plug"
+      [title]="'No connections for ' + environmentName"
+      [description]="isAdmin ? 'Click New to add a connection.' : ''"
+    ></app-empty-state>
   </div>
 </div>

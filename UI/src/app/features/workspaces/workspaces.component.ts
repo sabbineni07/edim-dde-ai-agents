@@ -22,10 +22,21 @@ interface WorkspacesLoadResult {
   error: string;
 }
 
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+
 @Component({
   selector: 'app-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    LoadingCardComponent,
+  ],
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.css'],
 })

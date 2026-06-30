@@ -1,0 +1,30 @@
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.page-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-title-icon {
+  margin-right: var(--space-2);
+  color: var(--navy-primary);
+  font-size: 1em;
+}
+
+[data-theme='dark'] .page-title-icon {
+  color: #6eb3ff;
+}
+
+.page-header-compact .page-title {
+  font-size: var(--text-lg);
+}
+
+.page-actions:empty {
+  display: none;
+}

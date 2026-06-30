@@ -9,13 +9,15 @@ import {
 } from '../../core/services/environment-selection.service';
 import { ApiService, PlatformEnvironment } from '../../services/api.service';
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
+import { ThemeService } from '../../core/services/theme.service';
 import { parseApiError } from '../../core/api-error.util';
 import { SidebarComponent, MenuItem } from '../sidebar/sidebar.component';
+import { ContextBarComponent } from '../../shared/context-bar/context-bar.component';
 
 @Component({
   selector: 'app-shell',
   standalone: true,
-  imports: [CommonModule, SidebarComponent, RouterOutlet],
+  imports: [CommonModule, SidebarComponent, RouterOutlet, ContextBarComponent],
   templateUrl: './shell.component.html',
   styleUrls: ['./shell.component.css'],
 })
@@ -28,23 +30,24 @@ export class ShellComponent implements OnInit {
   environmentsLoadError = '';
   environmentsLoadFailed = false;
   environmentsLoadErrorDismissed = false;
-  sidebarOpen = true;
+  sidebarExpanded = true;
   menuItems: MenuItem[] = [
-    { label: 'Connections', route: '/app/connections', icon: 'plug' },
-    { label: 'Datasets', route: '/app/datasets', icon: 'table' },
-    { label: 'Workspaces', route: '/app/workspaces', icon: 'building' },
-    { label: 'Jobs', route: '/app/jobs', icon: 'list-task' },
-    { label: 'Agents', route: '/app/agents', icon: 'robot' },
-    { label: 'Chat', route: '/app/chat', icon: 'chat-dots' },
+    { label: 'Connections', route: '/app/connections', icon: 'plug', group: 'setup' },
+    { label: 'Datasets', route: '/app/datasets', icon: 'table', group: 'setup' },
+    { label: 'Workspaces', route: '/app/workspaces', icon: 'building', group: 'workloads' },
+    { label: 'Jobs', route: '/app/jobs', icon: 'list-task', group: 'workloads' },
+    { label: 'Agents', route: '/app/agents', icon: 'robot', group: 'ai' },
+    { label: 'Chat', route: '/app/chat', icon: 'chat-dots', group: 'ai' },
   ];
-  activeMenuItem: MenuItem = this.menuItems[0];
+  activeMenuItem: MenuItem = this.menuItems[2];
 
   constructor(
     private router: Router,
     private auth: AuthService,
     private environmentSelection: EnvironmentSelectionService,
     private connectionCache: EnvironmentConnectionCacheService,
-    private api: ApiService
+    private api: ApiService,
+    public theme: ThemeService
   ) {}
 
   ngOnInit(): void {
@@ -77,6 +80,10 @@ export class ShellComponent implements OnInit {
     if (active) this.activeMenuItem = active;
   }
 
+  get themeLabel(): string {
+    return this.theme.current === 'light' ? 'Dark mode' : 'Light mode';
+  }
+
   selectEnvironment(env: PlatformEnvironment): void {
     this.environmentSelection.setSelected({
       id: env.id,
@@ -93,9 +100,17 @@ export class ShellComponent implements OnInit {
     this.environmentsLoadErrorDismissed = true;
   }
 
+  dismissEnvPicker(): void {
+    this.showEnvPicker = false;
+  }
+
   retryLoadEnvironments(): void {
     this.environmentsLoadErrorDismissed = false;
     this.fetchEnvironments();
+  }
+
+  toggleTheme(): void {
+    this.theme.toggle();
   }
 
   private fetchEnvironments(): void {
@@ -141,11 +156,11 @@ export class ShellComponent implements OnInit {
 
   onMenuItemClick(item: MenuItem): void {
     this.activeMenuItem = item;
-    this.router.navigateByUrl(item.route);
+    this.showEnvPicker = false;
   }
 
   toggleSidebar(): void {
-    this.sidebarOpen = !this.sidebarOpen;
+    this.sidebarExpanded = !this.sidebarExpanded;
   }
 
   logout(): void {

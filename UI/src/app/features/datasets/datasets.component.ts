@@ -11,11 +11,24 @@ import {
 import { AuthService } from '../../core/services/auth.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { parseApiError } from '../../core/api-error.util';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { StatusBadgeComponent } from '../../shared/status-badge/status-badge.component';
+import { ToastService } from '../../core/services/toast.service';
 
 @Component({
   selector: 'app-datasets',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    LoadingCardComponent,
+    StatusBadgeComponent,
+  ],
   templateUrl: './datasets.component.html',
   styleUrls: ['./datasets.component.css'],
 })
@@ -26,7 +39,6 @@ export class DatasetsComponent implements OnInit, OnDestroy {
   schemaProfiles: SchemaProfileMeta[] = [];
   loading = true;
   error = '';
-  message = '';
 
   showForm = false;
   editingId: string | null = null;
@@ -43,7 +55,8 @@ export class DatasetsComponent implements OnInit, OnDestroy {
   constructor(
     private api: ApiService,
     private auth: AuthService,
-    private environmentSelection: EnvironmentSelectionService
+    private environmentSelection: EnvironmentSelectionService,
+    private toast: ToastService
   ) {}
 
   get isAdmin(): boolean {
@@ -132,7 +145,6 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     this.formTableFqn = '';
     this.formLocalPath = '';
     this.formSetDefault = false;
-    this.message = '';
     this.error = '';
   }
 
@@ -146,7 +158,6 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     this.formTableFqn = d.table_fqn || '';
     this.formLocalPath = d.local_path || '';
     this.formSetDefault = d.is_default;
-    this.message = '';
     this.error = '';
   }
 
@@ -182,7 +193,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
           next: () => {
             this.saving = false;
             this.showForm = false;
-            this.message = 'Dataset updated.';
+            this.toast.success('Dataset updated.');
             this.loadDatasets();
           },
           error: (err) => {
@@ -207,7 +218,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
         next: () => {
           this.saving = false;
           this.showForm = false;
-          this.message = 'Dataset created.';
+          this.toast.success('Dataset created.');
           this.loadDatasets();
         },
         error: (err) => {
@@ -221,7 +232,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     if (!this.isAdmin) return;
     this.api.setDefaultEnvironmentDataset(this.environmentId, d.id).subscribe({
       next: () => {
-        this.message = `"${d.name}" set as default.`;
+        this.toast.success(`"${d.name}" set as default.`);
         this.loadDatasets();
       },
       error: (err) => {
@@ -234,7 +245,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     if (!this.isAdmin || !confirm(`Delete dataset "${d.name}"?`)) return;
     this.api.deleteEnvironmentDataset(this.environmentId, d.id).subscribe({
       next: () => {
-        this.message = 'Dataset deleted.';
+        this.toast.success('Dataset deleted.');
         this.loadDatasets();
       },
       error: (err) => {

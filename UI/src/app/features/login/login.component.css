@@ -1,13 +1,68 @@
 .login-container {
   min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  background: var(--color-surface-page);
+}
+
+.login-brand-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: var(--space-6);
+  background: linear-gradient(160deg, var(--navy-primary) 0%, var(--navy-dark) 100%);
+  color: var(--color-text-inverse);
+  text-align: center;
+}
+
+.login-brand-icon {
+  font-size: 2.5rem;
+  margin-bottom: var(--space-4);
+  opacity: 0.95;
+}
+
+.login-brand-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin: 0 0 var(--space-2);
+}
+
+.login-brand-tagline {
+  font-size: var(--text-sm);
+  opacity: 0.85;
+  max-width: 16rem;
+  margin: 0;
+}
+
+.login-form-panel {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--navy-bg);
-  padding: 1rem;
+  padding: var(--space-6);
 }
+
 .login-card {
   width: 100%;
-  max-width: 400px;
-  border-radius: 8px;
+  max-width: 22rem;
+  border: 1px solid var(--color-border-subtle);
+}
+
+.login-form-title {
+  font-size: var(--text-lg);
+  font-weight: 600;
+  margin: 0 0 var(--space-1);
+}
+
+.login-form-subtitle {
+  font-size: var(--text-xs);
+  margin-bottom: var(--space-4);
+}
+
+[data-theme='dark'] .login-brand-panel {
+  background: linear-gradient(160deg, #0a1628 0%, #001f5c 100%);
+}
+
+[data-theme='dark'] .login-form-panel {
+  background: var(--color-surface-page);
 }

@@ -1,28 +1,30 @@
-<div class="page-header mb-4">
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <nav class="mb-0">
-      <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
-      <span class="mx-2 text-muted">/</span>
-      <span class="small">Jobs</span>
-    </nav>
-    <div class="d-flex align-items-center flex-wrap gap-3 jobs-list-actions">
-      <div class="d-flex align-items-center gap-2">
-        <label class="small mb-0 fw-semibold text-nowrap" for="jobsWorkspaceSelect">Workspace</label>
+<app-page-header
+  title="Jobs"
+  icon="list-task"
+  [breadcrumbs]="breadcrumbs"
+></app-page-header>
+
+<div class="jobs-filter-bar card mb-2">
+  <div class="card-body jobs-filter-bar-body">
+    <div class="jobs-filter-row jobs-filter-row--primary">
+      <div class="jobs-filter-field jobs-filter-field--workspace">
+        <label class="form-label" for="jobsWorkspaceSelect">Workspace</label>
         <select
           id="jobsWorkspaceSelect"
           class="form-select form-select-sm"
           [ngModel]="workspaceId"
           (ngModelChange)="onWorkspaceChange($event)"
           [disabled]="workspacesLoading || !workspaces.length">
-          <option *ngIf="workspacesLoading" [ngValue]="null">Loading workspaces…</option>
+          <option *ngIf="workspacesLoading" [ngValue]="null">Loading…</option>
           <option *ngIf="!workspacesLoading && !workspaces.length" [ngValue]="null">No workspaces</option>
           <option *ngFor="let w of workspaces" [ngValue]="w.workspace_id">
             {{ w.workspace_name || w.workspace_id }}
           </option>
         </select>
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <label class="small mb-0 fw-semibold text-nowrap" for="jobsStartDate">Start date</label>
+
+      <div class="jobs-filter-field jobs-filter-field--date">
+        <label class="form-label" for="jobsStartDate">Start date</label>
         <input
           id="jobsStartDate"
           type="date"
@@ -30,8 +32,9 @@
           [(ngModel)]="startDate"
           [disabled]="!workspaceId" />
       </div>
-      <div class="d-flex align-items-center gap-2">
-        <label class="small mb-0 fw-semibold text-nowrap" for="jobsEndDate">End date</label>
+
+      <div class="jobs-filter-field jobs-filter-field--date">
+        <label class="form-label" for="jobsEndDate">End date</label>
         <input
           id="jobsEndDate"
           type="date"
@@ -39,43 +42,46 @@
           [(ngModel)]="endDate"
           [disabled]="!workspaceId" />
       </div>
-      <button
-        type="button"
-        class="btn btn-primary btn-sm"
-        (click)="applyDateRangeToUrl()"
-        [disabled]="loading || !workspaceId">
-        Apply
-      </button>
-      <button
-        type="button"
-        class="btn btn-outline-primary btn-sm"
-        (click)="refreshJobs()"
-        [disabled]="loading || !workspaceId">
-        <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i> Refresh
-      </button>
+
+      <div class="jobs-filter-actions">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          (click)="applyDateRangeToUrl()"
+          [disabled]="loading || !workspaceId">
+          Apply
+        </button>
+        <button
+          type="button"
+          class="btn btn-outline-primary btn-sm"
+          (click)="refreshJobs()"
+          [disabled]="loading || !workspaceId"
+          title="Refresh jobs"
+          aria-label="Refresh jobs">
+          <i class="bi bi-arrow-clockwise" [class.spin]="loading"></i>
+        </button>
+      </div>
+    </div>
+
+    <div class="jobs-filter-row jobs-filter-row--search" *ngIf="workspaceId">
+      <div class="jobs-filter-field jobs-filter-field--search">
+        <label class="form-label" for="jobsSearch">Search</label>
+        <input
+          id="jobsSearch"
+          type="search"
+          class="form-control form-control-sm"
+          placeholder="Job id, name, workload…"
+          [(ngModel)]="filterText"
+          (ngModelChange)="onFilterChange()" />
+      </div>
     </div>
   </div>
-  <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
-    <h2 class="mb-0"><i class="bi bi-list-task me-2"></i>Jobs</h2>
-    <input
-      *ngIf="workspaceId"
-      type="text"
-      class="form-control form-control-sm jobs-list-search"
-      placeholder="Filter by job id, name, workload..."
-      [(ngModel)]="filterText"
-      (ngModelChange)="onFilterChange()" />
-  </div>
 </div>
 
-<div class="alert alert-warning" *ngIf="error">{{ error }}</div>
+<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
 <div class="alert alert-warning py-2 small" *ngIf="dateRangeWarning">{{ dateRangeWarning }}</div>
 
-<div class="card" *ngIf="(loading || workspacesLoading) && workspaceId">
-  <div class="card-body text-center py-5">
-    <div class="spinner-border text-primary"></div>
-    <p class="mt-2 mb-0 text-muted">Loading jobs...</p>
-  </div>
-</div>
+<app-loading-card *ngIf="(loading || workspacesLoading) && workspaceId" message="Loading jobs…" variant="skeleton" [skeletonRows]="6"></app-loading-card>
 
 <div class="card" *ngIf="!workspacesLoading && !workspaces.length && !error">
   <div class="card-body text-center py-5 text-muted">No workspaces found. Ensure the data source has job metrics.</div>
@@ -91,7 +97,7 @@
 
 <div class="card jobs-list-card" *ngIf="!loading && workspaceId && filteredJobs.length > 0">
   <div class="table-responsive jobs-table-scroll">
-    <table class="table table-hover align-middle mb-0">
+    <table class="table table-hover table-compact table-sticky align-middle mb-0">
       <thead class="table-light">
         <tr>
           <th>Job ID</th>
