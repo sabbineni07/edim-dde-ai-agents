@@ -15,6 +15,7 @@ import { EmptyStateComponent } from '../../shared/empty-state/empty-state.compon
 import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
 import { StatusBadgeComponent } from '../../shared/status-badge/status-badge.component';
 import { ToastService } from '../../core/services/toast.service';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 
 @Component({
   selector: 'app-datasets',
@@ -26,6 +27,7 @@ import { ToastService } from '../../core/services/toast.service';
     EmptyStateComponent,
     LoadingCardComponent,
     StatusBadgeComponent,
+    ErrorAlertComponent,
   ],
   templateUrl: './datasets.component.html',
   styleUrls: ['./datasets.component.css'],

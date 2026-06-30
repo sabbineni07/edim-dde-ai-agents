@@ -15,6 +15,7 @@ import { parseApiError } from '../../core/api-error.util';
 import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -32,6 +33,7 @@ interface Message {
     MarkdownContentComponent,
     PageHeaderComponent,
     EmptyStateComponent,
+    ErrorAlertComponent,
   ],
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],

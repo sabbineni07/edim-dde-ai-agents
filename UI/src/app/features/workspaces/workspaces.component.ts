@@ -25,6 +25,7 @@ interface WorkspacesLoadResult {
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 
 @Component({
   selector: 'app-workspaces',
@@ -36,6 +37,7 @@ import { LoadingCardComponent } from '../../shared/loading-card/loading-card.com
     PageHeaderComponent,
     EmptyStateComponent,
     LoadingCardComponent,
+    ErrorAlertComponent,
   ],
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.css'],
@@ -44,7 +46,6 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   workspaces: Workspace[] = [];
   loading = false;
   error = '';
-  errorDismissed = false;
   environmentName = '';
   environmentId = '';
   metricsDatasetName = '';
@@ -78,9 +79,6 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
       ).subscribe((result) => {
         this.workspaces = result.workspaces;
         this.error = result.error;
-        if (result.error) {
-          this.errorDismissed = false;
-        }
       })
     );
 
@@ -228,10 +226,6 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   private updateSelectedConnectionName(): void {
     const conn = this.databricksConnections.find((c) => c.id === this.selectedConnectionId);
     this.selectedConnectionName = conn?.name || '';
-  }
-
-  dismissError(): void {
-    this.errorDismissed = true;
   }
 
   onConnectionChange(connectionId: string): void {

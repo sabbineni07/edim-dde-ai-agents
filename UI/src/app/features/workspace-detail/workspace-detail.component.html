@@ -51,7 +51,7 @@
   Select an environment in the header to bind agents to its connection pool.
 </div>
 
-<div class="alert alert-danger py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" (dismiss)="error = ''"></app-error-alert>
 
 <div class="card mb-2">
   <div class="card-header d-flex justify-content-between align-items-center">
@@ -114,6 +114,15 @@
 
 <div class="card" *ngIf="showAgentWizard">
   <div class="card-header">
+    <div class="wizard-steps mb-2" aria-label="Install agent steps">
+      <span class="wizard-step" [class.wizard-step-done]="wizardAgentId || isEditingAgent" [class.wizard-step-active]="!wizardAgentId && !isEditingAgent">
+        <span class="wizard-step-num">1</span> Agent
+      </span>
+      <span class="wizard-step-connector" aria-hidden="true"></span>
+      <span class="wizard-step" [class.wizard-step-done]="wizardManifest && canInstallAgent()" [class.wizard-step-active]="wizardAgentId || isEditingAgent">
+        <span class="wizard-step-num">2</span> Bindings
+      </span>
+    </div>
     <strong>{{ isEditingAgent ? 'Edit agent' : 'Install agent' }}</strong>
     <p class="small text-muted mb-0 mt-1" *ngIf="isEditingAgent">
       Update bindings (e.g. add optional Knowledge search), name, or advanced settings.

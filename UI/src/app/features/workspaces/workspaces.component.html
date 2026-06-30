@@ -56,17 +56,11 @@
   </span>
 </div>
 
-<div
-  class="alert alert-warning alert-dismissible fade show py-2"
-  role="alert"
-  *ngIf="error && !errorDismissed"
->
-  {{ error }}
+<app-error-alert [message]="error" variant="warning" (dismiss)="error = ''">
   <span *ngIf="error.includes('connection')" class="ms-1">
     <a routerLink="/app/connections">Configure in Connections</a>
   </span>
-  <button type="button" class="btn-close" aria-label="Dismiss" (click)="dismissError()"></button>
-</div>
+</app-error-alert>
 
 <app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="6"></app-loading-card>
 

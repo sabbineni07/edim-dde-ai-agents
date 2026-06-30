@@ -9,7 +9,7 @@
   </div>
 </app-page-header>
 
-<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" variant="warning" (dismiss)="error = ''"></app-error-alert>
 
 <app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="5"></app-loading-card>
 

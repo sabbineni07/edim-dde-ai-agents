@@ -48,7 +48,7 @@
   Select an environment in the header to use Chat.
 </div>
 
-<div class="alert alert-danger py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" (dismiss)="error = ''"></app-error-alert>
 
 <div class="chat-shell card" *ngIf="environmentId">
   <div class="chat-messages-wrap" #messageList>

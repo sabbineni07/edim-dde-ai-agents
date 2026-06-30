@@ -36,6 +36,76 @@
   margin-left: auto;
 }
 
+.job-detail-tabs {
+  border-bottom-color: var(--color-border-subtle);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.job-detail-tabs .nav-link {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+}
+
+.job-detail-tabs .nav-link:hover {
+  color: var(--navy-header);
+  border-bottom-color: var(--color-border);
+}
+
+.job-detail-tabs .nav-link.active {
+  color: var(--navy-header);
+  font-weight: 600;
+  background: transparent;
+  border-bottom-color: var(--navy-header);
+}
+
+.metric-gauges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.metric-gauge-chip {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+  max-width: 12rem;
+}
+
+.metric-gauge-label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.metric-gauge-bar {
+  height: 0.35rem;
+  background: var(--color-border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+}
+
+.metric-gauge-fill {
+  height: 100%;
+  background: var(--navy-header);
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+
+.metric-gauge-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
 .job-metrics-table {
   margin-bottom: 0;
 }

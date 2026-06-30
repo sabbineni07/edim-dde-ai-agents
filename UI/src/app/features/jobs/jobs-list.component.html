@@ -79,10 +79,10 @@
   </div>
 </div>
 
-<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" variant="warning" (dismiss)="error = ''"></app-error-alert>
 <div class="alert alert-warning py-2 small" *ngIf="dateRangeWarning">{{ dateRangeWarning }}</div>
 
-<app-loading-card *ngIf="(loading || workspacesLoading) && workspaceId" message="Loading jobs…" variant="skeleton" [skeletonRows]="6"></app-loading-card>
+<app-loading-card *ngIf="(loading || workspacesLoading) && workspaceId" variant="skeleton" [skeletonRows]="8"></app-loading-card>
 
 <div class="card" *ngIf="!workspacesLoading && !workspaces.length && !error">
   <div class="card-body">
@@ -142,7 +142,17 @@
           <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
           <td>{{ j.total_runs ?? '–' }}</td>
           <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
-          <td><button class="btn btn-primary btn-sm" (click)="openDetail(j)">View details</button></td>
+          <td>
+            <button
+              class="btn btn-outline-primary btn-sm"
+              type="button"
+              (click)="openDetail(j)"
+              title="View job details"
+              aria-label="View job details"
+            >
+              <i class="bi bi-box-arrow-up-right" aria-hidden="true"></i>
+            </button>
+          </td>
         </tr>
       </tbody>
     </table>

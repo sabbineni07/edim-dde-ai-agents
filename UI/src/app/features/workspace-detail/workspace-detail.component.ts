@@ -19,12 +19,13 @@ import { WorkspaceSelectionService } from '../../core/services/workspace-selecti
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { ToastService } from '../../core/services/toast.service';
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-workspace-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent],
+  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent, ErrorAlertComponent],
   templateUrl: './workspace-detail.component.html',
   styleUrls: ['./workspace-detail.component.css'],
 })

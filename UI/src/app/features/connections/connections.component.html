@@ -23,7 +23,7 @@
   <a routerLink="/app/datasets" class="ms-1">Manage datasets</a>
 </div>
 
-<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" variant="warning" (dismiss)="error = ''"></app-error-alert>
 
 <app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="4"></app-loading-card>
 

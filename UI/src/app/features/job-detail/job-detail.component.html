@@ -56,10 +56,34 @@
   </div>
 </div>
 
-<div class="alert alert-danger py-2" *ngIf="loadError">{{ loadError }}</div>
-<div class="alert alert-danger py-2" *ngIf="error">{{ error }}</div>
-<!-- Job runs -->
-<div class="card mb-4 job-runs-card">
+<app-error-alert [message]="loadError" (dismiss)="loadError = ''"></app-error-alert>
+<app-error-alert [message]="error" (dismiss)="error = ''"></app-error-alert>
+
+<nav class="job-detail-tabs nav nav-tabs mb-2" aria-label="Job detail sections">
+  <button
+    type="button"
+    class="nav-link"
+    [class.active]="activeTab === 'runs'"
+    (click)="selectTab('runs')"
+  >
+    Runs
+    <span class="badge bg-secondary ms-1" *ngIf="totalRuns">{{ totalRuns }}</span>
+  </button>
+  <button type="button" class="nav-link" [class.active]="activeTab === 'metrics'" (click)="selectTab('metrics')">
+    Metrics
+  </button>
+  <button type="button" class="nav-link" [class.active]="activeTab === 'recommendations'" (click)="selectTab('recommendations')">
+    Recommendations
+    <span class="badge bg-secondary ms-1" *ngIf="lastResult">1</span>
+  </button>
+  <button type="button" class="nav-link" [class.active]="activeTab === 'history'" (click)="selectTab('history')">
+    History
+    <span class="badge bg-secondary ms-1" *ngIf="historyCount">{{ historyCount }}</span>
+  </button>
+</nav>
+
+<!-- Runs tab -->
+<div class="card mb-2 job-runs-card" *ngIf="activeTab === 'runs'">
   <div class="card-header"><strong>Job runs</strong></div>
   <div class="card-body p-0">
     <app-loading-card *ngIf="loadingRuns" variant="skeleton" [skeletonRows]="5"></app-loading-card>
@@ -167,14 +191,31 @@
   </div>
 </div>
 
-<!-- Current metrics (job aggregate) -->
-<div class="card mb-4 job-metrics-card">
+<!-- Metrics tab -->
+<div class="card mb-2 job-metrics-card" *ngIf="activeTab === 'metrics'">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
     <strong>Job metrics (date range aggregate)</strong>
     <span class="small text-muted" *ngIf="metricsSummaryLine">{{ metricsSummaryLine }}</span>
   </div>
   <div class="card-body p-0">
     <app-loading-card *ngIf="loadingMetrics" variant="skeleton" [skeletonRows]="4"></app-loading-card>
+    <div class="metric-gauges px-3 pt-3" *ngIf="!loadingMetrics && jobAggregateMetrics">
+      <div class="metric-gauge-chip" *ngIf="metricNumber('avg_worker_cpu_utilization_pct') as cpu">
+        <span class="metric-gauge-label">Worker CPU</span>
+        <div class="metric-gauge-bar"><div class="metric-gauge-fill" [style.width.%]="metricGaugeWidth(cpu)"></div></div>
+        <span class="metric-gauge-value">{{ cpu | number:'1.0-1' }}%</span>
+      </div>
+      <div class="metric-gauge-chip" *ngIf="metricNumber('avg_worker_memory_utilization_pct') as mem">
+        <span class="metric-gauge-label">Worker memory</span>
+        <div class="metric-gauge-bar"><div class="metric-gauge-fill" [style.width.%]="metricGaugeWidth(mem)"></div></div>
+        <span class="metric-gauge-value">{{ mem | number:'1.0-1' }}%</span>
+      </div>
+      <div class="metric-gauge-chip" *ngIf="metricNumber('avg_driver_cpu_utilization_pct') as dcpu">
+        <span class="metric-gauge-label">Driver CPU</span>
+        <div class="metric-gauge-bar"><div class="metric-gauge-fill" [style.width.%]="metricGaugeWidth(dcpu)"></div></div>
+        <span class="metric-gauge-value">{{ dcpu | number:'1.0-1' }}%</span>
+      </div>
+    </div>
     <div *ngIf="!loadingMetrics && jobAggregateMetrics as m" class="table-responsive">
       <table class="table table-sm table-bordered mb-0 job-metrics-table">
         <thead>
@@ -213,18 +254,34 @@
             <td class="border-start">{{ metricNumber('avg_driver_memory_utilization_pct') != null ? (metricNumber('avg_driver_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
             <td class="border-start">{{ metricNumber('avg_worker_memory_utilization_pct') != null ? (metricNumber('avg_worker_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
           </tr>
-          <tr>
-            <td class="metric-label">Peak CPU %</td>
-            <td class="border-start">{{ metricNumber('peak_driver_cpu_utilization_pct') != null ? (metricNumber('peak_driver_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-            <td class="border-start">{{ metricNumber('peak_worker_cpu_utilization_pct') != null ? (metricNumber('peak_worker_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-          </tr>
-          <tr>
-            <td class="metric-label">Peak memory %</td>
-            <td class="border-start">–</td>
-            <td class="border-start">{{ metricNumber('peak_worker_memory_utilization_pct') != null ? (metricNumber('peak_worker_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-          </tr>
         </tbody>
       </table>
+      <div class="px-3 py-2 border-top">
+        <button
+          type="button"
+          class="btn btn-link btn-sm p-0"
+          (click)="showAdvancedMetrics = !showAdvancedMetrics"
+          [attr.aria-expanded]="showAdvancedMetrics"
+        >
+          {{ showAdvancedMetrics ? 'Hide' : 'Show' }} peak metrics
+        </button>
+      </div>
+      <div class="table-responsive" *ngIf="showAdvancedMetrics">
+        <table class="table table-sm table-bordered mb-0 job-metrics-table">
+          <tbody>
+            <tr>
+              <td class="metric-label">Peak CPU %</td>
+              <td class="border-start">{{ metricNumber('peak_driver_cpu_utilization_pct') != null ? (metricNumber('peak_driver_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+              <td class="border-start">{{ metricNumber('peak_worker_cpu_utilization_pct') != null ? (metricNumber('peak_worker_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+            </tr>
+            <tr>
+              <td class="metric-label">Peak memory %</td>
+              <td class="border-start">–</td>
+              <td class="border-start">{{ metricNumber('peak_worker_memory_utilization_pct') != null ? (metricNumber('peak_worker_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     <div *ngIf="!loadingMetrics && !metricsData" class="p-3">
       <app-empty-state
@@ -237,8 +294,8 @@
   </div>
 </div>
 
-<!-- Latest recommendation result -->
-<div class="card mb-4" *ngIf="lastResult">
+<!-- Recommendations tab -->
+<div class="card mb-2" *ngIf="activeTab === 'recommendations' && lastResult">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
     <strong>Latest recommendation</strong>
     <div class="d-flex align-items-center flex-wrap gap-2">
@@ -340,13 +397,29 @@
   </div>
 </div>
 
-<!-- Recommendation history -->
-<div class="card">
+<div class="card mb-2" *ngIf="activeTab === 'recommendations' && !lastResult && !runningRecommendation">
+  <div class="card-body">
+    <app-empty-state
+      icon="lightning"
+      title="No recommendation yet"
+      description="Select a run on the Runs tab, then click Run recommendation."
+      [compact]="true"
+    ></app-empty-state>
+  </div>
+</div>
+
+<!-- History tab -->
+<div class="card mb-2" *ngIf="activeTab === 'history'">
   <div class="card-header"><strong>Recommendation history</strong></div>
   <div class="card-body">
-    <div *ngIf="loadingRecs" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
-    <div *ngIf="!loadingRecs && recommendations.length === 0" class="text-muted small">
-      No recommendations yet. Select a run and click &quot;Run Recommendation&quot;.
+    <app-loading-card *ngIf="loadingRecs" variant="skeleton" [skeletonRows]="4"></app-loading-card>
+    <div *ngIf="!loadingRecs && recommendations.length === 0" class="p-2">
+      <app-empty-state
+        icon="clock-history"
+        title="No recommendation history"
+        description="Run a recommendation to build history for this job."
+        [compact]="true"
+      ></app-empty-state>
     </div>
     <div *ngIf="!loadingRecs && recommendations.length > 0">
       <div class="accordion" id="recAccordion">

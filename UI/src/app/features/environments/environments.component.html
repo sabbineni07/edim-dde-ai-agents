@@ -4,7 +4,7 @@
   subtitle="Choose a Unity Catalog source or local CSV."
 ></app-page-header>
 
-<div class="alert alert-warning py-2" *ngIf="error">{{ error }}</div>
+<app-error-alert [message]="error" variant="warning" (dismiss)="error = ''"></app-error-alert>
 
 <app-loading-card *ngIf="loading" message="Loading environments…"></app-loading-card>
 
@@ -86,7 +86,7 @@
   </div>
   <div class="card-body">
     <p class="text-muted small">Changes are saved to Postgres and used for all users.</p>
-    <div class="alert alert-danger py-2" *ngIf="editError">{{ editError }}</div>
+    <app-error-alert [message]="editError" (dismiss)="editError = ''"></app-error-alert>
 
     <div class="mb-2">
       <label class="form-label small">Display name</label>
@@ -151,7 +151,7 @@
     </div>
 
     <div class="alert alert-success py-2" *ngIf="uploadSuccess">{{ uploadSuccess }}</div>
-    <div class="alert alert-danger py-2" *ngIf="uploadError">{{ uploadError }}</div>
+    <app-error-alert [message]="uploadError" (dismiss)="uploadError = ''"></app-error-alert>
 
     <div class="d-flex flex-wrap gap-2">
       <button

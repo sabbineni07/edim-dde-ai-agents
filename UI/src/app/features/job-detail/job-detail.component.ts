@@ -35,13 +35,14 @@ import { MarkdownContentComponent } from '../../shared/markdown-content/markdown
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent],
+  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent, ErrorAlertComponent],
   templateUrl: './job-detail.component.html',
   styleUrls: ['./job-detail.component.css'],
 })
@@ -78,6 +79,8 @@ export class JobDetailComponent implements OnInit {
 
   uiHints: UiHints | null = null;
   loadError = '';
+  activeTab: 'runs' | 'metrics' | 'recommendations' | 'history' = 'runs';
+  showAdvancedMetrics = false;
 
   private readonly destroyRef = inject(DestroyRef);
   private lastLoadKey = '';
@@ -131,6 +134,19 @@ export class JobDetailComponent implements OnInit {
       parts.push(`${this.startDate} – ${this.endDate}`);
     }
     return parts.join(' · ');
+  }
+
+  get historyCount(): number {
+    return this.recommendations.length;
+  }
+
+  selectTab(tab: 'runs' | 'metrics' | 'recommendations' | 'history'): void {
+    this.activeTab = tab;
+  }
+
+  metricGaugeWidth(pct: number | null): number {
+    if (pct == null || Number.isNaN(pct)) return 0;
+    return Math.min(100, Math.max(0, pct));
   }
 
   ngOnInit(): void {
@@ -592,6 +608,7 @@ export class JobDetailComponent implements OnInit {
         next: (res) => {
           this.runningRecommendation = false;
           this.lastResult = res;
+          this.activeTab = 'recommendations';
           this.loadRecommendations(true);
         },
         error: (err) => {

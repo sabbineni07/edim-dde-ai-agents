@@ -13,12 +13,13 @@ import { BrowseDataCacheService } from '../../core/services/browse-data-cache.se
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
 import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-jobs-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent],
+  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent, ErrorAlertComponent],
   templateUrl: './jobs-list.component.html',
   styleUrls: ['./jobs-list.component.css'],
 })
