@@ -95,6 +95,15 @@
         [compact]="true"
       ></app-empty-state>
     </div>
+    <div class="px-3 py-2 border-bottom bg-light small" *ngIf="!loadingRuns && selectedRun">
+      <strong>Selected run</strong>
+      <span class="ms-2">
+        <code class="small">{{ selectedRun.job_run_id || selectedRun.cluster_id }}</code>
+      </span>
+      <span *ngIf="selectedRun.dbr_version" class="ms-2 text-muted">
+        · DBR {{ selectedRun.dbr_version }}
+      </span>
+    </div>
     <div class="table-responsive job-runs-table-scroll" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
         <thead>
@@ -103,6 +112,7 @@
             <th rowspan="2">Job run ID</th>
             <th rowspan="2">Cluster ID</th>
             <th rowspan="2">Run date</th>
+            <th rowspan="2">DBR version</th>
             <th colspan="3" class="text-center border-start">Driver</th>
             <th colspan="4" class="text-center border-start">Workers</th>
           </tr>
@@ -139,6 +149,7 @@
               <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>
             </td>
             <td>{{ run.job_run_date ?? '–' }}</td>
+            <td class="small">{{ run.dbr_version ?? '–' }}</td>
             <td class="border-start">{{ run.avg_driver_cpu_utilization_pct != null ? (run.avg_driver_cpu_utilization_pct | number:'1.0-1') : '–' }}</td>
             <td>{{ run.avg_driver_memory_utilization_pct != null ? (run.avg_driver_memory_utilization_pct | number:'1.0-1') : '–' }}</td>
             <td class="small">{{ run.azure_driver_vm_size ?? '–' }}</td>
@@ -226,6 +237,10 @@
           </tr>
         </thead>
         <tbody>
+          <tr *ngIf="displayedDbrVersion">
+            <td class="metric-label">DBR version</td>
+            <td colspan="2" class="border-start">{{ displayedDbrVersion }}</td>
+          </tr>
           <tr>
             <td class="metric-label">VM size</td>
             <td class="border-start">{{ metricText('azure_driver_vm_size') ?? '–' }}</td>

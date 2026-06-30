@@ -51,7 +51,7 @@ Using only the inputs below, produce a structured explanation that: justifies th
 
 ## Inputs you will receive
 - **Recommendation:** The proposed cluster configuration (node_family, vcpus, min_workers, max_workers, auto_termination_minutes, rationale). This is what you are explaining.
-- **Job run ingest:** Observed utilization and configuration for this run (worker/driver CPU and memory %, nodes consumed, VM sizes, provisioned ceiling). Quote specific numbers in Rationale and Evidence.
+- **Job run ingest:** Observed utilization and configuration for this run (worker/driver CPU and memory %, nodes consumed, VM sizes, provisioned ceiling, **dbr_version** when present). Quote specific numbers in Rationale and Evidence.
 - **Pattern analysis:** Prior workload and utilization analysis from the sizing step.
 - **Risk assessment:** Risk level and mitigations from validation.
 

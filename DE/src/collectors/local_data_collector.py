@@ -377,6 +377,8 @@ class LocalDataCollector:
                 df_filtered["job_name"] = df_filtered["job_id"]
             if "job_type" not in df_filtered.columns:
                 df_filtered["job_type"] = None
+            if "dbr_version" not in df_filtered.columns:
+                df_filtered["dbr_version"] = None
 
             grouped = (
                 df_filtered.groupby("job_id", dropna=False)
@@ -390,6 +392,7 @@ class LocalDataCollector:
                     current_node_type=("azure_worker_vm_size", "max"),
                     current_max_workers=("max_worker_nodes_provisioned", "max"),
                     last_run_date=(date_col, "max"),
+                    dbr_version=("dbr_version", "max"),
                 )
                 .reset_index()
                 .sort_values(by=["job_name", "job_id"], ascending=[True, True])
@@ -408,6 +411,9 @@ class LocalDataCollector:
                     "azure_worker_vm_size": row["current_node_type"],
                     "max_worker_nodes_provisioned": int(row["current_max_workers"]),
                     "last_job_run_date": row["last_run_date"].strftime("%Y-%m-%d"),
+                    "dbr_version": (
+                        str(row["dbr_version"]) if pd.notna(row.get("dbr_version")) else None
+                    ),
                 }
                 for _, row in grouped.iterrows()
             ]
@@ -452,6 +458,9 @@ class LocalDataCollector:
             ].copy()
             if df_filtered.empty:
                 return []
+
+            if "dbr_version" not in df_filtered.columns:
+                df_filtered["dbr_version"] = None
 
             runs: List[Dict[str, Any]] = []
             for cluster_id, group in df_filtered.groupby("cluster_id", sort=False):
@@ -515,6 +524,12 @@ class LocalDataCollector:
                             first.get("max_worker_nodes_provisioned", 16)
                         ),
                         "job_type": first.get("job_type"),
+                        "dbr_version": (
+                            str(first.get("dbr_version"))
+                            if first.get("dbr_version") is not None
+                            and pd.notna(first.get("dbr_version"))
+                            else None
+                        ),
                     }
                 )
 
@@ -644,6 +659,7 @@ class LocalDataCollector:
 
             optional_map = (
                 "job_name",
+                "dbr_version",
                 "workspace_name",
                 "job_run_date",
                 "cluster_id",

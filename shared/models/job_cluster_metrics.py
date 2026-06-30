@@ -14,6 +14,7 @@ DELTA_TABLE_COLUMNS: List[str] = [
     "cluster_id",
     "job_type",
     "job_name",
+    "dbr_version",
     "job_run_start_time_utc",
     "job_run_end_time_utc",
     "job_run_duration_seconds",
@@ -63,6 +64,7 @@ class JobClusterMetrics(BaseModel):
     cluster_id: str
     job_type: Optional[str] = None
     job_name: Optional[str] = None
+    dbr_version: Optional[str] = None
     job_run_start_time_utc: Optional[str] = None
     job_run_end_time_utc: Optional[str] = None
     job_run_duration_seconds: float = 0.0

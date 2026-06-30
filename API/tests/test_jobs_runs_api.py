@@ -61,6 +61,7 @@ async def test_list_job_runs():
         assert runs[0]["cluster_id"].startswith("run-001-")
         assert runs[0]["job_run_id"].startswith("jr-")
         assert runs[0]["job_run_id"] != runs[0]["cluster_id"]
+        assert runs[0].get("dbr_version") == "15.4.x-scala2.12"
 
 
 @pytest.mark.asyncio

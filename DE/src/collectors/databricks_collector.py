@@ -34,6 +34,7 @@ _METRICS_SELECT_BODY = """
   CAST(cluster_id AS STRING) AS cluster_id,
   job_type,
   job_name,
+  dbr_version,
   CAST(job_run_start_time_utc AS STRING) AS job_run_start_time_utc,
   CAST(job_run_end_time_utc AS STRING) AS job_run_end_time_utc,
   COALESCE(CAST(job_run_duration_seconds AS DOUBLE), 0.0) AS job_run_duration_seconds,
@@ -321,7 +322,8 @@ class DatabricksCollector:
           COALESCE(AVG(job_run_duration_seconds), 0.0) AS avg_job_run_duration_seconds,
           COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
-          CAST(MAX(job_run_date) AS STRING) AS last_job_run_date
+          CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
+          MAX(dbr_version) AS dbr_version
         FROM {table}
         WHERE workspace_id = ?
           AND job_run_date >= ?
@@ -390,7 +392,8 @@ class DatabricksCollector:
           COALESCE(MAX(peak_worker_memory_utilization_pct), 0.0) AS peak_worker_memory_utilization_pct,
           COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
-          MAX(job_type) AS job_type
+          MAX(job_type) AS job_type,
+          MAX(dbr_version) AS dbr_version
         FROM {table}
         WHERE workspace_id = ?
           AND job_id = ?
@@ -453,6 +456,7 @@ class DatabricksCollector:
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
           CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
           MAX(job_name) AS job_name,
+          MAX(dbr_version) AS dbr_version,
           MAX(workspace_name) AS workspace_name,
           MAX(job_run_start_time_utc) AS job_run_start_time_utc,
           MAX(job_run_end_time_utc) AS job_run_end_time_utc,

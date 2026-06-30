@@ -126,6 +126,8 @@ def test_list_jobs_for_workspace():
     assert "total_runs" in first
     assert "avg_job_run_duration_seconds" in first
     assert "last_job_run_date" in first
+    job003 = next(j for j in jobs if j["job_id"] == "job-003")
+    assert job003.get("dbr_version") == "15.4.x-scala2.12"
 
 
 def test_list_job_runs():
@@ -145,6 +147,7 @@ def test_list_job_runs():
     assert first["job_run_id"].startswith("jr-")
     assert first["job_run_id"] != first["cluster_id"]
     assert "job_run_date" in first
+    assert first.get("dbr_version") == "15.4.x-scala2.12"
     assert "avg_worker_cpu_utilization_pct" in first
 
 

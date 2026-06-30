@@ -32,6 +32,7 @@ class JobRunIngest(BaseModel):
     job_run_id: Optional[str] = None
     cluster_id: str
     job_name: Optional[str] = None
+    dbr_version: Optional[str] = None
     job_type: Optional[str] = None
     job_run_date: Optional[str] = None
     job_run_start_time_utc: Optional[str] = None

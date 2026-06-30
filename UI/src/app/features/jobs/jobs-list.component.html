@@ -128,6 +128,7 @@
           <th>Avg Mem %</th>
           <th>Runs</th>
           <th>Node type</th>
+          <th>DBR version</th>
           <th></th>
         </tr>
       </thead>
@@ -142,6 +143,7 @@
           <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
           <td>{{ j.total_runs ?? '–' }}</td>
           <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
+          <td class="small">{{ j.dbr_version || '–' }}</td>
           <td>
             <button
               class="btn btn-outline-primary btn-sm"

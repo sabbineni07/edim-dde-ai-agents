@@ -104,6 +104,7 @@ export interface JobSummary {
   azure_worker_vm_size?: string;
   max_worker_nodes_provisioned?: number;
   last_job_run_date?: string;
+  dbr_version?: string;
 }
 
 export interface JobRunSummary {
@@ -126,6 +127,7 @@ export interface JobRunSummary {
   azure_worker_vm_size?: string;
   max_worker_nodes_provisioned?: number;
   job_type?: string;
+  dbr_version?: string;
 }
 
 export interface JobMetricsResponse {

@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 _OPTIONAL_DELTA_KEYS = (
     "job_name",
+    "dbr_version",
     "workspace_name",
     "job_run_start_time_utc",
     "job_run_end_time_utc",

@@ -166,6 +166,7 @@ class JobRunSummary(BaseModel):
     azure_worker_vm_size: Optional[str] = None
     max_worker_nodes_provisioned: Optional[int] = None
     job_type: Optional[str] = None
+    dbr_version: Optional[str] = None
 
     @field_validator("job_run_date", mode="before")
     @classmethod

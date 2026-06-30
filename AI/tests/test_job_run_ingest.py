@@ -16,6 +16,7 @@ def _sample_metrics() -> JobClusterMetrics:
         job_id="job-1",
         job_run_id="jr-99",
         cluster_id="run-99",
+        dbr_version="15.4.x-scala2.12",
         job_run_duration_seconds=1540.0,
         avg_worker_cpu_utilization_pct=4.48,
         avg_worker_memory_utilization_pct=10.0,
@@ -31,6 +32,7 @@ def _sample_metrics() -> JobClusterMetrics:
 def test_to_llm_ingest_dict_copilot_field_names():
     ingest = to_llm_ingest_dict(_sample_metrics())
     assert ingest["cluster_id"] == "run-99"
+    assert ingest["dbr_version"] == "15.4.x-scala2.12"
     assert ingest["azure_worker_vm_size"] == "Standard_E8s_v3"
     assert ingest["max_worker_nodes_provisioned"] == 17
     assert ingest["avg_worker_nodes_consumed"] == 6.0

@@ -537,6 +537,8 @@ export class JobDetailComponent implements OnInit {
     const parts: string[] = [];
     const name = m['job_name'];
     if (typeof name === 'string' && name.trim()) parts.push(name.trim());
+    const dbr = this.displayedDbrVersion;
+    if (dbr) parts.push(`DBR ${dbr}`);
     const runs = m['total_runs'];
     if (typeof runs === 'number') parts.push(`${runs} run${runs === 1 ? '' : 's'}`);
     if (data?.start_date && data?.end_date) {
@@ -545,6 +547,20 @@ export class JobDetailComponent implements OnInit {
     const dur = m['avg_job_run_duration_seconds'];
     if (typeof dur === 'number') parts.push(`avg run ${this.formatDuration(dur)}`);
     return parts.join(' · ');
+  }
+
+  get selectedRun(): JobRunSummary | null {
+    if (!this.selectedClusterId) return null;
+    return this.runs.find((r) => r.cluster_id === this.selectedClusterId) ?? null;
+  }
+
+  /** DBR version from the selected run, else aggregate metrics for the date range. */
+  get displayedDbrVersion(): string | null {
+    const fromRun = this.selectedRun?.dbr_version;
+    if (typeof fromRun === 'string' && fromRun.trim()) return fromRun.trim();
+    const fromAgg = this.jobAggregateMetrics?.['dbr_version'];
+    if (typeof fromAgg === 'string' && fromAgg.trim()) return fromAgg.trim();
+    return null;
   }
 
   metricNumber(key: string): number | null {
