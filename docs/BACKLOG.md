@@ -29,7 +29,7 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 ## Product / UX
 
-**UI/UX modernization (Options A → B → C):** see [BACKLOG_UI_UX_MODERNIZATION.md](./BACKLOG_UI_UX_MODERNIZATION.md) for phased design, review gates, and progress (Option A Phase 1 done; Phase 2 next).
+**UI/UX modernization (Options A → B → C):** see [BACKLOG_UI_UX_MODERNIZATION.md](./BACKLOG_UI_UX_MODERNIZATION.md) — **Option A complete (Phases 1–4)**; evaluation recommends staying on Bootstrap + shared components ([UI_COMPONENT_LIBRARY_EVALUATION.md](./UI_COMPONENT_LIBRARY_EVALUATION.md)); Option B/C deferred/skipped.
 
 Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
@@ -62,4 +62,4 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: 2026-06-29 — Manage environments UX in connections backlog §6.4; UI Phase 1 marked done.*
+*Last updated: 2026-06-30 — Option A UI modernization complete; library evaluation defers Material/PrimeNG.*
