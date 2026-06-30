@@ -1,7 +1,6 @@
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { RouterLink } from '@angular/router';
 import { Subscription } from 'rxjs';
 import {
   ApiService,
@@ -23,7 +22,6 @@ import { ToastService } from '../../core/services/toast.service';
   imports: [
     CommonModule,
     FormsModule,
-    RouterLink,
     PageHeaderComponent,
     EmptyStateComponent,
     LoadingCardComponent,
@@ -49,7 +47,12 @@ export class DatasetsComponent implements OnInit, OnDestroy {
   formTableFqn = '';
   formLocalPath = '';
   formSetDefault = false;
+  formError = '';
   saving = false;
+
+  pendingDelete: EnvironmentDataset | null = null;
+  deleting = false;
+
   private subs = new Subscription();
 
   constructor(
@@ -61,6 +64,10 @@ export class DatasetsComponent implements OnInit, OnDestroy {
 
   get isAdmin(): boolean {
     return this.auth.isAdmin();
+  }
+
+  get formTitle(): string {
+    return this.editingId ? 'Edit dataset' : 'New dataset';
   }
 
   ngOnInit(): void {
@@ -145,7 +152,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     this.formTableFqn = '';
     this.formLocalPath = '';
     this.formSetDefault = false;
-    this.error = '';
+    this.formError = '';
   }
 
   startEdit(d: EnvironmentDataset): void {
@@ -158,12 +165,22 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     this.formTableFqn = d.table_fqn || '';
     this.formLocalPath = d.local_path || '';
     this.formSetDefault = d.is_default;
-    this.error = '';
+    this.formError = '';
   }
 
   cancelForm(): void {
     this.showForm = false;
     this.editingId = null;
+    this.formError = '';
+  }
+
+  confirmDelete(d: EnvironmentDataset): void {
+    this.pendingDelete = d;
+  }
+
+  cancelDelete(): void {
+    this.pendingDelete = null;
+    this.deleting = false;
   }
 
   onSchemaProfileChange(): void {
@@ -173,13 +190,31 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     }
   }
 
+  validateForm(): string | null {
+    if (!this.formName.trim()) {
+      return 'Name is required.';
+    }
+    if (this.formSourceType === 'databricks_delta' && !this.formTableFqn.trim()) {
+      return 'Table FQN is required for Databricks Delta datasets.';
+    }
+    if (this.formSourceType === 'local_csv' && !this.formLocalPath.trim()) {
+      return 'CSV path is required for local datasets.';
+    }
+    return null;
+  }
+
   save(): void {
-    if (!this.environmentId || !this.formName.trim()) {
-      this.error = 'Name and environment are required.';
+    if (!this.environmentId) {
+      this.formError = 'Select an environment first.';
+      return;
+    }
+    const validationError = this.validateForm();
+    if (validationError) {
+      this.formError = validationError;
       return;
     }
     this.saving = true;
-    this.error = '';
+    this.formError = '';
 
     if (this.editingId) {
       this.api
@@ -195,10 +230,11 @@ export class DatasetsComponent implements OnInit, OnDestroy {
             this.showForm = false;
             this.toast.success('Dataset updated.');
             this.loadDatasets();
+            this.environmentSelection.loadEnvironments().subscribe();
           },
           error: (err) => {
             this.saving = false;
-            this.error = parseApiError(err, 'Save failed');
+            this.formError = parseApiError(err, 'Save failed');
           },
         });
       return;
@@ -220,10 +256,11 @@ export class DatasetsComponent implements OnInit, OnDestroy {
           this.showForm = false;
           this.toast.success('Dataset created.');
           this.loadDatasets();
+          this.environmentSelection.loadEnvironments().subscribe();
         },
         error: (err) => {
           this.saving = false;
-          this.error = parseApiError(err, 'Create failed');
+          this.formError = parseApiError(err, 'Create failed');
         },
       });
   }
@@ -234,6 +271,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
       next: () => {
         this.toast.success(`"${d.name}" set as default.`);
         this.loadDatasets();
+        this.environmentSelection.loadEnvironments().subscribe();
       },
       error: (err) => {
         this.error = parseApiError(err, 'Failed to set default');
@@ -241,15 +279,22 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteDataset(d: EnvironmentDataset): void {
-    if (!this.isAdmin || !confirm(`Delete dataset "${d.name}"?`)) return;
+  deleteDataset(): void {
+    const d = this.pendingDelete;
+    if (!this.isAdmin || !d) return;
+    this.deleting = true;
     this.api.deleteEnvironmentDataset(this.environmentId, d.id).subscribe({
       next: () => {
+        this.deleting = false;
+        this.pendingDelete = null;
         this.toast.success('Dataset deleted.');
         this.loadDatasets();
+        this.environmentSelection.loadEnvironments().subscribe();
       },
       error: (err) => {
+        this.deleting = false;
         this.error = parseApiError(err, 'Delete failed');
+        this.pendingDelete = null;
       },
     });
   }

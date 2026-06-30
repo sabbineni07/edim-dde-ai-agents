@@ -36,7 +36,8 @@ import { ToastService } from '../../core/services/toast.service';
 export class ConnectionsComponent implements OnInit, OnDestroy {
   environmentId = '';
   environmentName = '';
-  metricsTableFqn = '';
+  defaultDatasetName = '';
+  defaultDatasetRef = '';
   connections: EnvironmentConnection[] = [];
   connectionTypes: ConnectionTypeMeta[] = [];
   loading = true;
@@ -48,7 +49,12 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
   formType = 'databricks';
   formConfig: Record<string, string> = {};
   formSetDefault = false;
+  formError = '';
   saving = false;
+
+  pendingDelete: EnvironmentConnection | null = null;
+  deleting = false;
+
   private subs = new Subscription();
 
   constructor(
@@ -63,6 +69,10 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     return this.auth.isAdmin();
   }
 
+  get formTitle(): string {
+    return this.editingId ? 'Edit connection' : 'New connection';
+  }
+
   ngOnInit(): void {
     this.api.getConnectionTypes().subscribe({
       next: (res) => {
@@ -73,8 +83,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     this.subs.add(
       this.environmentSelection.watchEnvironments().subscribe(() => {
         if (this.environmentId) {
-          const env = this.environmentSelection.getEnvironmentRecord(this.environmentId);
-          this.metricsTableFqn = env?.table_fqn?.trim() || '';
+          this.syncEnvContext(this.environmentId);
         }
       })
     );
@@ -84,6 +93,8 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         if (!envId) {
           this.environmentId = '';
           this.environmentName = '';
+          this.defaultDatasetName = '';
+          this.defaultDatasetRef = '';
           this.connections = [];
           this.loading = false;
           return;
@@ -91,8 +102,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         const sel = this.environmentSelection.getSelected();
         this.environmentId = envId;
         this.environmentName = sel?.displayName || envId;
-        const env = this.environmentSelection.getEnvironmentRecord(envId);
-        this.metricsTableFqn = env?.table_fqn?.trim() || '';
+        this.syncEnvContext(envId);
         this.loadConnections();
       })
     );
@@ -102,7 +112,12 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     this.subs.unsubscribe();
   }
 
-  /** Use cache unless force refresh (Refresh button or after CRUD). */
+  private syncEnvContext(envId: string): void {
+    const env = this.environmentSelection.getEnvironmentRecord(envId);
+    this.defaultDatasetName = env?.default_dataset_name?.trim() || '';
+    this.defaultDatasetRef = env?.default_dataset_ref?.trim() || '';
+  }
+
   loadConnections(force = false): void {
     if (!this.environmentId) {
       this.connections = [];
@@ -138,7 +153,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     this.formType = 'databricks';
     this.formConfig = {};
     this.formSetDefault = false;
-    this.error = '';
+    this.formError = '';
   }
 
   startEdit(c: EnvironmentConnection): void {
@@ -153,12 +168,22 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
       if (v != null) this.formConfig[f.key] = String(v);
     }
     this.formSetDefault = c.is_default;
-    this.error = '';
+    this.formError = '';
   }
 
   cancelForm(): void {
     this.showForm = false;
     this.editingId = null;
+    this.formError = '';
+  }
+
+  confirmDelete(c: EnvironmentConnection): void {
+    this.pendingDelete = c;
+  }
+
+  cancelDelete(): void {
+    this.pendingDelete = null;
+    this.deleting = false;
   }
 
   buildConfig(): Record<string, unknown> {
@@ -171,18 +196,36 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     return out;
   }
 
+  validateForm(): string | null {
+    if (!this.formName.trim()) {
+      return 'Name is required.';
+    }
+    const meta = this.typeMeta(this.formType);
+    for (const f of meta?.fields || []) {
+      if (f.required && !this.formConfig[f.key]?.trim()) {
+        return `${f.label} is required.`;
+      }
+    }
+    return null;
+  }
+
   private afterMutation(): void {
     this.environmentSelection.invalidateConnectionCache(this.environmentId);
     this.loadConnections(true);
   }
 
   save(): void {
-    if (!this.environmentId || !this.formName.trim()) {
-      this.error = 'Name and environment are required.';
+    if (!this.environmentId) {
+      this.formError = 'Select an environment first.';
+      return;
+    }
+    const validationError = this.validateForm();
+    if (validationError) {
+      this.formError = validationError;
       return;
     }
     this.saving = true;
-    this.error = '';
+    this.formError = '';
     const config = this.buildConfig();
     if (this.editingId) {
       this.api
@@ -199,7 +242,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
           },
           error: (err) => {
             this.saving = false;
-            this.error = parseApiError(err, 'Save failed');
+            this.formError = parseApiError(err, 'Save failed');
           },
         });
       return;
@@ -220,7 +263,7 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         },
         error: (err) => {
           this.saving = false;
-          this.error = parseApiError(err, 'Create failed');
+          this.formError = parseApiError(err, 'Create failed');
         },
       });
   }
@@ -238,10 +281,14 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     });
   }
 
-  deleteConnection(c: EnvironmentConnection): void {
-    if (!this.isAdmin || !confirm(`Delete connection "${c.name}"?`)) return;
+  deleteConnection(): void {
+    const c = this.pendingDelete;
+    if (!this.isAdmin || !c) return;
+    this.deleting = true;
     this.api.deleteEnvironmentConnection(this.environmentId, c.id).subscribe({
       next: () => {
+        this.deleting = false;
+        this.pendingDelete = null;
         this.toast.success('Connection deleted.');
         if (this.environmentSelection.getSelectedConnectionId() === c.id) {
           this.environmentSelection.setSelectedConnection(null);
@@ -249,7 +296,9 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
         this.afterMutation();
       },
       error: (err) => {
+        this.deleting = false;
         this.error = parseApiError(err, 'Delete failed');
+        this.pendingDelete = null;
       },
     });
   }
