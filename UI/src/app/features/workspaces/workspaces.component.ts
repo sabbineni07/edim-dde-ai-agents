@@ -22,10 +22,23 @@ interface WorkspacesLoadResult {
   error: string;
 }
 
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
+
 @Component({
   selector: 'app-workspaces',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    LoadingCardComponent,
+    ErrorAlertComponent,
+  ],
   templateUrl: './workspaces.component.html',
   styleUrls: ['./workspaces.component.css'],
 })
@@ -33,7 +46,6 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   workspaces: Workspace[] = [];
   loading = false;
   error = '';
-  errorDismissed = false;
   environmentName = '';
   environmentId = '';
   metricsDatasetName = '';
@@ -41,6 +53,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   isLocalEnvironment = false;
   databricksConnections: EnvironmentConnection[] = [];
   selectedConnectionId = '';
+  selectedConnectionName = '';
   showConnectionPicker = false;
   datasets: EnvironmentDataset[] = [];
   selectedDatasetId = '';
@@ -66,9 +79,6 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
       ).subscribe((result) => {
         this.workspaces = result.workspaces;
         this.error = result.error;
-        if (result.error) {
-          this.errorDismissed = false;
-        }
       })
     );
 
@@ -86,8 +96,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
         this.isLocalEnvironment = envId === 'local';
         const env = this.environmentSelection.getEnvironmentRecord(envId);
         this.metricsDatasetName = env?.default_dataset_name?.trim() || '';
-        this.metricsDatasetRef =
-          env?.default_dataset_ref?.trim() || env?.table_fqn?.trim() || '';
+        this.metricsDatasetRef = env?.default_dataset_ref?.trim() || '';
         if (envId !== this.lastLoadedEnvId) {
           this.lastLoadedEnvId = envId;
           this.bootstrapForEnvironment();
@@ -98,6 +107,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
     this.subs.add(
       this.environmentSelection.watchSelectedConnectionId().subscribe((connId) => {
         this.selectedConnectionId = connId || '';
+        this.updateSelectedConnectionName();
       })
     );
 
@@ -210,10 +220,12 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   private applyDatabricksConnections(list: EnvironmentConnection[]): void {
     this.databricksConnections = list;
     this.showConnectionPicker = list.length > 1;
+    this.updateSelectedConnectionName();
   }
 
-  dismissError(): void {
-    this.errorDismissed = true;
+  private updateSelectedConnectionName(): void {
+    const conn = this.databricksConnections.find((c) => c.id === this.selectedConnectionId);
+    this.selectedConnectionName = conn?.name || '';
   }
 
   onConnectionChange(connectionId: string): void {
@@ -223,6 +235,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
     this.error = '';
     if (conn) {
       this.environmentSelection.setSelectedConnection(conn);
+      this.selectedConnectionName = conn.name;
     }
     this.requestWorkspacesLoad();
   }

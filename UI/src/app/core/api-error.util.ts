@@ -33,7 +33,7 @@ export function parseApiError(err: unknown, fallback = 'Request failed'): string
   if (e?.status === 500) {
     return typeof detail === 'string'
       ? detail
-      : 'Server error while loading data. Check the connection configuration.';
+      : 'Server error while loading data. Check API logs or try again.';
   }
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail)) {

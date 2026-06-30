@@ -1,22 +1,39 @@
-<div class="page-header mb-4">
-  <h2 class="mb-0"><i class="bi bi-robot me-2"></i>AI Agents</h2>
-  <p class="text-muted small mb-0 mt-1">
-    Agent catalog. Install agents per workspace with connections — open
-    <a routerLink="/app/workspaces">Workspaces</a> → <strong>Setup</strong>.
-  </p>
-</div>
+<app-page-header
+  title="AI Agents"
+  icon="robot"
+  subtitle="Platform agent catalog. Install an agent on a workspace to run recommendations and analysis."
+></app-page-header>
 
-<div *ngIf="loading" class="text-center py-4"><div class="spinner-border spinner-border-sm"></div></div>
+<app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="3"></app-loading-card>
 
-<div class="row g-3" *ngIf="!loading">
-  <div class="col-md-6 col-lg-4" *ngFor="let a of agents">
-    <div class="card h-100">
-      <div class="card-body">
-        <h5 class="card-title">{{ a.name }}</h5>
-        <p class="card-text small text-muted mb-2"><code>{{ a.agent_id }}</code></p>
-        <p class="card-text small">{{ a.description }}</p>
-        <a class="btn btn-primary btn-sm" routerLink="/app/workspaces">Choose workspace</a>
+<div class="agent-grid" *ngIf="!loading && agents.length">
+  <div class="agent-card card" *ngFor="let a of agents">
+    <div class="card-body d-flex flex-column">
+      <div class="agent-card-header">
+        <div class="agent-icon" aria-hidden="true">
+          <i class="bi" [ngClass]="agentIcon(a.agent_id)"></i>
+        </div>
+        <app-status-badge [label]="agentCategory(a.agent_id)" variant="default"></app-status-badge>
+      </div>
+      <h3 class="agent-card-title">{{ a.name }}</h3>
+      <p class="agent-card-id"><code>{{ a.agent_id }}</code></p>
+      <p class="agent-card-desc">{{ a.description }}</p>
+      <div class="agent-card-actions mt-auto">
+        <button type="button" class="btn btn-primary btn-sm" (click)="installInWorkspace()">
+          <i class="bi bi-box-arrow-in-down me-1"></i> Install in workspace
+        </button>
+        <a class="btn btn-outline-secondary btn-sm" routerLink="/app/workspaces">Workspaces</a>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && !agents.length">
+  <div class="card-body">
+    <app-empty-state
+      icon="robot"
+      title="No agents in catalog"
+      description="Agents appear here when registered on the platform."
+    ></app-empty-state>
   </div>
 </div>

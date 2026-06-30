@@ -1,52 +1,59 @@
-<div class="page-header mb-4">
-  <nav class="mb-2">
-    <a routerLink="/app/workspaces" class="text-decoration-none small text-muted">Workspaces</a>
-    <span class="mx-2 text-muted">/</span>
-    <span class="small">{{ workspaceName || workspaceId() }}</span>
-  </nav>
-  <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
-    <div>
-      <h2 class="mb-0">Workspace setup</h2>
-      <p class="text-muted small mb-0 mt-1">
-        <code>{{ workspaceId() }}</code> — install agents and bind environment connections
-        <span *ngIf="environmentDisplayName"> for <strong>{{ environmentDisplayName }}</strong></span>
-      </p>
-    </div>
-    <div class="d-flex gap-2">
-      <button type="button" class="btn btn-outline-primary btn-sm" (click)="openJobs()">View jobs</button>
-      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="refresh()">Refresh</button>
-    </div>
+<app-page-header
+  title="Workspace setup"
+  [subtitle]="workspaceSubtitle"
+  [breadcrumbs]="breadcrumbs"
+>
+  <div actions class="page-actions">
+    <button type="button" class="btn btn-outline-primary btn-sm" (click)="openJobs()">View jobs</button>
+    <button type="button" class="btn btn-refresh btn-sm" (click)="refresh()">
+      <i class="bi bi-arrow-clockwise"></i> Refresh
+    </button>
   </div>
-</div>
+</app-page-header>
 
-<div class="alert alert-info small mb-3">
-  <strong>How setup works</strong>
-  <ol class="mb-0 ps-3 mt-1">
-    <li>
-      <strong>Datasets</strong> — job metrics tables/CSV are managed in
-      <a routerLink="/app/datasets" class="alert-link">Datasets</a>.
-    </li>
-    <li>
-      <strong>Connections</strong> — SQL warehouses, LLM endpoints, and search indexes in
-      <a routerLink="/app/connections" class="alert-link">Connections</a>.
-    </li>
-    <li>
-      <strong>Agents</strong> — choose which AI agent runs on this workspace, which dataset it reads, and which LLM connection it uses.
-    </li>
-  </ol>
-  <span class="d-block mt-2 text-muted">
-    Authentication uses your Azure identity (<code>az login</code> or Managed Identity). No tokens or API keys are stored in this UI.
-  </span>
+<div class="setup-checklist card mb-2" *ngIf="environmentId">
+  <div class="card-body py-3">
+    <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+      <h2 class="setup-checklist-title mb-0">Setup checklist</h2>
+      <span class="badge" [class.bg-success]="setupComplete" [class.bg-secondary]="!setupComplete">
+        {{ setupComplete ? 'Complete' : 'In progress' }}
+      </span>
+    </div>
+    <ul class="setup-checklist-items list-unstyled mb-0">
+      <li class="setup-checklist-item" [class.done]="hasMetricsDataset">
+        <i class="bi setup-check-icon" [ngClass]="hasMetricsDataset ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>Metrics dataset</strong> — configure in
+          <a routerLink="/app/datasets">Datasets</a>
+        </span>
+      </li>
+      <li class="setup-checklist-item" [class.done]="hasLlmConnection">
+        <i class="bi setup-check-icon" [ngClass]="hasLlmConnection ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>LLM connection</strong> — add AI Foundry in
+          <a routerLink="/app/connections">Connections</a>
+        </span>
+      </li>
+      <li class="setup-checklist-item" [class.done]="hasInstalledAgent">
+        <i class="bi setup-check-icon" [ngClass]="hasInstalledAgent ? 'bi-check-circle-fill' : 'bi-circle'"></i>
+        <span class="setup-check-text">
+          <strong>Workspace agent</strong> — install below to run recommendations
+        </span>
+      </li>
+    </ul>
+    <p class="setup-checklist-note mb-0 mt-2">
+      Authentication uses Azure identity (<code>az login</code> or Managed Identity). No API keys are stored in this UI.
+    </p>
+  </div>
 </div>
 
 <div class="alert alert-warning small" *ngIf="!environmentId">
   Select an environment in the header to bind agents to its connection pool.
 </div>
 
-<div class="alert alert-danger" *ngIf="error">{{ error }}</div>
-<div class="alert alert-success" *ngIf="message">{{ message }}</div>
+<app-error-alert [message]="error" (dismiss)="error = ''"></app-error-alert>
 
-<div class="card mb-3">
+<div class="card mb-2">
   <div class="card-header d-flex justify-content-between align-items-center">
     <div>
       <strong>Installed agents</strong>
@@ -107,6 +114,15 @@
 
 <div class="card" *ngIf="showAgentWizard">
   <div class="card-header">
+    <div class="wizard-steps mb-2" aria-label="Install agent steps">
+      <span class="wizard-step" [class.wizard-step-done]="wizardAgentId || isEditingAgent" [class.wizard-step-active]="!wizardAgentId && !isEditingAgent">
+        <span class="wizard-step-num">1</span> Agent
+      </span>
+      <span class="wizard-step-connector" aria-hidden="true"></span>
+      <span class="wizard-step" [class.wizard-step-done]="wizardManifest && canInstallAgent()" [class.wizard-step-active]="wizardAgentId || isEditingAgent">
+        <span class="wizard-step-num">2</span> Bindings
+      </span>
+    </div>
     <strong>{{ isEditingAgent ? 'Edit agent' : 'Install agent' }}</strong>
     <p class="small text-muted mb-0 mt-1" *ngIf="isEditingAgent">
       Update bindings (e.g. add optional Knowledge search), name, or advanced settings.

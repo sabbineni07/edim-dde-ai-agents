@@ -1,0 +1,16 @@
+<div class="card loading-card" [class.loading-card-compact]="compact">
+  <div class="card-body">
+    <div *ngIf="variant === 'spinner'" class="loading-spinner-wrap">
+      <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+      <span class="loading-message">{{ message }}</span>
+    </div>
+    <div *ngIf="variant === 'skeleton'" class="loading-skeleton">
+      <div *ngFor="let _ of rowIndices()" class="skeleton-row">
+        <div class="skeleton-line" style="width: 18%"></div>
+        <div class="skeleton-line" style="width: 32%"></div>
+        <div class="skeleton-line" style="width: 14%"></div>
+        <div class="skeleton-line" style="width: 22%"></div>
+      </div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,11 @@
+<div class="empty-state" [class.empty-state-compact]="compact">
+  <i class="bi empty-state-icon" [ngClass]="'bi-' + icon" aria-hidden="true"></i>
+  <p class="empty-state-title">{{ title }}</p>
+  <p *ngIf="description" class="empty-state-desc">{{ description }}</p>
+  <ng-content></ng-content>
+  <a
+    *ngIf="actionLabel && actionLink"
+    class="btn btn-primary btn-sm mt-2"
+    [routerLink]="actionLink"
+  >{{ actionLabel }}</a>
+</div>

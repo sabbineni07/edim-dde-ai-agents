@@ -3,12 +3,139 @@
   cursor: pointer;
 }
 
-.job-detail-actions .form-select-sm {
+.job-detail-toolbar {
+  border-color: var(--color-border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.job-detail-toolbar-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+}
+
+.job-detail-toolbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 10rem;
+}
+
+.job-detail-toolbar-group .form-select-sm {
   min-width: 11rem;
 }
 
-.metrics-panels .border-start {
-  border-left: 1px solid var(--bs-border-color) !important;
+.job-detail-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+
+.job-detail-tabs {
+  border-bottom-color: var(--color-border-subtle);
+  flex-wrap: nowrap;
+  overflow-x: auto;
+}
+
+.job-detail-tabs .nav-link {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: var(--space-3) var(--space-4);
+  white-space: nowrap;
+}
+
+.job-detail-tabs .nav-link:hover {
+  color: var(--navy-header);
+  border-bottom-color: var(--color-border);
+}
+
+.job-detail-tabs .nav-link.active {
+  color: var(--navy-header);
+  font-weight: 600;
+  background: transparent;
+  border-bottom-color: var(--navy-header);
+}
+
+.metric-gauges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.metric-gauge-chip {
+  flex: 1 1 8rem;
+  min-width: 7rem;
+  max-width: 12rem;
+}
+
+.metric-gauge-label {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-1);
+}
+
+.metric-gauge-bar {
+  height: 0.35rem;
+  background: var(--color-border-subtle);
+  border-radius: 999px;
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+}
+
+.metric-gauge-fill {
+  height: 100%;
+  background: var(--navy-header);
+  border-radius: 999px;
+  transition: width var(--transition-base);
+}
+
+.metric-gauge-value {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.job-metrics-table {
+  margin-bottom: 0;
+}
+
+.job-metrics-table .metric-label-col {
+  width: 9rem;
+}
+
+.job-metrics-table .metric-label {
+  color: var(--color-text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.job-metrics-table td:not(.metric-label) {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.job-metrics-table thead th {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--color-text-muted);
+  background: var(--color-surface-muted);
+}
+
+.job-metrics-card .card-header {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
 
 .job-run-id-text {
@@ -39,4 +166,8 @@
 
 .job-runs-pagination .page-item.active .page-link {
   pointer-events: none;
+}
+
+.recommendation-actions .btn {
+  white-space: nowrap;
 }

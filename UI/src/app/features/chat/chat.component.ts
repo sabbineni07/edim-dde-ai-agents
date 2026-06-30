@@ -13,6 +13,9 @@ import { EnvironmentSelectionService } from '../../core/services/environment-sel
 import { EnvironmentConnectionCacheService } from '../../core/services/environment-connection-cache.service';
 import { parseApiError } from '../../core/api-error.util';
 import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -23,17 +26,34 @@ interface Message {
 @Component({
   selector: 'app-chat',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink, MarkdownContentComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    RouterLink,
+    MarkdownContentComponent,
+    PageHeaderComponent,
+    EmptyStateComponent,
+    ErrorAlertComponent,
+  ],
   templateUrl: './chat.component.html',
   styleUrls: ['./chat.component.css'],
 })
 export class ChatComponent implements OnInit, OnDestroy {
   @ViewChild('messageList') private messageListRef?: ElementRef<HTMLElement>;
+  @ViewChild('questionInput') private questionInputRef?: ElementRef<HTMLTextAreaElement>;
+
+  readonly suggestedPrompts = [
+    'What metrics should I look at for cluster tuning?',
+    'How do I configure a metrics dataset for an environment?',
+    'What does executor memory pressure indicate?',
+  ];
 
   question = '';
   messages: Message[] = [];
   loading = false;
   error = '';
+  showSettings = false;
+  expandedSourceKey: string | null = null;
 
   environmentId = '';
   environmentName = '';
@@ -70,6 +90,10 @@ export class ChatComponent implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.subs.unsubscribe();
+  }
+
+  get hasMessages(): boolean {
+    return this.messages.length > 0;
   }
 
   loadConnections(): void {
@@ -115,6 +139,34 @@ export class ChatComponent implements OnInit, OnDestroy {
       !!(this.question || '').trim() &&
       !this.loading
     );
+  }
+
+  toggleSettings(): void {
+    this.showSettings = !this.showSettings;
+  }
+
+  usePrompt(prompt: string): void {
+    this.question = prompt;
+    this.questionInputRef?.nativeElement.focus();
+  }
+
+  onQuestionKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      this.send();
+    }
+  }
+
+  sourceKey(messageIndex: number, sourceIndex: number): string {
+    return `${messageIndex}-${sourceIndex}`;
+  }
+
+  toggleSource(key: string): void {
+    this.expandedSourceKey = this.expandedSourceKey === key ? null : key;
+  }
+
+  isSourceExpanded(key: string): boolean {
+    return this.expandedSourceKey === key;
   }
 
   send(): void {

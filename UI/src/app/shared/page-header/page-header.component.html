@@ -1,0 +1,16 @@
+<header class="page-header" [class.page-header-compact]="compact">
+  <app-breadcrumb *ngIf="breadcrumbs.length" [items]="breadcrumbs"></app-breadcrumb>
+  <div class="page-header-row">
+    <div class="page-header-main">
+      <h1 class="page-title">
+        <i *ngIf="icon" [class]="iconClass + ' page-title-icon'" aria-hidden="true"></i>
+        {{ title }}
+      </h1>
+      <p *ngIf="subtitle" class="page-subtitle">{{ subtitle }}</p>
+      <ng-content select="[subtitle-extra]"></ng-content>
+    </div>
+    <div class="page-actions">
+      <ng-content select="[actions]"></ng-content>
+    </div>
+  </div>
+</header>

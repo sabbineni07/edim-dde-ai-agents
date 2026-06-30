@@ -62,8 +62,9 @@ def resolve_metrics_table_fqn(
 ) -> str:
     """Resolve the metrics Delta table for an environment.
 
-    Priority: explicit dataset_id → default environment dataset → env ``table_fqn``
-    → legacy table on connection config.
+    Priority: explicit dataset_id → default environment dataset → legacy table on
+    connection config (deprecated). Environment ``table_fqn`` columns are not used
+    at runtime; configure a dataset instead.
     """
     eid = (environment_id or "").strip()
     resolved_id = resolve_metrics_dataset_id(eid, dataset_id) if eid else None
@@ -77,11 +78,6 @@ def resolve_metrics_table_fqn(
         table = (ds.table_fqn or "").strip()
         if table:
             return table
-
-    env = get_environment(eid) if eid else None
-    table = (env.table_fqn or "").strip() if env else ""
-    if table:
-        return table
 
     legacy = ((connection_config or {}).get("databricks_job_cluster_metrics_table") or "").strip()
     if legacy:
@@ -105,7 +101,7 @@ def _has_metrics_dataset(env: PlatformEnvironment) -> bool:
             return bool((ds.table_fqn or "").strip())
         if ds.source_type == "local_csv":
             return bool((ds.local_path or "").strip())
-    return bool((env.table_fqn or "").strip())
+    return False
 
 
 def _metrics_table_ready(env: PlatformEnvironment, conn_config: Optional[dict] = None) -> bool:

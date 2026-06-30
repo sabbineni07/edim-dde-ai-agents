@@ -10,11 +10,16 @@ import {
 import { WorkspaceSelectionService } from '../../core/services/workspace-selection.service';
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { BrowseDataCacheService } from '../../core/services/browse-data-cache.service';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
+import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 
 @Component({
   selector: 'app-jobs-list',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule],
+  imports: [CommonModule, RouterLink, FormsModule, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent, ErrorAlertComponent],
   templateUrl: './jobs-list.component.html',
   styleUrls: ['./jobs-list.component.css'],
 })
@@ -43,6 +48,25 @@ export class JobsListComponent implements OnInit {
     private environmentSelection: EnvironmentSelectionService,
     private browseCache: BrowseDataCacheService
   ) {}
+
+  get breadcrumbs(): BreadcrumbItem[] {
+    const items: BreadcrumbItem[] = [{ label: 'Workspaces', link: '/app/workspaces' }];
+    if (this.workspaceId) {
+      const ws = this.workspaces.find((w) => w.workspace_id === this.workspaceId);
+      items.push({ label: ws?.workspace_name || this.workspaceId });
+    }
+    items.push({ label: 'Jobs' });
+    return items;
+  }
+
+  get jobsSubtitle(): string {
+    if (!this.workspaceId) {
+      return 'Select a workspace and date range to browse jobs.';
+    }
+    const ws = this.workspaces.find((w) => w.workspace_id === this.workspaceId);
+    const name = ws?.workspace_name || this.workspaceId;
+    return `${name} · ${this.startDate} to ${this.endDate}`;
+  }
 
   ngOnInit(): void {
     if (!this.environmentSelection.getSelectedId()) {

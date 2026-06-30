@@ -1,17 +1,25 @@
-<aside class="sidebar" [class.sidebar-closed]="!isOpen">
-  <nav class="sidebar-nav">
-    <ul class="nav-list">
-      <li *ngFor="let item of menuItems" class="nav-item">
-        <a
-          class="nav-link"
-          [class.active]="activeMenuItem?.label === item.label"
-          (click)="onItemClick(item)"
-          href="javascript:void(0)"
-        >
-          <i class="nav-icon" [ngClass]="getIconClass(item.icon)"></i>
-          <span class="nav-label">{{ item.label }}</span>
-        </a>
-      </li>
-    </ul>
+<aside class="sidebar" [class.sidebar-expanded]="expanded" [class.sidebar-rail]="!expanded">
+  <nav class="sidebar-nav" aria-label="Main navigation">
+    <ng-container *ngFor="let group of groups">
+      <div *ngIf="itemsForGroup(group.key).length" class="nav-group">
+        <div *ngIf="expanded" class="nav-group-label">{{ group.label }}</div>
+        <ul class="nav-list">
+          <li *ngFor="let item of itemsForGroup(group.key)" class="nav-item">
+            <a
+              class="nav-link"
+              [routerLink]="item.route"
+              routerLinkActive="active"
+              [routerLinkActiveOptions]="{ paths: 'subset', queryParams: 'ignored', fragment: 'ignored', matrixParams: 'ignored' }"
+              (click)="onItemClick(item)"
+              [attr.title]="!expanded ? item.label : null"
+              [attr.aria-label]="item.label"
+            >
+              <i class="nav-icon" [ngClass]="getIconClass(item.icon)"></i>
+              <span class="nav-label">{{ item.label }}</span>
+            </a>
+          </li>
+        </ul>
+      </div>
+    </ng-container>
   </nav>
 </aside>

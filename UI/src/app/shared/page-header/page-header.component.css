@@ -1,0 +1,28 @@
+.page-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.page-header-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-title-icon {
+  margin-right: var(--space-2);
+  color: var(--page-icon-color);
+  font-size: 0.92em;
+  opacity: 0.92;
+  vertical-align: -0.05em;
+}
+
+.page-header-compact .page-title {
+  font-size: var(--text-lg);
+}
+
+.page-actions:empty {
+  display: none;
+}

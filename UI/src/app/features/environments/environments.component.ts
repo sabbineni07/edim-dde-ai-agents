@@ -11,11 +11,14 @@ import {
 import { EnvironmentSelectionService } from '../../core/services/environment-selection.service';
 import { AuthService } from '../../core/services/auth.service';
 import { parseApiError } from '../../core/api-error.util';
+import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 
 @Component({
   selector: 'app-environments',
   standalone: true,
-  imports: [CommonModule, FormsModule, RouterLink],
+  imports: [CommonModule, FormsModule, RouterLink, PageHeaderComponent, LoadingCardComponent, ErrorAlertComponent],
   templateUrl: './environments.component.html',
   styleUrls: ['./environments.component.css'],
 })

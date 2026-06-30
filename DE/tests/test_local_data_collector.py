@@ -150,6 +150,8 @@ def test_list_job_runs():
 
 def test_get_job_metrics():
     """Test aggregated metrics for one job/workspace."""
+    import json
+
     collector = LocalDataCollector()
     metrics = collector.get_job_metrics(
         workspace_id="1234567890123456",
@@ -163,3 +165,4 @@ def test_get_job_metrics():
     assert "avg_worker_cpu_utilization_pct" in metrics
     assert "avg_worker_memory_utilization_pct" in metrics
     assert "azure_worker_vm_size" in metrics
+    json.dumps(metrics)

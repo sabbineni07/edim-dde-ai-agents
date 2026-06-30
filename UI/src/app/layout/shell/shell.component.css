@@ -5,46 +5,78 @@
 }
 
 .shell-header {
-  background: var(--navy-primary);
-  color: white;
-  padding: 0.5rem 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  background: var(--navy-header);
+  color: var(--color-text-inverse);
+  padding: 0 var(--content-padding-x);
+  min-height: var(--shell-header-height);
+  display: flex;
+  align-items: center;
+  box-shadow: var(--shadow-md);
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .header-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  width: 100%;
+  gap: var(--space-3);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .sidebar-toggle-btn {
   background: transparent;
   border: none;
-  color: white;
-  padding: 0.25rem 0.5rem;
+  color: inherit;
+  padding: var(--space-2);
   cursor: pointer;
-  font-size: 1.25rem;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.app-icon { font-size: 1.5rem; }
-.app-title { font-size: 1.25rem; margin: 0; font-weight: 600; }
+.sidebar-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.app-icon {
+  font-size: 1.15rem;
+  flex-shrink: 0;
+}
+
+.app-title {
+  font-size: var(--text-md);
+  margin: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: var(--space-3);
+  flex-shrink: 0;
 }
 
-.user-text { font-size: 0.9rem; }
+.user-text {
+  font-size: var(--text-xs);
+  opacity: 0.9;
+}
 
 .env-dropdown .env-switcher {
-  max-width: 14rem;
+  max-width: 11rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -52,8 +84,9 @@
 
 .shell-banner {
   flex-shrink: 0;
-  padding: 0.5rem 1rem;
-  padding-right: 2.5rem;
+  padding: var(--space-2) var(--content-padding-x);
+  padding-right: 2rem;
+  font-size: var(--text-sm);
 }
 
 .shell-body {
@@ -66,11 +99,31 @@
 .main-content {
   flex: 1;
   overflow: auto;
-  padding: 1rem;
-  background: var(--navy-bg);
-  transition: margin-left 0.2s ease;
+  padding: var(--content-padding-y) var(--content-padding-x);
+  background: var(--color-surface-page);
+  min-width: 0;
+  position: relative;
 }
 
-.main-content.sidebar-closed {
-  margin-left: 0;
+.env-picker-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+  background: rgba(15, 20, 25, 0.35);
+}
+
+.env-picker-dialog {
+  width: 100%;
+  max-width: 22rem;
+  border: 1px solid var(--color-border-subtle);
+}
+
+[data-theme='dark'] .btn-outline-light {
+  --bs-btn-color: #e8eaed;
+  --bs-btn-border-color: rgba(255, 255, 255, 0.35);
+  --bs-btn-hover-bg: rgba(255, 255, 255, 0.1);
 }

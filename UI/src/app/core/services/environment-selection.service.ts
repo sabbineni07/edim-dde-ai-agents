@@ -2,55 +2,44 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 import { distinctUntilChanged, map } from 'rxjs/operators';
 import { ApiService, EnvironmentConnection, PlatformEnvironment } from '../../services/api.service';
+import { AuthService } from './auth.service';
 import { BrowseDataCacheService } from './browse-data-cache.service';
 import { EnvironmentConnectionCacheService } from './environment-connection-cache.service';
 
-const ENV_KEY = 'edim_selected_environment_id';
-const ENV_NAME_KEY = 'edim_selected_environment_name';
-const CONN_KEY = 'edim_selected_connection_id';
-const DATASET_KEY = 'edim_selected_dataset_id';
-const LEGACY_CONN_KEY = 'edim_selected_metrics_connection_id';
+/** Legacy global keys (migrated to per-user keys on first read). */
+const LEGACY_ENV_KEY = 'edim_selected_environment_id';
+const LEGACY_ENV_NAME_KEY = 'edim_selected_environment_name';
+const LEGACY_CONN_KEY = 'edim_selected_connection_id';
+const LEGACY_DATASET_KEY = 'edim_selected_dataset_id';
+const LEGACY_METRICS_CONN_KEY = 'edim_selected_metrics_connection_id';
 
 export interface SelectedEnvironment {
   id: string;
   displayName: string;
 }
 
-function readStoredConnectionId(): string | null {
-  try {
-    return (
-      localStorage.getItem(CONN_KEY)?.trim() ||
-      localStorage.getItem(LEGACY_CONN_KEY)?.trim() ||
-      null
-    );
-  } catch {
-    return null;
-  }
-}
-
-function readStoredDatasetId(): string | null {
-  try {
-    return localStorage.getItem(DATASET_KEY)?.trim() || null;
-  } catch {
-    return null;
-  }
+interface UserStorageKeys {
+  env: string;
+  envName: string;
+  conn: string;
+  dataset: string;
 }
 
 /**
  * Session context: environment slug (e.g. dim_dev) and selected Databricks connection UUID.
  *
- * Environment ids are stable business keys from platform seed (Unity Catalog scope),
- * not auto-generated UUIDs. Connection rows use UUID primary keys.
+ * Preferences are persisted in localStorage per signed-in user and restored on login.
  */
 @Injectable({ providedIn: 'root' })
 export class EnvironmentSelectionService {
   private environments$ = new BehaviorSubject<PlatformEnvironment[]>([]);
-  private selected$ = new BehaviorSubject<SelectedEnvironment | null>(this.getSelected());
-  private selectedConnectionId$ = new BehaviorSubject<string | null>(readStoredConnectionId());
-  private selectedDatasetId$ = new BehaviorSubject<string | null>(readStoredDatasetId());
+  private selected$ = new BehaviorSubject<SelectedEnvironment | null>(null);
+  private selectedConnectionId$ = new BehaviorSubject<string | null>(null);
+  private selectedDatasetId$ = new BehaviorSubject<string | null>(null);
 
   constructor(
     private api: ApiService,
+    private auth: AuthService,
     private connectionCache: EnvironmentConnectionCacheService,
     private browseCache: BrowseDataCacheService
   ) {}
@@ -83,6 +72,15 @@ export class EnvironmentSelectionService {
     return this.connectionCache.watchSelectedConnection();
   }
 
+  /** Load persisted prefs for the current user into in-memory state (call after login). */
+  initializeForCurrentUser(): void {
+    this.migrateLegacyStorage();
+    const stored = this.getSelected();
+    this.selected$.next(stored);
+    this.selectedConnectionId$.next(this.readStoredConnectionId());
+    this.selectedDatasetId$.next(this.readStoredDatasetId());
+  }
+
   /** Latest loaded environment row for the given id (from header env list). */
   getEnvironmentRecord(environmentId: string): PlatformEnvironment | null {
     const id = environmentId?.trim();
@@ -92,9 +90,10 @@ export class EnvironmentSelectionService {
 
   getSelected(): SelectedEnvironment | null {
     try {
-      const id = localStorage.getItem(ENV_KEY)?.trim();
+      const keys = this.storageKeys();
+      const id = localStorage.getItem(keys.env)?.trim();
       if (!id) return null;
-      const displayName = localStorage.getItem(ENV_NAME_KEY)?.trim() || id;
+      const displayName = localStorage.getItem(keys.envName)?.trim() || id;
       return { id, displayName };
     } catch {
       return null;
@@ -108,7 +107,7 @@ export class EnvironmentSelectionService {
   getSelectedConnectionId(): string | null {
     return (
       this.connectionCache.getSelectedConnection()?.id ||
-      readStoredConnectionId()
+      this.readStoredConnectionId()
     );
   }
 
@@ -117,15 +116,16 @@ export class EnvironmentSelectionService {
   }
 
   getSelectedDatasetId(): string | null {
-    return readStoredDatasetId();
+    return this.readStoredDatasetId();
   }
 
   setSelected(environment: SelectedEnvironment): void {
     const prevId = this.getSelectedId();
     const nextId = environment.id.trim();
     try {
-      localStorage.setItem(ENV_KEY, nextId);
-      localStorage.setItem(ENV_NAME_KEY, environment.displayName.trim());
+      const keys = this.storageKeys();
+      localStorage.setItem(keys.env, nextId);
+      localStorage.setItem(keys.envName, environment.displayName.trim());
       this.selected$.next(environment);
       if (prevId !== nextId) {
         this.connectionCache.clearSelectedConnection();
@@ -162,33 +162,6 @@ export class EnvironmentSelectionService {
     }
   }
 
-  private persistConnectionId(connectionId: string | null): void {
-    try {
-      if (connectionId?.trim()) {
-        localStorage.setItem(CONN_KEY, connectionId.trim());
-      } else {
-        localStorage.removeItem(CONN_KEY);
-      }
-      localStorage.removeItem(LEGACY_CONN_KEY);
-      this.selectedConnectionId$.next(connectionId?.trim() || null);
-    } catch {
-      // ignore
-    }
-  }
-
-  private persistDatasetId(datasetId: string | null): void {
-    try {
-      if (datasetId?.trim()) {
-        localStorage.setItem(DATASET_KEY, datasetId.trim());
-      } else {
-        localStorage.removeItem(DATASET_KEY);
-      }
-      this.selectedDatasetId$.next(datasetId?.trim() || null);
-    } catch {
-      // ignore
-    }
-  }
-
   invalidateConnectionCache(environmentId?: string): void {
     this.connectionCache.invalidate(environmentId);
     if (environmentId) {
@@ -198,19 +171,25 @@ export class EnvironmentSelectionService {
     }
   }
 
+  /** Clear in-memory session state only (logout). Persisted prefs are kept for next login. */
+  clearSession(): void {
+    this.selected$.next(null);
+    this.selectedConnectionId$.next(null);
+    this.selectedDatasetId$.next(null);
+    this.connectionCache.clearSelectedConnection();
+    this.connectionCache.invalidate();
+    this.browseCache.clear();
+  }
+
+  /** Remove persisted preferences for the current user. */
   clearSelected(): void {
     try {
-      localStorage.removeItem(ENV_KEY);
-      localStorage.removeItem(ENV_NAME_KEY);
-      localStorage.removeItem(CONN_KEY);
-      localStorage.removeItem(DATASET_KEY);
-      localStorage.removeItem(LEGACY_CONN_KEY);
-      this.selected$.next(null);
-      this.selectedConnectionId$.next(null);
-      this.selectedDatasetId$.next(null);
-      this.connectionCache.clearSelectedConnection();
-      this.connectionCache.invalidate();
-      this.browseCache.clear();
+      const keys = this.storageKeys();
+      localStorage.removeItem(keys.env);
+      localStorage.removeItem(keys.envName);
+      localStorage.removeItem(keys.conn);
+      localStorage.removeItem(keys.dataset);
+      this.clearSession();
     } catch {
       // ignore
     }
@@ -234,6 +213,8 @@ export class EnvironmentSelectionService {
             const env = list.find((e) => e.id === stored.id);
             if (env && env.display_name !== stored.displayName) {
               this.setSelected({ id: env.id, displayName: env.display_name });
+            } else {
+              this.selected$.next(stored);
             }
           }
           subscriber.next(list);
@@ -242,5 +223,101 @@ export class EnvironmentSelectionService {
         error: (err) => subscriber.error(err),
       });
     });
+  }
+
+  private storageKeys(): UserStorageKeys {
+    const user = (this.auth.currentUser?.username || '_anonymous').trim().toLowerCase();
+    return {
+      env: `edim_selected_environment_id:${user}`,
+      envName: `edim_selected_environment_name:${user}`,
+      conn: `edim_selected_connection_id:${user}`,
+      dataset: `edim_selected_dataset_id:${user}`,
+    };
+  }
+
+  private readStoredConnectionId(): string | null {
+    try {
+      const keys = this.storageKeys();
+      return (
+        localStorage.getItem(keys.conn)?.trim() ||
+        localStorage.getItem(LEGACY_METRICS_CONN_KEY)?.trim() ||
+        null
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  private readStoredDatasetId(): string | null {
+    try {
+      const keys = this.storageKeys();
+      return localStorage.getItem(keys.dataset)?.trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private persistConnectionId(connectionId: string | null): void {
+    try {
+      const keys = this.storageKeys();
+      if (connectionId?.trim()) {
+        localStorage.setItem(keys.conn, connectionId.trim());
+      } else {
+        localStorage.removeItem(keys.conn);
+      }
+      this.selectedConnectionId$.next(connectionId?.trim() || null);
+    } catch {
+      // ignore
+    }
+  }
+
+  private persistDatasetId(datasetId: string | null): void {
+    try {
+      const keys = this.storageKeys();
+      if (datasetId?.trim()) {
+        localStorage.setItem(keys.dataset, datasetId.trim());
+      } else {
+        localStorage.removeItem(keys.dataset);
+      }
+      this.selectedDatasetId$.next(datasetId?.trim() || null);
+    } catch {
+      // ignore
+    }
+  }
+
+  /** One-time migration from pre-login global localStorage keys. */
+  private migrateLegacyStorage(): void {
+    try {
+      const keys = this.storageKeys();
+      if (localStorage.getItem(keys.env)) {
+        return;
+      }
+      const legacyEnv = localStorage.getItem(LEGACY_ENV_KEY)?.trim();
+      if (!legacyEnv) {
+        return;
+      }
+      localStorage.setItem(keys.env, legacyEnv);
+      const legacyName = localStorage.getItem(LEGACY_ENV_NAME_KEY)?.trim();
+      if (legacyName) {
+        localStorage.setItem(keys.envName, legacyName);
+      }
+      const legacyConn =
+        localStorage.getItem(LEGACY_CONN_KEY)?.trim() ||
+        localStorage.getItem(LEGACY_METRICS_CONN_KEY)?.trim();
+      if (legacyConn) {
+        localStorage.setItem(keys.conn, legacyConn);
+      }
+      const legacyDataset = localStorage.getItem(LEGACY_DATASET_KEY)?.trim();
+      if (legacyDataset) {
+        localStorage.setItem(keys.dataset, legacyDataset);
+      }
+      localStorage.removeItem(LEGACY_ENV_KEY);
+      localStorage.removeItem(LEGACY_ENV_NAME_KEY);
+      localStorage.removeItem(LEGACY_CONN_KEY);
+      localStorage.removeItem(LEGACY_DATASET_KEY);
+      localStorage.removeItem(LEGACY_METRICS_CONN_KEY);
+    } catch {
+      // ignore
+    }
   }
 }

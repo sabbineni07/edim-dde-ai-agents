@@ -42,7 +42,7 @@ export class LoginComponent {
       .login(this.form.value.username, this.form.value.password)
       .then(() => {
         this.loading = false;
-        this.router.navigate(['/app/workspaces']);
+        this.router.navigate(['/app/connections']);
       })
       .catch((err) => {
         this.loading = false;

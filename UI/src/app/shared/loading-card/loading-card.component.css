@@ -1,0 +1,26 @@
+.loading-card-compact .card-body {
+  padding: var(--space-5) var(--card-body-px);
+}
+
+.loading-spinner-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  padding: var(--space-4) 0;
+}
+
+.loading-message {
+  font-size: var(--text-sm);
+  color: var(--color-text-muted);
+}
+
+.skeleton-row {
+  display: flex;
+  gap: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.skeleton-row:last-child {
+  margin-bottom: 0;
+}

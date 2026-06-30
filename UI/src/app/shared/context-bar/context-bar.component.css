@@ -1,0 +1,42 @@
+.context-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--content-padding-x);
+  background: var(--color-surface-card);
+  border-bottom: 1px solid var(--color-border-subtle);
+  font-size: var(--text-xs);
+}
+
+.context-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-subtle);
+  max-width: 16rem;
+}
+
+.context-chip .bi {
+  color: var(--page-icon-color);
+  font-size: 0.75rem;
+}
+
+.context-label {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  font-size: 0.625rem;
+  letter-spacing: 0.03em;
+}
+
+.context-value {
+  color: var(--color-text);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -2,7 +2,7 @@
 
 Captured from product and engineering discussions. Not committed to priority or sprint; adjust as needed.
 
-**Platform data model (connections → datasets):** see [BACKLOG_CONNECTIONS_AND_DATASETS.md](./BACKLOG_CONNECTIONS_AND_DATASETS.md) for phased design, flows, and checkboxes (Phases 0–5 done; Phase 6 pending).
+**Platform data model (connections → datasets):** see [BACKLOG_CONNECTIONS_AND_DATASETS.md](./BACKLOG_CONNECTIONS_AND_DATASETS.md) for phased design, flows, and checkboxes (Phases 0–5 done; Phase 6 pending). **Manage environments admin UX** (hide Source/Readiness, setup summary) tracked in §6.4.
 
 **AI Foundry / LangChain upgrade:** see [BACKLOG_AI_FOUNDRY_UPGRADE.md](./BACKLOG_AI_FOUNDRY_UPGRADE.md) for phased design, diagrams, and progress (Phases 0–7 not started).
 
@@ -28,6 +28,8 @@ Captured from product and engineering discussions. Not committed to priority or 
 ---
 
 ## Product / UX
+
+**UI/UX modernization (Options A → B → C):** see [BACKLOG_UI_UX_MODERNIZATION.md](./BACKLOG_UI_UX_MODERNIZATION.md) for phased design, review gates, and progress (Option A Phase 1 done; Phase 2 next).
 
 Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
@@ -60,4 +62,4 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: 2026-06-25 — added AI Foundry upgrade backlog link.*
+*Last updated: 2026-06-29 — Manage environments UX in connections backlog §6.4; UI Phase 1 marked done.*
