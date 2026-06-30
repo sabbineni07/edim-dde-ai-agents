@@ -3,8 +3,37 @@
   cursor: pointer;
 }
 
-.job-detail-actions .form-select-sm {
+.job-detail-toolbar {
+  border-color: var(--color-border-subtle);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.job-detail-toolbar-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4) var(--space-5);
+  padding: var(--space-3) var(--space-4);
+}
+
+.job-detail-toolbar-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-width: 10rem;
+}
+
+.job-detail-toolbar-group .form-select-sm {
   min-width: 11rem;
+}
+
+.job-detail-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-left: auto;
 }
 
 .job-metrics-table {

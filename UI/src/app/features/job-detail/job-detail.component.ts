@@ -33,13 +33,15 @@ import { BrowseDataCacheService } from '../../core/services/browse-data-cache.se
 import { ToastService } from '../../core/services/toast.service';
 import { MarkdownContentComponent } from '../../shared/markdown-content/markdown-content.component';
 import { PageHeaderComponent } from '../../shared/page-header/page-header.component';
+import { LoadingCardComponent } from '../../shared/loading-card/loading-card.component';
+import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 import { UiHints } from '../../services/api.service';
 
 @Component({
   selector: 'app-job-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent, PageHeaderComponent],
+  imports: [CommonModule, RouterLink, FormsModule, MarkdownContentComponent, PageHeaderComponent, LoadingCardComponent, EmptyStateComponent],
   templateUrl: './job-detail.component.html',
   styleUrls: ['./job-detail.component.css'],
 })
@@ -96,19 +98,39 @@ export class JobDetailComponent implements OnInit {
   }
 
   get breadcrumbs(): BreadcrumbItem[] {
+    const jobsLink = {
+      workspaceId: this.workspaceId(),
+      start_date: this.startDate,
+      end_date: this.endDate,
+    };
     return [
       { label: 'Workspaces', link: '/app/workspaces' },
       {
         label: 'Jobs',
         link: ['/app/jobs'],
-        queryParams: {
-          workspaceId: this.workspaceId(),
-          start_date: this.startDate,
-          end_date: this.endDate,
-        },
+        queryParams: jobsLink,
       },
-      { label: this.jobId() },
+      { label: this.jobDisplayName },
     ];
+  }
+
+  get workspaceDisplayName(): string {
+    const fromAgent = this.workspaceAgents.find((wa) => wa.workspace_name)?.workspace_name;
+    return fromAgent?.trim() || this.workspaceId();
+  }
+
+  get jobDisplayName(): string {
+    const name = this.jobAggregateMetrics?.['job_name'];
+    if (typeof name === 'string' && name.trim()) return name.trim();
+    return this.jobId();
+  }
+
+  get jobDetailSubtitle(): string {
+    const parts = [`Workspace ${this.workspaceDisplayName}`];
+    if (this.startDate && this.endDate) {
+      parts.push(`${this.startDate} – ${this.endDate}`);
+    }
+    return parts.join(' · ');
   }
 
   ngOnInit(): void {

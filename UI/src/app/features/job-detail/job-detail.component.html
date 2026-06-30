@@ -1,31 +1,60 @@
 <app-page-header
-  title="Job Details"
+  [title]="jobDisplayName"
   icon="info-circle"
-  [subtitle]="'Workspace: ' + workspaceId() + ' · Job: ' + jobId()"
+  [subtitle]="jobDetailSubtitle"
   [breadcrumbs]="breadcrumbs"
 >
-  <div actions class="page-actions job-detail-actions">
-    <div class="d-flex align-items-center gap-2">
-      <label class="form-label mb-0 text-nowrap" for="workspaceAgentSelect">Agent</label>
+  <div subtitle-extra class="page-subtitle">
+    <code>{{ jobId() }}</code>
+  </div>
+</app-page-header>
+
+<div class="job-detail-toolbar card mb-2">
+  <div class="card-body job-detail-toolbar-body">
+    <div class="job-detail-toolbar-group">
+      <label class="form-label mb-0" for="workspaceAgentSelect">Agent</label>
       <select id="workspaceAgentSelect" class="form-select form-select-sm" [(ngModel)]="selectedWorkspaceAgentId">
         <option value="">Platform default</option>
         <option *ngFor="let wa of workspaceAgents" [value]="wa.id">{{ wa.name }}</option>
       </select>
+      <a
+        *ngIf="workspaceAgents.length === 0"
+        class="small text-nowrap"
+        [routerLink]="['/app/workspaces', workspaceId()]"
+        [queryParams]="{ tab: 'agents' }"
+      >
+        Add agent
+      </a>
     </div>
-    <a *ngIf="workspaceAgents.length === 0" class="small" [routerLink]="['/app/workspaces', workspaceId()]" [queryParams]="{ tab: 'agents' }">Add agent</a>
-    <div class="form-check mb-0">
-      <input class="form-check-input" type="checkbox" id="includeExplanation" [(ngModel)]="includeExplanation" />
-      <label class="form-check-label small" for="includeExplanation">Explanation</label>
+    <div class="job-detail-toolbar-group">
+      <div class="form-check mb-0">
+        <input class="form-check-input" type="checkbox" id="includeExplanation" [(ngModel)]="includeExplanation" />
+        <label class="form-check-label small" for="includeExplanation">Include explanation</label>
+      </div>
     </div>
-    <button class="btn btn-refresh btn-sm" (click)="refreshJobData()" [disabled]="loadingMetrics || loadingRuns || loadingRecs">
-      <i class="bi bi-arrow-clockwise"></i>
-    </button>
-    <button class="btn btn-primary btn-sm" (click)="runRecommendation()" [disabled]="runningRecommendation || !selectedClusterId">
-      <span *ngIf="!runningRecommendation">Run</span>
-      <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>…</span>
-    </button>
+    <div class="job-detail-toolbar-actions">
+      <button
+        class="btn btn-refresh btn-sm"
+        type="button"
+        (click)="refreshJobData()"
+        [disabled]="loadingMetrics || loadingRuns || loadingRecs"
+        title="Refresh"
+        aria-label="Refresh job data"
+      >
+        <i class="bi bi-arrow-clockwise"></i>
+      </button>
+      <button
+        class="btn btn-primary btn-sm"
+        type="button"
+        (click)="runRecommendation()"
+        [disabled]="runningRecommendation || !selectedClusterId"
+      >
+        <span *ngIf="!runningRecommendation"><i class="bi bi-play-fill me-1"></i>Run recommendation</span>
+        <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>Running…</span>
+      </button>
+    </div>
   </div>
-</app-page-header>
+</div>
 
 <div class="alert alert-danger py-2" *ngIf="loadError">{{ loadError }}</div>
 <div class="alert alert-danger py-2" *ngIf="error">{{ error }}</div>
@@ -33,9 +62,14 @@
 <div class="card mb-4 job-runs-card">
   <div class="card-header"><strong>Job runs</strong></div>
   <div class="card-body p-0">
-    <div *ngIf="loadingRuns" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
-    <div *ngIf="!loadingRuns && runs.length === 0" class="p-3 text-muted small">
-      No runs in this date range.
+    <app-loading-card *ngIf="loadingRuns" variant="skeleton" [skeletonRows]="5"></app-loading-card>
+    <div *ngIf="!loadingRuns && runs.length === 0" class="p-3">
+      <app-empty-state
+        icon="calendar-range"
+        title="No runs in range"
+        description="Select a different date range from the Jobs list or pick another cluster after runs load."
+        [compact]="true"
+      ></app-empty-state>
     </div>
     <div class="table-responsive job-runs-table-scroll" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
@@ -140,7 +174,7 @@
     <span class="small text-muted" *ngIf="metricsSummaryLine">{{ metricsSummaryLine }}</span>
   </div>
   <div class="card-body p-0">
-    <div *ngIf="loadingMetrics" class="text-center py-3"><div class="spinner-border spinner-border-sm"></div></div>
+    <app-loading-card *ngIf="loadingMetrics" variant="skeleton" [skeletonRows]="4"></app-loading-card>
     <div *ngIf="!loadingMetrics && jobAggregateMetrics as m" class="table-responsive">
       <table class="table table-sm table-bordered mb-0 job-metrics-table">
         <thead>
@@ -192,8 +226,13 @@
         </tbody>
       </table>
     </div>
-    <div *ngIf="!loadingMetrics && !metricsData" class="p-3 text-muted small">
-      No aggregated metrics for this job in the selected date range.
+    <div *ngIf="!loadingMetrics && !metricsData" class="p-3">
+      <app-empty-state
+        icon="graph-up"
+        title="No aggregated metrics"
+        description="No metrics for this job in the selected date range."
+        [compact]="true"
+      ></app-empty-state>
     </div>
   </div>
 </div>
