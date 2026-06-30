@@ -14,6 +14,14 @@ import { parseApiError } from '../../core/api-error.util';
 import { SidebarComponent, MenuItem } from '../sidebar/sidebar.component';
 import { ContextBarComponent } from '../../shared/context-bar/context-bar.component';
 
+/** Routes where session context chips add little value (setup/admin). */
+const CONTEXT_BAR_HIDDEN_PREFIXES = [
+  '/app/admin/environments',
+  '/app/environments',
+  '/app/connections',
+  '/app/datasets',
+];
+
 @Component({
   selector: 'app-shell',
   standalone: true,
@@ -26,6 +34,9 @@ export class ShellComponent implements OnInit {
   isAdmin = false;
   environments: PlatformEnvironment[] = [];
   selectedEnvironment: SelectedEnvironment | null = null;
+  contextDatasetName = '';
+  contextConnectionName = '';
+  currentUrl = '';
   showEnvPicker = false;
   environmentsLoadError = '';
   environmentsLoadFailed = false;
@@ -67,6 +78,16 @@ export class ShellComponent implements OnInit {
 
     this.environmentSelection.watchSelected().subscribe((sel) => {
       this.selectedEnvironment = sel;
+      this.refreshSessionContext();
+      if (sel?.id && sel.id !== 'local') {
+        this.connectionCache.getDatabricksConnections(sel.id).subscribe({
+          next: () => this.refreshSessionContext(),
+        });
+      }
+    });
+
+    this.environmentSelection.watchSelectedConnection().subscribe(() => {
+      this.refreshSessionContext();
     });
 
     this.fetchEnvironments();
@@ -74,16 +95,49 @@ export class ShellComponent implements OnInit {
     this.router.events
       .pipe(filter((e): e is NavigationEnd => e instanceof NavigationEnd))
       .subscribe((e) => {
-        const active = this.resolveActiveMenuItem(e.urlAfterRedirects);
+        this.currentUrl = e.urlAfterRedirects.split('?')[0].split('#')[0];
+        const active = this.resolveActiveMenuItem(this.currentUrl);
         if (active) this.activeMenuItem = active;
       });
 
-    const active = this.resolveActiveMenuItem(this.router.url);
+    this.currentUrl = this.router.url.split('?')[0].split('#')[0];
+    const active = this.resolveActiveMenuItem(this.currentUrl);
     if (active) this.activeMenuItem = active;
   }
 
   get themeLabel(): string {
     return this.theme.current === 'light' ? 'Dark mode' : 'Light mode';
+  }
+
+  get selectedEnvRecord(): PlatformEnvironment | null {
+    const id = this.selectedEnvironment?.id;
+    if (!id) return null;
+    return this.environments.find((e) => e.id === id) ?? null;
+  }
+
+  get selectedEnvironmentTier(): string {
+    return this.selectedEnvRecord?.environment_tier?.trim() || '';
+  }
+
+  get selectedEnvironmentShortName(): string {
+    return this.selectedEnvironment?.displayName?.trim() || 'Select environment';
+  }
+
+  get userInitials(): string {
+    const name = this.username.trim();
+    if (!name) return '?';
+    const parts = name.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }
+
+  get showContextBar(): boolean {
+    if (this.isContextBarHiddenRoute(this.currentUrl)) {
+      return false;
+    }
+    return !!(this.contextDatasetName || this.contextConnectionName);
   }
 
   selectEnvironment(env: PlatformEnvironment): void {
@@ -94,7 +148,11 @@ export class ShellComponent implements OnInit {
     this.environmentSelection.setSelectedConnection(null);
     this.showEnvPicker = false;
     if (env.id !== 'local') {
-      this.connectionCache.getDatabricksConnections(env.id).subscribe();
+      this.connectionCache.getDatabricksConnections(env.id).subscribe({
+        next: () => this.refreshSessionContext(),
+      });
+    } else {
+      this.refreshSessionContext();
     }
   }
 
@@ -122,9 +180,12 @@ export class ShellComponent implements OnInit {
         this.environmentsLoadFailed = false;
         this.environmentsLoadErrorDismissed = false;
         this.environments = list.filter((e) => e.is_enabled !== false);
+        this.refreshSessionContext();
         const selected = this.environmentSelection.getSelected();
         if (selected && selected.id !== 'local') {
-          this.connectionCache.getDatabricksConnections(selected.id).subscribe();
+          this.connectionCache.getDatabricksConnections(selected.id).subscribe({
+            next: () => this.refreshSessionContext(),
+          });
         }
         if (!selected && this.environments.length) {
           this.showEnvPicker = true;
@@ -147,6 +208,46 @@ export class ShellComponent implements OnInit {
 
   manageEnvironments(): void {
     void this.router.navigate(['/app/admin/environments']);
+  }
+
+  private refreshSessionContext(): void {
+    const envRecord = this.selectedEnvRecord;
+    const envId = this.selectedEnvironment?.id;
+
+    if (envRecord?.default_dataset_name?.trim()) {
+      this.contextDatasetName = envRecord.default_dataset_name.trim();
+    } else if (envRecord?.source_type === 'local_csv') {
+      const localName = envRecord.local_dataset?.filename?.trim();
+      this.contextDatasetName = localName
+        ? localName.replace(/\.csv$/i, '')
+        : 'Sample CSV';
+    } else {
+      this.contextDatasetName = '';
+    }
+
+    const selectedConn = this.environmentSelection.getSelectedConnection();
+    if (selectedConn?.name?.trim()) {
+      this.contextConnectionName = selectedConn.name.trim();
+      return;
+    }
+
+    if (envId && envId !== 'local') {
+      const cached = this.connectionCache.getCachedDatabricksConnections(envId);
+      const preferredId = this.environmentSelection.getSelectedConnectionId();
+      const picked = cached
+        ? this.connectionCache.pickConnection(cached, preferredId)
+        : null;
+      this.contextConnectionName = picked?.name?.trim() || '';
+    } else {
+      this.contextConnectionName = '';
+    }
+  }
+
+  private isContextBarHiddenRoute(url: string): boolean {
+    const path = url.split('?')[0].split('#')[0];
+    return CONTEXT_BAR_HIDDEN_PREFIXES.some(
+      (prefix) => path === prefix || path.startsWith(prefix + '/')
+    );
   }
 
   private resolveActiveMenuItem(url: string): MenuItem | undefined {

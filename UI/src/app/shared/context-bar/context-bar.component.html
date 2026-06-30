@@ -1,17 +1,22 @@
-<div class="context-bar" *ngIf="hasContent" role="status" aria-label="Session context">
-  <span *ngIf="environmentName" class="context-chip">
-    <i class="bi bi-layers" aria-hidden="true"></i>
-    <span class="context-label">Env</span>
-    <span class="context-value">{{ environmentName }}</span>
-  </span>
-  <span *ngIf="datasetName" class="context-chip">
+<div class="context-bar" *ngIf="hasContent" role="status" aria-label="Active data context">
+  <a
+    *ngIf="datasetName"
+    class="context-chip context-chip-link"
+    [routerLink]="datasetLink"
+    title="View datasets"
+  >
     <i class="bi bi-table" aria-hidden="true"></i>
     <span class="context-label">Dataset</span>
     <span class="context-value">{{ datasetName }}</span>
-  </span>
-  <span *ngIf="connectionName" class="context-chip">
+  </a>
+  <a
+    *ngIf="connectionName"
+    class="context-chip context-chip-link"
+    [routerLink]="connectionLink"
+    title="View connections"
+  >
     <i class="bi bi-plug" aria-hidden="true"></i>
     <span class="context-label">Connection</span>
     <span class="context-value">{{ connectionName }}</span>
-  </span>
+  </a>
 </div>

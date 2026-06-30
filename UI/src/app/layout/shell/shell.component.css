@@ -66,20 +66,89 @@
 .header-right {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: var(--space-2);
   flex-shrink: 0;
 }
 
-.user-text {
+.env-dropdown .env-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: 14rem;
+  padding: 0.2rem 0.45rem 0.2rem 0.35rem;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: var(--radius-md);
   font-size: var(--text-xs);
-  opacity: 0.9;
+  font-weight: 500;
+  line-height: 1.2;
 }
 
-.env-dropdown .env-switcher {
-  max-width: 11rem;
+.env-switcher:hover,
+.env-switcher:focus-visible,
+.env-switcher.show {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.env-tier-badge {
+  flex-shrink: 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.1rem 0.35rem;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+.env-switcher-name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  text-align: left;
+}
+
+.env-switcher-chevron {
+  flex-shrink: 0;
+  font-size: 0.65rem;
+  opacity: 0.85;
+}
+
+.account-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  line-height: 1;
+}
+
+.account-menu-btn:hover,
+.account-menu-btn:focus-visible,
+.account-menu-btn.show {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.account-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .shell-banner {
