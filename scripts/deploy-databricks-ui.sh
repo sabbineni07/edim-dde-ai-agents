@@ -46,6 +46,13 @@ log() { printf '==> %s\n' "$*"; }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 
 databricks_cmd() {
+  # Git Bash on Windows rewrites /Workspace/... → C:/Program Files/Git/Workspace/...
+  # Disable MSYS path conversion for all databricks CLI calls.
+  if [[ -n "${MSYSTEM:-}" || "${OSTYPE:-}" == msys* ]]; then
+    MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*' \
+      databricks ${DATABRICKS_PROFILE:+-p "$DATABRICKS_PROFILE"} "$@"
+    return
+  fi
   if [[ -n "${DATABRICKS_PROFILE:-}" ]]; then
     databricks -p "${DATABRICKS_PROFILE}" "$@"
   else
@@ -175,6 +182,14 @@ main() {
     [[ -n "${WORKSPACE_USER:-}" ]] \
       || die "Set WORKSPACE_USER or UI_WS_PATH for the workspace sync destination"
     UI_WS_PATH="/Workspace/Users/${WORKSPACE_USER}/${APP_NAME}"
+  fi
+  # Normalize: must be a Databricks workspace path, not a Git-Bash-mangled local path
+  if [[ "${UI_WS_PATH}" == *"/Program Files/Git/Workspace/"* ]]; then
+    UI_WS_PATH="/Workspace/${UI_WS_PATH#*/Program Files/Git/Workspace/}"
+    log "Corrected Git Bash workspace path to: ${UI_WS_PATH}"
+  fi
+  if [[ "${UI_WS_PATH}" != /Workspace/* ]]; then
+    die "UI_WS_PATH must start with /Workspace/ (got: ${UI_WS_PATH}). On Git Bash use PowerShell or re-run this script (MSYS path fix is applied)."
   fi
 
   log "App name:        ${APP_NAME}"

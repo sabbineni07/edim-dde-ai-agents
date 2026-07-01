@@ -359,7 +359,10 @@ The script will:
 export WORKSPACE_USER="you@company.com"
 export UI_WS_PATH="/Workspace/Users/${WORKSPACE_USER}/edim-dde-ai-agents-ui"
 
-databricks sync as sync UI "${UI_WS_PATH}"
+# Git Bash on Windows: prevent /Workspace → C:/Program Files/Git/Workspace
+export MSYS_NO_PATHCONV=1
+
+databricks sync deploy/databricks-ui "${UI_WS_PATH}"
 
 # First time only
 databricks apps create edim-dde-ai-agents-ui
@@ -402,6 +405,7 @@ databricks apps logs edim-dde-ai-agents-ui
 | API works, UI 500 on startup | `npm install` failed / no `express` | Run `npm ci` locally; sync after `npm ci --omit=dev` or let platform install |
 | CORS errors | UI calling API URL directly | Keep `API_BASE = '/api'`; fix proxy, not CORS |
 | App stuck **Deploying** | Invalid `app.yaml` | Validate YAML; test `node server.js` locally |
+| Sync path `C:/Program Files/Git/Workspace/...` | **Git Bash** rewrote `/Workspace/...` | Use **PowerShell**, or re-run `./scripts/deploy-databricks-ui.sh` (script sets `MSYS_NO_PATHCONV=1`), or `export MSYS_NO_PATHCONV=1` before `databricks sync` |
 
 ---
 
