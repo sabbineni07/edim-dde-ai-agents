@@ -109,8 +109,7 @@ write_runtime_package_json() {
   "private": true,
   "version": "1.0.0",
   "dependencies": {
-    "express": "^4.21.2",
-    "http-proxy-middleware": "^3.0.3"
+    "express": "^4.21.2"
   }
 }
 EOF
@@ -158,6 +157,40 @@ ensure_app_exists() {
   fi
   log "Creating Databricks app '${APP_NAME}'"
   databricks_cmd apps create "$APP_NAME"
+}
+
+verify_workspace_folder() {
+  local ws_path="$1"
+  log "Verifying workspace folder has files: ${ws_path}"
+  local listing
+  if ! listing="$(databricks_cmd workspace list "$ws_path" 2>&1)"; then
+    die "Cannot list ${ws_path}. Check path and CLI auth. Output: ${listing}"
+  fi
+  if [[ -z "${listing//[[:space:]]/}" ]]; then
+    die "Workspace folder is empty: ${ws_path}. Sync may have failed or used the wrong path."
+  fi
+  if ! grep -qE 'app\.yaml|server\.js' <<<"${listing}"; then
+    log "Warning: app.yaml or server.js not visible in folder listing (may still be OK):"
+    printf '%s\n' "${listing}" | head -20
+  else
+    log "Workspace folder contains expected deploy files"
+  fi
+}
+
+print_sp_permission_hint() {
+  local ws_path="$1"
+  cat <<EOF
+
+If deploy fails with "no files found" or Service Principal access:
+  1. Open Compute → Apps → ${APP_NAME} → Environment tab
+  2. Note the app service principal (client id / name)
+  3. In Workspace, open: ${ws_path}
+  4. Share / Permissions → add that service principal → CAN READ (or CAN MANAGE)
+  5. Re-run deploy (SKIP_BUILD=1 SKIP_SYNC=1 if files are already synced)
+
+Or deploy once from the UI: Apps → ${APP_NAME} → Deploy → select ${ws_path}
+
+EOF
 }
 
 main() {
@@ -226,6 +259,9 @@ main() {
   else
     log "Skipping sync (SKIP_SYNC=1)"
   fi
+
+  verify_workspace_folder "${UI_WS_PATH}"
+  print_sp_permission_hint "${UI_WS_PATH}"
 
   log "Deploying Databricks app '${APP_NAME}'"
   databricks_cmd apps deploy "$APP_NAME" --source-code-path "${UI_WS_PATH}"

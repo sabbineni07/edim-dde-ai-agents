@@ -404,6 +404,8 @@ databricks apps logs edim-dde-ai-agents-ui
 | `Cannot GET /api/...` or 502 | Wrong `API_PROXY_TARGET` | Use exact API **App URL** from Databricks |
 | API works, UI 500 on startup | `npm install` failed / no `express` | Run `npm ci` locally; sync after `npm ci --omit=dev` or let platform install |
 | CORS errors | UI calling API URL directly | Keep `API_BASE = '/api'`; fix proxy, not CORS |
+| Deploy: **no files found** / SP access | Empty folder or app SP cannot read folder | [Fix: no files found](#fix-deploy-no-files-found--service-principal-access) |
+| App built OK then **http-proxy-middleware** crash | v3 is ESM / broken `require` on Node 22 | Fixed in repo: `server.js` uses Node built-in proxy + **express** only — redeploy |
 | App stuck **Deploying** | Invalid `app.yaml` | Validate YAML; test `node server.js` locally |
 | Sync path `C:/Program Files/Git/Workspace/...` | **Git Bash** rewrote `/Workspace/...` | Use **PowerShell**, or re-run `./scripts/deploy-databricks-ui.sh` (script sets `MSYS_NO_PATHCONV=1`), or `export MSYS_NO_PATHCONV=1` before `databricks sync` |
 
@@ -427,6 +429,83 @@ databricks apps deploy edim-dde-ai-agents-ui --source-code-path "${UI_WS_PATH}"
 ```
 
 Only redeploy the **API** app when backend changes; only redeploy the **UI** app when Angular changes.
+
+---
+
+## Fix: deploy “no files found” / Service Principal access
+
+This error at **`databricks apps deploy`** usually means one of two things:
+
+1. **The workspace folder is empty** (sync went to the wrong path or failed silently).
+2. **The app’s service principal cannot read** the folder (most common after sync succeeds).
+
+### Step 1 — Confirm files exist
+
+In **PowerShell** (recommended on Windows):
+
+```powershell
+databricks workspace list /Workspace/Users/you@org.com/edim-dde-ai-agents-ui
+```
+
+You should see at least: `app.yaml`, `server.js`, `package.json`, `dist`, `node_modules`.
+
+If the list is **empty**:
+
+- `WORKSPACE_USER` must match the **same email** as your CLI login (check `databricks auth describe`).
+- Re-sync with path conversion disabled:
+
+```powershell
+$env:WORKSPACE_USER = "you@org.com"
+$UI_WS_PATH = "/Workspace/Users/$env:WORKSPACE_USER/edim-dde-ai-agents-ui"
+databricks sync deploy/databricks-ui $UI_WS_PATH
+```
+
+### Step 2 — Grant the app service principal access to the folder
+
+Each Databricks App runs as its **own service principal**. That identity must be able to **read** the source folder.
+
+**A. Find the app service principal**
+
+1. **Compute → Apps →** `edim-dde-ai-agents-ui`
+2. Open the **Environment** tab (or **Overview**)
+3. Note **`DATABRICKS_CLIENT_ID`** (UUID) — this is the app’s service principal
+
+**B. Share the workspace folder (UI)**
+
+1. **Workspace** → browse to  
+   `/Users/you@org.com/edim-dde-ai-agents-ui`
+2. Click the **⋮** menu on the folder (or **Share**)
+3. **Add** the app service principal:
+   - Search by the **client id** UUID, or the app name if it appears
+4. Permission: **Can Read** (minimum) or **Can Manage**
+5. **Save**
+
+**C. Redeploy**
+
+```powershell
+databricks apps deploy edim-dde-ai-agents-ui `
+  --source-code-path /Workspace/Users/you@org.com/edim-dde-ai-agents-ui
+```
+
+Or from the app UI: **Deploy** → select the same workspace folder → **Deploy**.
+
+### Step 3 — Alternative: use `/Workspace/Shared/` (team deploys)
+
+If user-folder ACLs are awkward:
+
+1. Sync to `/Workspace/Shared/edim-dde-ai-agents-ui`
+2. Grant the app SP **Can Read** on that Shared folder
+3. Deploy with `--source-code-path /Workspace/Shared/edim-dde-ai-agents-ui`
+
+### Step 4 — First deploy from UI (often easiest)
+
+After sync + folder permissions:
+
+1. **Apps →** your UI app → **Deploy**
+2. **From workspace** → select the folder that contains `app.yaml`
+3. **Deploy**
+
+The UI deploy flow sometimes resolves path/permission issues that CLI-only deploy hits on first run.
 
 ---
 
