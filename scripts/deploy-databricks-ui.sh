@@ -207,16 +207,25 @@ sync_to_workspace() {
   local ws_path="$2"
   log "Syncing ${sync_source} -> ${ws_path}"
   local sync_out
-  # Slim staging bundle has no node_modules/.git — skip --exclude (some CLI versions mishandle it).
-  local sync_args=(sync "${sync_source}" "${ws_path}")
+  # Root .gitignore has dist/ — databricks sync respects repo .gitignore and skips dist/ unless
+  # explicitly included. Always force-include the Angular build output.
+  local sync_args=(
+    sync "${sync_source}" "${ws_path}"
+    --include "dist/**"
+    --full
+  )
   if [[ "${DEPLOY_MODE}" == "full" ]]; then
     sync_args+=(--exclude node_modules --exclude .git --exclude .angular)
   fi
-  if ! sync_out="$(databricks_cmd "${sync_args[@]}" --full 2>&1)"; then
+  if ! sync_out="$(databricks_cmd "${sync_args[@]}" 2>&1)"; then
     log "Retrying sync without --full (older CLI)"
+    sync_args=(sync "${sync_source}" "${ws_path}" --include "dist/**")
+    if [[ "${DEPLOY_MODE}" == "full" ]]; then
+      sync_args+=(--exclude node_modules --exclude .git --exclude .angular)
+    fi
     sync_out="$(databricks_cmd "${sync_args[@]}" 2>&1)" || die "Sync failed:\n${sync_out}"
   fi
-  printf '%s\n' "${sync_out}" | tail -10
+  printf '%s\n' "${sync_out}" | tail -15
 }
 
 workspace_file_exists() {
@@ -234,8 +243,11 @@ verify_workspace_folder() {
       missing+=("${f}")
     fi
   done
+  if ! workspace_file_exists "${ws_path}/dist/cluster-advisor-ui/index.html"; then
+    missing+=("dist/cluster-advisor-ui/index.html")
+  fi
   if [[ ${#missing[@]} -eq 0 ]]; then
-    log "Workspace has server.js, app.yaml, package.json"
+    log "Workspace has server.js, app.yaml, package.json, and dist/cluster-advisor-ui/index.html"
     return 0
   fi
   local listing
@@ -244,7 +256,9 @@ verify_workspace_folder() {
 Path: ${ws_path}
 Listing:
 ${listing}
-If manual sync works but this script fails, run from PowerShell (not Git Bash) or set SKIP_SYNC=1 after syncing manually."
+If dist/ is missing: root .gitignore has dist/ and databricks sync skips it unless you pass --include \"dist/**\".
+Manual fix:
+  databricks sync deploy/databricks-ui \"${ws_path}\" --include \"dist/**\" --full"
 }
 
 verify_deployed_server() {

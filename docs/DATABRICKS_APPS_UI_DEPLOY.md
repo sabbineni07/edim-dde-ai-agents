@@ -362,7 +362,7 @@ export UI_WS_PATH="/Workspace/Users/${WORKSPACE_USER}/edim-dde-ai-agents-ui"
 # Git Bash on Windows: prevent /Workspace → C:/Program Files/Git/Workspace
 export MSYS_NO_PATHCONV=1
 
-databricks sync deploy/databricks-ui "${UI_WS_PATH}"
+databricks sync deploy/databricks-ui "${UI_WS_PATH}" --include "dist/**" --full
 
 # First time only
 databricks apps create edim-dde-ai-agents-ui
@@ -400,14 +400,15 @@ databricks apps logs edim-dde-ai-agents-ui
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Blank page / 404 on refresh | `dist/` missing at deploy | Run `npm run build` before sync |
+| Blank page / 404 on refresh | `dist/` missing at deploy | Run `npm run build` before sync; sync with `--include "dist/**"` (see below) |
 | `Cannot GET /api/...` or 502 | Wrong `API_PROXY_TARGET` | Use exact API **App URL** from Databricks |
 | API works, UI 500 on startup | `npm install` failed / no `express` | Run `npm ci` locally; sync after `npm ci --omit=dev` or let platform install |
 | CORS errors | UI calling API URL directly | Keep `API_BASE = '/api'`; fix proxy, not CORS |
+| **401** on `/api/*` (UI → API) | Databricks Apps gateway rejects proxy auth | Grant UI app SP **CAN USE** on API app; redeploy UI with fixed `server.js` (forwards user token / M2M, strips stub token) — [Fix: 401](#fix-401-between-ui-and-api-apps) |
 | Deploy: **no files found** / SP access | Empty folder or app SP cannot read folder | [Fix: no files found](#fix-deploy-no-files-found--service-principal-access) |
 | App built OK then **http-proxy-middleware** crash | Stale **node_modules** on workspace from prior deploy | Re-deploy with `CLEAN_NODE_MODULES=1` (deletes only node_modules after sync). Do **not** use `CLEAN_STALE_FILES=1` unless sync overwrite fails |
 | App stuck **Deploying** | Invalid `app.yaml` | Validate YAML; test `node server.js` locally |
-| Sync path `C:/Program Files/Git/Workspace/...` | **Git Bash** rewrote `/Workspace/...` | Use **PowerShell**, or re-run `./scripts/deploy-databricks-ui.sh` (script sets `MSYS_NO_PATHCONV=1`), or `export MSYS_NO_PATHCONV=1` before `databricks sync` |
+| Sync uploads root files but **not `dist/`** | Root `.gitignore` has `dist/`; CLI respects it | Add `--include "dist/**"` to `databricks sync` |
 
 ---
 
@@ -457,7 +458,7 @@ If the list is **empty**:
 ```powershell
 $env:WORKSPACE_USER = "you@org.com"
 $UI_WS_PATH = "/Workspace/Users/$env:WORKSPACE_USER/edim-dde-ai-agents-ui"
-databricks sync deploy/databricks-ui $UI_WS_PATH
+databricks sync deploy/databricks-ui $UI_WS_PATH --include "dist/**" --full
 ```
 
 ### Step 2 — Grant the app service principal access to the folder
@@ -506,6 +507,59 @@ After sync + folder permissions:
 3. **Deploy**
 
 The UI deploy flow sometimes resolves path/permission issues that CLI-only deploy hits on first run.
+
+---
+
+## Fix: 401 between UI and API apps
+
+When the UI app proxies `/api` to the API Databricks App URL, requests hit the **Databricks Apps OAuth gateway**. A 401 usually means the outbound call had no valid Bearer token.
+
+### Cause
+
+1. **Stub login token** — Angular sends `Authorization: Bearer stub-token-...`. The old proxy forwarded that to the API app → **401**.
+2. **Missing CAN USE** — The UI app's service principal must have **CAN USE** on the API app for M2M fallback.
+3. **User lacks app access** — The signed-in user needs **CAN USE** on both apps.
+
+### Fix 1 — Redeploy UI with updated `server.js`
+
+The proxy now:
+
+- Uses `x-forwarded-access-token` (user OAuth from Databricks) when present
+- Falls back to UI app M2M token (`DATABRICKS_CLIENT_ID` / `SECRET`)
+- **Does not** forward stub tokens
+
+Rebuild and redeploy the UI app only.
+
+### Fix 2 — Grant UI app SP access to the API app
+
+1. **Compute → Apps → edim-dde-ai-agents-ui → Environment** — copy **`DATABRICKS_CLIENT_ID`** (UUID).
+2. **Compute → Apps → edim-dde-ai-agents-api → Permissions** — add that service principal → **Can use**.
+
+Or CLI (replace IDs/names):
+
+```bash
+# UI app SP client id from Apps → UI → Environment
+UI_SP_CLIENT_ID="<uuid>"
+
+databricks api patch /api/2.0/permissions/apps/edim-dde-ai-agents-api --json "{
+  \"access_control_list\": [{
+    \"service_principal_name\": \"${UI_SP_CLIENT_ID}\",
+    \"permission_level\": \"CAN_USE\"
+  }]
+}"
+```
+
+### Fix 3 — Confirm user can use both apps
+
+Your workspace user needs **CAN USE** (or higher) on **both** the UI and API apps.
+
+### Verify
+
+Browser devtools → Network → `GET /api/environments` (or `/api/platform/ui-hints`):
+
+- **200** + JSON → fixed
+- **401** → check permissions above; check UI app logs for `M2M token` / `Proxy auth` errors
+- **302** to login HTML → wrong URL (must call `/api/...` on the API app, not root)
 
 ---
 
@@ -631,7 +685,7 @@ cp app.yaml server.js package.json package-lock.json ../deploy/databricks-ui/
 cp -r dist/cluster-advisor-ui ../deploy/databricks-ui/dist/
 cp -r node_modules ../deploy/databricks-ui/
 
-databricks sync deploy/databricks-ui "${UI_WS_PATH}"
+databricks sync deploy/databricks-ui "${UI_WS_PATH}" --include "dist/**" --full
 databricks apps deploy edim-dde-ai-agents-ui --source-code-path "${UI_WS_PATH}"
 ```
 
