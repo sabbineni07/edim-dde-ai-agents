@@ -405,7 +405,7 @@ databricks apps logs edim-dde-ai-agents-ui
 | API works, UI 500 on startup | `npm install` failed / no `express` | Run `npm ci` locally; sync after `npm ci --omit=dev` or let platform install |
 | CORS errors | UI calling API URL directly | Keep `API_BASE = '/api'`; fix proxy, not CORS |
 | Deploy: **no files found** / SP access | Empty folder or app SP cannot read folder | [Fix: no files found](#fix-deploy-no-files-found--service-principal-access) |
-| App built OK then **http-proxy-middleware** crash | v3 is ESM / broken `require` on Node 22 | Fixed in repo: `server.js` uses Node built-in proxy + **express** only — redeploy |
+| App built OK then **http-proxy-middleware** crash | Stale **server.js** or **node_modules** on workspace from prior deploy | Delete workspace folder; redeploy with updated script (`CLEAN_WORKSPACE=1` default). Verify: `grep http-proxy-middleware UI/server.js` should only match comments |
 | App stuck **Deploying** | Invalid `app.yaml` | Validate YAML; test `node server.js` locally |
 | Sync path `C:/Program Files/Git/Workspace/...` | **Git Bash** rewrote `/Workspace/...` | Use **PowerShell**, or re-run `./scripts/deploy-databricks-ui.sh` (script sets `MSYS_NO_PATHCONV=1`), or `export MSYS_NO_PATHCONV=1` before `databricks sync` |
 
@@ -506,6 +506,75 @@ After sync + folder permissions:
 3. **Deploy**
 
 The UI deploy flow sometimes resolves path/permission issues that CLI-only deploy hits on first run.
+
+---
+
+## Fix: http-proxy-middleware crash after “App built successfully”
+
+The repo **no longer uses** `http-proxy-middleware`. If you still see:
+
+```text
+Cannot find module '.../http-proxy-middleware/dist/index.js'
+```
+
+the workspace almost certainly has **old `server.js`** (and/or stale `node_modules`) from a previous deploy. Sync alone may not replace them.
+
+### Step 1 — Confirm your local copy is fixed
+
+```powershell
+Select-String -Path UI\server.js -Pattern "require\('http-proxy-middleware'\)"
+# Should return NOTHING
+
+Select-String -Path UI\server.js -Pattern "require\('http'\)"
+# Should match (native proxy)
+```
+
+If the first command matches, run `git pull` to get the latest `UI/server.js`.
+
+### Step 2 — Delete the workspace deploy folder
+
+In **Databricks Workspace UI**:
+
+1. Browse to `/Users/you@org.com/edim-dde-ai-agents-ui`
+2. **Delete the entire folder** (or delete at least `server.js` and `node_modules`)
+
+Or CLI:
+
+```powershell
+databricks workspace delete /Workspace/Users/you@org.com/edim-dde-ai-agents-ui --recursive
+```
+
+### Step 3 — Redeploy with cleanup (updated script)
+
+```powershell
+$env:API_PROXY_TARGET = "https://your-api-app.databricksapps.com"
+$env:WORKSPACE_USER = "you@org.com"
+$env:CLEAN_WORKSPACE = "1"
+
+bash ./scripts/deploy-databricks-ui.sh
+```
+
+The script now:
+
+- Verifies staging `server.js` has **no** `http-proxy-middleware` require
+- **Deletes** the workspace folder before sync (default)
+- Syncs **without** `node_modules` (Databricks runs `npm install` for express only)
+- **Exports** `server.js` from workspace after sync to verify it updated
+
+### Step 4 — Confirm app deploy source
+
+In **Apps → edim-dde-ai-agents-ui → Deploy**:
+
+- Use **From workspace** (not Git) unless your Git branch has the fixed `server.js`
+- If the app is Git-backed, push the fix to that branch or switch to workspace deploy
+
+### Step 5 — Check logs after deploy
+
+Success line:
+
+```text
+Insights Hub UI on 0.0.0.0:...; /api -> https://...
+```
 
 ---
 

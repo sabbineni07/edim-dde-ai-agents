@@ -20,7 +20,8 @@
 #   SKIP_BUILD=1             Skip npm ci && npm run build
 #   SKIP_SYNC=1              Skip databricks sync (deploy only)
 #   CREATE_APP=1             Run databricks apps create if the app does not exist
-#   DEPLOY_MODE=slim|full    slim = minimal runtime bundle (default); full = sync entire UI/
+#   CLEAN_WORKSPACE=1          Delete workspace deploy folder before sync (default: 1)
+#   DEPLOY_MODE=slim|full      slim = minimal runtime bundle (default); full = sync entire UI/
 #
 # Examples:
 #   CREATE_APP=1 API_PROXY_TARGET=https://... WORKSPACE_USER=me@co.com ./scripts/deploy-databricks-ui.sh
@@ -108,10 +109,139 @@ write_runtime_package_json() {
   "name": "cluster-advisor-ui-runtime",
   "private": true,
   "version": "1.0.0",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "4.21.2"
   }
 }
+EOF
+}
+
+write_deploy_manifest() {
+  local dest="$1"
+  local api_target="$2"
+  cat >"$dest" <<EOF
+deployed_at=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+server_proxy=native-http-https
+express_only=true
+api_proxy_target=${api_target}
+EOF
+}
+
+verify_local_server() {
+  if grep -qE "require\(['\"]http-proxy-middleware['\"]\)" "${UI_DIR}/server.js"; then
+    die "UI/server.js still requires http-proxy-middleware. Run: git pull (you need the native http/https proxy version)."
+  fi
+  if ! grep -q "require('http')" "${UI_DIR}/server.js"; then
+    die "UI/server.js does not look like the fixed Databricks runtime server."
+  fi
+  log "Local UI/server.js OK (native proxy, no http-proxy-middleware require)"
+}
+
+verify_staging_bundle() {
+  local dir="$1"
+  if grep -qE "require\(['\"]http-proxy-middleware['\"]\)" "${dir}/server.js"; then
+    die "Staging server.js still requires http-proxy-middleware. Git pull latest UI/server.js."
+  fi
+  if grep -q 'http-proxy-middleware' "${dir}/package.json"; then
+    die "Staging package.json still lists http-proxy-middleware."
+  fi
+  if ! grep -q "require('http')" "${dir}/server.js"; then
+    die "Staging server.js missing native http/https proxy — wrong file?"
+  fi
+  log "Staging bundle verified (native proxy, express-only package.json)"
+}
+
+cleanup_workspace_folder() {
+  local ws_path="$1"
+  if [[ "${CLEAN_WORKSPACE:-1}" != "1" ]]; then
+    log "Skipping workspace cleanup (CLEAN_WORKSPACE=0)"
+    return 0
+  fi
+  log "Removing stale workspace folder before sync: ${ws_path}"
+  databricks_cmd workspace delete "${ws_path}" --recursive 2>/dev/null || true
+  local listing
+  if listing="$(databricks_cmd workspace list "${ws_path}" 2>/dev/null || true)"; then
+    if [[ -n "${listing//[[:space:]]/}" ]]; then
+      die "Workspace folder still exists after delete: ${ws_path}
+Delete it manually in the Databricks UI (Workspace → your folder → Delete), then re-run.
+Or: databricks workspace delete \"${ws_path}\" --recursive"
+    fi
+  fi
+  log "Workspace folder cleared (or did not exist)"
+}
+
+sync_to_workspace() {
+  local sync_source="$1"
+  local ws_path="$2"
+  log "Syncing ${sync_source} -> ${ws_path}"
+  local sync_args=(
+    sync "${sync_source}" "${ws_path}"
+    --exclude node_modules
+    --exclude .git
+    --exclude .angular
+  )
+  if ! databricks_cmd "${sync_args[@]}" --full 2>/dev/null; then
+    log "Retrying sync without --full (older CLI)"
+    databricks_cmd "${sync_args[@]}"
+  fi
+}
+
+verify_deployed_server() {
+  local ws_path="$1"
+  local tmp
+  tmp="$(mktemp)"
+  if ! databricks_cmd workspace export "${ws_path}/server.js" "${tmp}" 2>/dev/null; then
+    rm -f "${tmp}"
+    die "Could not export ${ws_path}/server.js after sync. Check UI_WS_PATH and permissions."
+  fi
+  if grep -qE "require\(['\"]http-proxy-middleware['\"]\)" "${tmp}"; then
+    rm -f "${tmp}"
+    die "Workspace server.js is STILL the old version after sync.
+1. In Databricks Workspace UI, delete folder: ${ws_path}
+2. Confirm the app deploys from workspace (Apps → Deploy → From workspace), not Git with an old branch
+3. Re-run with CLEAN_WORKSPACE=1"
+  fi
+  if ! grep -q "require('http')" "${tmp}"; then
+    rm -f "${tmp}"
+    die "Workspace server.js missing native http/https proxy — wrong file uploaded?"
+  fi
+  log "Verified workspace server.js (native proxy, no http-proxy-middleware)"
+  rm -f "${tmp}"
+}
+
+verify_deploy_manifest() {
+  local ws_path="$1"
+  local tmp
+  tmp="$(mktemp)"
+  if databricks_cmd workspace export "${ws_path}/DEPLOY_MANIFEST.txt" "${tmp}" 2>/dev/null; then
+    if grep -q 'server_proxy=native-http-https' "${tmp}"; then
+      log "Verified DEPLOY_MANIFEST.txt (native-http-https)"
+    else
+      log "Warning: DEPLOY_MANIFEST.txt present but missing server_proxy=native-http-https"
+    fi
+  else
+    log "Warning: DEPLOY_MANIFEST.txt not found on workspace (slim deploy may be from older script)"
+  fi
+  rm -f "${tmp}"
+}
+
+print_git_source_warning() {
+  cat <<EOF
+
+If deploy still crashes with http-proxy-middleware AFTER verify passed:
+  The app may be deploying from **Git**, not the workspace folder you synced.
+  Apps → ${APP_NAME} → check Source / Deploy:
+    - Use "From workspace" and path: ${UI_WS_PATH}
+    - OR push the fixed UI/server.js to the Git branch the app uses
+    - If workspace requires Git-only deploys, you must push the fix to Git
+
 EOF
 }
 
@@ -129,9 +259,15 @@ prepare_slim_bundle() {
 
   write_app_yaml "${STAGING_DIR}/app.yaml" "$api_target"
   write_runtime_package_json "${STAGING_DIR}/package.json"
+  write_deploy_manifest "${STAGING_DIR}/DEPLOY_MANIFEST.txt" "$api_target"
 
-  log "Installing production Node dependencies in staging bundle"
-  (cd "${STAGING_DIR}" && npm install --omit=dev --no-fund --no-audit)
+  # Do not sync node_modules — Databricks runs npm install from package.json on deploy.
+  # Syncing node_modules can leave stale http-proxy-middleware from older bundles.
+  cat >"${STAGING_DIR}/.gitignore" <<'EOF'
+node_modules
+EOF
+
+  verify_staging_bundle "${STAGING_DIR}"
 }
 
 prepare_full_sync_path() {
@@ -203,6 +339,7 @@ main() {
   require_cmd npm
 
   [[ -d "${UI_DIR}" ]] || die "UI directory not found: ${UI_DIR}"
+  verify_local_server
 
   local api_target="${API_PROXY_TARGET:-}"
   if [[ -z "$api_target" ]]; then
@@ -253,18 +390,24 @@ main() {
 
   ensure_app_exists
 
+  cleanup_workspace_folder "${UI_WS_PATH}"
+
   if [[ "${SKIP_SYNC}" != "1" ]]; then
-    log "Syncing ${sync_source} -> ${UI_WS_PATH}"
-    databricks_cmd sync "${sync_source}" "${UI_WS_PATH}"
+    sync_to_workspace "${sync_source}" "${UI_WS_PATH}"
   else
     log "Skipping sync (SKIP_SYNC=1)"
   fi
 
   verify_workspace_folder "${UI_WS_PATH}"
+  verify_deployed_server "${UI_WS_PATH}"
+  verify_deploy_manifest "${UI_WS_PATH}"
+  print_git_source_warning
   print_sp_permission_hint "${UI_WS_PATH}"
 
-  log "Deploying Databricks app '${APP_NAME}'"
-  databricks_cmd apps deploy "$APP_NAME" --source-code-path "${UI_WS_PATH}"
+  log "Deploying Databricks app '${APP_NAME}' (SNAPSHOT from workspace)"
+  databricks_cmd apps deploy "$APP_NAME" \
+    --source-code-path "${UI_WS_PATH}" \
+    --mode SNAPSHOT
 
   log "Done. Check status and URL:"
   printf '  databricks apps get %s\n' "$APP_NAME"
