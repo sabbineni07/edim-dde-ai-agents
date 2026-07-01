@@ -21,7 +21,8 @@
 #   SKIP_SYNC=1              Skip databricks sync (deploy only)
 #   CREATE_APP=1             Run databricks apps create if the app does not exist
 #   CLEAN_WORKSPACE=1          Delete entire workspace folder before sync (default: 0 — preserves ACLs)
-#   CLEAN_STALE_FILES=1        Delete only server.js, app.yaml, package.json, node_modules before sync (default: 1)
+#   CLEAN_STALE_FILES=1        Delete server.js/app.yaml/etc. before sync (default: 0 — sync overwrites)
+#   CLEAN_NODE_MODULES=1       Delete workspace node_modules after sync, before deploy (default: 0)
 #   DEPLOY_MODE=slim|full      slim = minimal runtime bundle (default); full = sync entire UI/
 #
 # Examples:
@@ -161,38 +162,44 @@ verify_staging_bundle() {
 
 cleanup_stale_runtime_files() {
   local ws_path="$1"
-  if [[ "${CLEAN_STALE_FILES:-1}" != "1" ]]; then
-    log "Skipping stale file cleanup (CLEAN_STALE_FILES=0)"
-    return 0
-  fi
-  log "Removing stale runtime files (preserves folder permissions): ${ws_path}"
+  log "Removing stale runtime files before sync: ${ws_path}"
   local f
   for f in server.js app.yaml package.json DEPLOY_MANIFEST.txt package-lock.json; do
     databricks_cmd workspace delete "${ws_path}/${f}" 2>/dev/null || true
   done
   databricks_cmd workspace delete "${ws_path}/node_modules" --recursive 2>/dev/null || true
-  log "Stale runtime files cleared (folder ACLs unchanged)"
+  log "Stale runtime files cleared"
+}
+
+cleanup_workspace_node_modules() {
+  local ws_path="$1"
+  if [[ "${CLEAN_NODE_MODULES:-0}" != "1" ]]; then
+    return 0
+  fi
+  log "Removing workspace node_modules (stale deps) after sync: ${ws_path}/node_modules"
+  databricks_cmd workspace delete "${ws_path}/node_modules" --recursive 2>/dev/null || true
 }
 
 cleanup_workspace_folder() {
   local ws_path="$1"
-  if [[ "${CLEAN_WORKSPACE:-0}" != "1" ]]; then
-    log "Skipping full folder delete (CLEAN_WORKSPACE=0). Folder permissions are preserved."
-    cleanup_stale_runtime_files "${ws_path}"
+  if [[ "${CLEAN_WORKSPACE:-0}" == "1" ]]; then
+    log "WARNING: Deleting entire workspace folder — re-grant app service principal access after sync."
+    log "Removing workspace folder: ${ws_path}"
+    databricks_cmd workspace delete "${ws_path}" --recursive 2>/dev/null || true
+    local listing
+    if listing="$(databricks_cmd workspace list "${ws_path}" 2>/dev/null || true)"; then
+      if [[ -n "${listing//[[:space:]]/}" ]]; then
+        die "Workspace folder still exists after delete: ${ws_path}"
+      fi
+    fi
+    log "Workspace folder cleared"
     return 0
   fi
-  log "WARNING: Deleting entire workspace folder — you must re-grant app service principal access after sync."
-  log "Removing workspace folder before sync: ${ws_path}"
-  databricks_cmd workspace delete "${ws_path}" --recursive 2>/dev/null || true
-  local listing
-  if listing="$(databricks_cmd workspace list "${ws_path}" 2>/dev/null || true)"; then
-    if [[ -n "${listing//[[:space:]]/}" ]]; then
-      die "Workspace folder still exists after delete: ${ws_path}
-Delete it manually in the Databricks UI (Workspace → your folder → Delete), then re-run.
-Or: databricks workspace delete \"${ws_path}\" --recursive"
-    fi
+  if [[ "${CLEAN_STALE_FILES:-0}" == "1" ]]; then
+    cleanup_stale_runtime_files "${ws_path}"
+  else
+    log "No pre-sync cleanup (sync --full overwrites files in place; folder ACLs preserved)"
   fi
-  log "Workspace folder cleared (re-grant Can Read/Can Manage to the app SP before deploy)"
 }
 
 sync_to_workspace() {
@@ -200,40 +207,44 @@ sync_to_workspace() {
   local ws_path="$2"
   log "Syncing ${sync_source} -> ${ws_path}"
   local sync_out
-  local sync_args=(
-    sync "${sync_source}" "${ws_path}"
-    --exclude node_modules
-    --exclude .git
-    --exclude .angular
-  )
+  # Slim staging bundle has no node_modules/.git — skip --exclude (some CLI versions mishandle it).
+  local sync_args=(sync "${sync_source}" "${ws_path}")
+  if [[ "${DEPLOY_MODE}" == "full" ]]; then
+    sync_args+=(--exclude node_modules --exclude .git --exclude .angular)
+  fi
   if ! sync_out="$(databricks_cmd "${sync_args[@]}" --full 2>&1)"; then
     log "Retrying sync without --full (older CLI)"
     sync_out="$(databricks_cmd "${sync_args[@]}" 2>&1)" || die "Sync failed:\n${sync_out}"
   fi
-  printf '%s\n' "${sync_out}" | tail -5
+  printf '%s\n' "${sync_out}" | tail -10
+}
+
+workspace_file_exists() {
+  local ws_file="$1"
+  databricks_cmd workspace get-status "${ws_file}" >/dev/null 2>&1
 }
 
 verify_workspace_folder() {
   local ws_path="$1"
-  log "Verifying workspace folder has files: ${ws_path}"
-  local listing
-  if ! listing="$(databricks_cmd workspace list "$ws_path" 2>&1)"; then
-    die "Cannot list ${ws_path}. Check path and CLI auth. Output: ${listing}"
-  fi
-  if [[ -z "${listing//[[:space:]]/}" ]]; then
-    die "Workspace folder is empty: ${ws_path}. Sync may have failed or used the wrong path.
-Check WORKSPACE_USER matches your Databricks login email exactly.
-Try: databricks workspace list \"${ws_path}\""
-  fi
-  if grep -qiE 'server\.js|app\.yaml' <<<"${listing}"; then
-    log "Workspace folder contains expected deploy files"
+  log "Verifying workspace upload: ${ws_path}"
+  local missing=()
+  local f
+  for f in server.js app.yaml package.json; do
+    if ! workspace_file_exists "${ws_path}/${f}"; then
+      missing+=("${f}")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    log "Workspace has server.js, app.yaml, package.json"
     return 0
   fi
-  log "Folder listing (server.js / app.yaml not matched — check path and sync output):"
-  printf '%s\n' "${listing}" | head -25
-  die "Expected server.js and app.yaml under ${ws_path} after sync.
-If files are missing, confirm WORKSPACE_USER and re-run sync.
-Tip: grant permissions on the parent folder /Workspace/Users/<you>/ so they survive redeploys."
+  local listing
+  listing="$(databricks_cmd workspace list "$ws_path" 2>&1 || true)"
+  die "Missing on workspace after sync: ${missing[*]}
+Path: ${ws_path}
+Listing:
+${listing}
+If manual sync works but this script fails, run from PowerShell (not Git Bash) or set SKIP_SYNC=1 after syncing manually."
 }
 
 verify_deployed_server() {
@@ -426,8 +437,9 @@ main() {
 
   if [[ "${SKIP_SYNC}" != "1" ]]; then
     sync_to_workspace "${sync_source}" "${UI_WS_PATH}"
+    cleanup_workspace_node_modules "${UI_WS_PATH}"
   else
-    log "Skipping sync (SKIP_SYNC=1)"
+    log "Skipping sync (SKIP_SYNC=1) — using files already on workspace"
   fi
 
   verify_workspace_folder "${UI_WS_PATH}"
