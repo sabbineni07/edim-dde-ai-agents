@@ -20,7 +20,8 @@
 #   SKIP_BUILD=1             Skip npm ci && npm run build
 #   SKIP_SYNC=1              Skip databricks sync (deploy only)
 #   CREATE_APP=1             Run databricks apps create if the app does not exist
-#   CLEAN_WORKSPACE=1          Delete workspace deploy folder before sync (default: 1)
+#   CLEAN_WORKSPACE=1          Delete entire workspace folder before sync (default: 0 — preserves ACLs)
+#   CLEAN_STALE_FILES=1        Delete only server.js, app.yaml, package.json, node_modules before sync (default: 1)
 #   DEPLOY_MODE=slim|full      slim = minimal runtime bundle (default); full = sync entire UI/
 #
 # Examples:
@@ -158,13 +159,30 @@ verify_staging_bundle() {
   log "Staging bundle verified (native proxy, express-only package.json)"
 }
 
-cleanup_workspace_folder() {
+cleanup_stale_runtime_files() {
   local ws_path="$1"
-  if [[ "${CLEAN_WORKSPACE:-1}" != "1" ]]; then
-    log "Skipping workspace cleanup (CLEAN_WORKSPACE=0)"
+  if [[ "${CLEAN_STALE_FILES:-1}" != "1" ]]; then
+    log "Skipping stale file cleanup (CLEAN_STALE_FILES=0)"
     return 0
   fi
-  log "Removing stale workspace folder before sync: ${ws_path}"
+  log "Removing stale runtime files (preserves folder permissions): ${ws_path}"
+  local f
+  for f in server.js app.yaml package.json DEPLOY_MANIFEST.txt package-lock.json; do
+    databricks_cmd workspace delete "${ws_path}/${f}" 2>/dev/null || true
+  done
+  databricks_cmd workspace delete "${ws_path}/node_modules" --recursive 2>/dev/null || true
+  log "Stale runtime files cleared (folder ACLs unchanged)"
+}
+
+cleanup_workspace_folder() {
+  local ws_path="$1"
+  if [[ "${CLEAN_WORKSPACE:-0}" != "1" ]]; then
+    log "Skipping full folder delete (CLEAN_WORKSPACE=0). Folder permissions are preserved."
+    cleanup_stale_runtime_files "${ws_path}"
+    return 0
+  fi
+  log "WARNING: Deleting entire workspace folder — you must re-grant app service principal access after sync."
+  log "Removing workspace folder before sync: ${ws_path}"
   databricks_cmd workspace delete "${ws_path}" --recursive 2>/dev/null || true
   local listing
   if listing="$(databricks_cmd workspace list "${ws_path}" 2>/dev/null || true)"; then
@@ -174,32 +192,62 @@ Delete it manually in the Databricks UI (Workspace → your folder → Delete), 
 Or: databricks workspace delete \"${ws_path}\" --recursive"
     fi
   fi
-  log "Workspace folder cleared (or did not exist)"
+  log "Workspace folder cleared (re-grant Can Read/Can Manage to the app SP before deploy)"
 }
 
 sync_to_workspace() {
   local sync_source="$1"
   local ws_path="$2"
   log "Syncing ${sync_source} -> ${ws_path}"
+  local sync_out
   local sync_args=(
     sync "${sync_source}" "${ws_path}"
     --exclude node_modules
     --exclude .git
     --exclude .angular
   )
-  if ! databricks_cmd "${sync_args[@]}" --full 2>/dev/null; then
+  if ! sync_out="$(databricks_cmd "${sync_args[@]}" --full 2>&1)"; then
     log "Retrying sync without --full (older CLI)"
-    databricks_cmd "${sync_args[@]}"
+    sync_out="$(databricks_cmd "${sync_args[@]}" 2>&1)" || die "Sync failed:\n${sync_out}"
   fi
+  printf '%s\n' "${sync_out}" | tail -5
+}
+
+verify_workspace_folder() {
+  local ws_path="$1"
+  log "Verifying workspace folder has files: ${ws_path}"
+  local listing
+  if ! listing="$(databricks_cmd workspace list "$ws_path" 2>&1)"; then
+    die "Cannot list ${ws_path}. Check path and CLI auth. Output: ${listing}"
+  fi
+  if [[ -z "${listing//[[:space:]]/}" ]]; then
+    die "Workspace folder is empty: ${ws_path}. Sync may have failed or used the wrong path.
+Check WORKSPACE_USER matches your Databricks login email exactly.
+Try: databricks workspace list \"${ws_path}\""
+  fi
+  if grep -qiE 'server\.js|app\.yaml' <<<"${listing}"; then
+    log "Workspace folder contains expected deploy files"
+    return 0
+  fi
+  log "Folder listing (server.js / app.yaml not matched — check path and sync output):"
+  printf '%s\n' "${listing}" | head -25
+  die "Expected server.js and app.yaml under ${ws_path} after sync.
+If files are missing, confirm WORKSPACE_USER and re-run sync.
+Tip: grant permissions on the parent folder /Workspace/Users/<you>/ so they survive redeploys."
 }
 
 verify_deployed_server() {
   local ws_path="$1"
-  local tmp
+  local tmp export_err
   tmp="$(mktemp)"
-  if ! databricks_cmd workspace export "${ws_path}/server.js" "${tmp}" 2>/dev/null; then
+  if ! export_err="$(databricks_cmd workspace export "${ws_path}/server.js" "${tmp}" 2>&1)"; then
     rm -f "${tmp}"
-    die "Could not export ${ws_path}/server.js after sync. Check UI_WS_PATH and permissions."
+    die "Could not export ${ws_path}/server.js after sync.
+CLI output: ${export_err}
+Common causes:
+  - WORKSPACE_USER email does not match the workspace path owner
+  - Sync uploaded to a different path (Git Bash path mangling — use PowerShell)
+  - Folder is empty — run: databricks workspace list \"${ws_path}\""
   fi
   if grep -qE "require\(['\"]http-proxy-middleware['\"]\)" "${tmp}"; then
     rm -f "${tmp}"
@@ -295,24 +343,6 @@ ensure_app_exists() {
   databricks_cmd apps create "$APP_NAME"
 }
 
-verify_workspace_folder() {
-  local ws_path="$1"
-  log "Verifying workspace folder has files: ${ws_path}"
-  local listing
-  if ! listing="$(databricks_cmd workspace list "$ws_path" 2>&1)"; then
-    die "Cannot list ${ws_path}. Check path and CLI auth. Output: ${listing}"
-  fi
-  if [[ -z "${listing//[[:space:]]/}" ]]; then
-    die "Workspace folder is empty: ${ws_path}. Sync may have failed or used the wrong path."
-  fi
-  if ! grep -qE 'app\.yaml|server\.js' <<<"${listing}"; then
-    log "Warning: app.yaml or server.js not visible in folder listing (may still be OK):"
-    printf '%s\n' "${listing}" | head -20
-  else
-    log "Workspace folder contains expected deploy files"
-  fi
-}
-
 print_sp_permission_hint() {
   local ws_path="$1"
   cat <<EOF
@@ -320,11 +350,13 @@ print_sp_permission_hint() {
 If deploy fails with "no files found" or Service Principal access:
   1. Open Compute → Apps → ${APP_NAME} → Environment tab
   2. Note the app service principal (client id / name)
-  3. In Workspace, open: ${ws_path}
-  4. Share / Permissions → add that service principal → CAN READ (or CAN MANAGE)
+  3. Grant access on the **parent folder** so it survives redeploys:
+       /Workspace/Users/<your-email>/
+     (Can Read is enough; Can Manage also works)
+  4. Or grant on the app folder: ${ws_path}
   5. Re-run deploy (SKIP_BUILD=1 SKIP_SYNC=1 if files are already synced)
 
-Or deploy once from the UI: Apps → ${APP_NAME} → Deploy → select ${ws_path}
+Avoid CLEAN_WORKSPACE=1 unless necessary — deleting the folder removes ACLs you set on it.
 
 EOF
 }

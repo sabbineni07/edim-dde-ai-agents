@@ -405,7 +405,7 @@ databricks apps logs edim-dde-ai-agents-ui
 | API works, UI 500 on startup | `npm install` failed / no `express` | Run `npm ci` locally; sync after `npm ci --omit=dev` or let platform install |
 | CORS errors | UI calling API URL directly | Keep `API_BASE = '/api'`; fix proxy, not CORS |
 | Deploy: **no files found** / SP access | Empty folder or app SP cannot read folder | [Fix: no files found](#fix-deploy-no-files-found--service-principal-access) |
-| App built OK then **http-proxy-middleware** crash | Stale **server.js** or **node_modules** on workspace from prior deploy | Delete workspace folder; redeploy with updated script (`CLEAN_WORKSPACE=1` default). Verify: `grep http-proxy-middleware UI/server.js` should only match comments |
+| App built OK then **http-proxy-middleware** crash | Stale **server.js** or **node_modules** on workspace from prior deploy | Default: script deletes only stale files (`CLEAN_STALE_FILES=1`), not the whole folder. Use `CLEAN_WORKSPACE=1` only if needed — then re-grant app SP permissions |
 | App stuck **Deploying** | Invalid `app.yaml` | Validate YAML; test `node server.js` locally |
 | Sync path `C:/Program Files/Git/Workspace/...` | **Git Bash** rewrote `/Workspace/...` | Use **PowerShell**, or re-run `./scripts/deploy-databricks-ui.sh` (script sets `MSYS_NO_PATHCONV=1`), or `export MSYS_NO_PATHCONV=1` before `databricks sync` |
 
@@ -531,12 +531,15 @@ Select-String -Path UI\server.js -Pattern "require\('http'\)"
 
 If the first command matches, run `git pull` to get the latest `UI/server.js`.
 
-### Step 2 — Delete the workspace deploy folder
+### Step 2 — Delete stale files (not the whole folder)
 
-In **Databricks Workspace UI**:
+Prefer **deleting only stale runtime files** so folder permissions survive:
 
-1. Browse to `/Users/you@org.com/edim-dde-ai-agents-ui`
-2. **Delete the entire folder** (or delete at least `server.js` and `node_modules`)
+- `server.js`, `app.yaml`, `package.json`, `node_modules/`
+
+The deploy script does this by default (`CLEAN_STALE_FILES=1`, `CLEAN_WORKSPACE=0`).
+
+Only delete the **entire folder** if you must (`CLEAN_WORKSPACE=1`) — you will need to **re-grant** the app service principal **Can Read** on the folder afterward.
 
 Or CLI:
 
@@ -549,7 +552,7 @@ databricks workspace delete /Workspace/Users/you@org.com/edim-dde-ai-agents-ui -
 ```powershell
 $env:API_PROXY_TARGET = "https://your-api-app.databricksapps.com"
 $env:WORKSPACE_USER = "you@org.com"
-$env:CLEAN_WORKSPACE = "1"
+$env:CLEAN_WORKSPACE = "0"   # default — preserves folder permissions
 
 bash ./scripts/deploy-databricks-ui.sh
 ```
@@ -557,7 +560,8 @@ bash ./scripts/deploy-databricks-ui.sh
 The script now:
 
 - Verifies staging `server.js` has **no** `http-proxy-middleware` require
-- **Deletes** the workspace folder before sync (default)
+- **Deletes only stale runtime files** before sync (default) — **preserves ACLs**
+- Optional `CLEAN_WORKSPACE=1` deletes the whole folder (you must re-grant app SP access)
 - Syncs **without** `node_modules` (Databricks runs `npm install` for express only)
 - **Exports** `server.js` from workspace after sync to verify it updated
 
