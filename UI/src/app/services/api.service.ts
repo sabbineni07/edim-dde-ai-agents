@@ -178,6 +178,95 @@ export interface AgentInfo {
   get_started_route: string;
 }
 
+export interface AgentDefinitionContent {
+  agent_id: string;
+  display_name: string;
+  description?: string | null;
+  version: number;
+  is_enabled: boolean;
+  get_started_route: string;
+  updated_at?: string | null;
+}
+
+export interface AgentPromptContent {
+  chain_name: string;
+  role: string;
+  content: string;
+  version: number;
+  sort_order: number;
+  updated_at?: string | null;
+  updated_by?: string | null;
+  usage_summary?: string | null;
+  usage_detail?: string | null;
+  backend_ref?: string | null;
+}
+
+export interface AgentSkillContent {
+  skill_key: string;
+  title: string;
+  description?: string | null;
+  content: string;
+  version: number;
+  sort_order: number;
+  updated_at?: string | null;
+  updated_by?: string | null;
+  usage_summary?: string | null;
+  usage_detail?: string | null;
+  backend_ref?: string | null;
+}
+
+export interface AgentChainUsage {
+  summary: string;
+  detail: string;
+  backend_ref?: string | null;
+}
+
+export interface AgentContentResponse {
+  agent_id: string;
+  definition: AgentDefinitionContent;
+  prompts: AgentPromptContent[];
+  skills: AgentSkillContent[];
+  source: string;
+  chain_usage?: Record<string, AgentChainUsage>;
+  can_edit: boolean;
+}
+
+export interface AgentContentVersionSummary {
+  version: number;
+  is_active: boolean;
+  updated_at?: string | null;
+  updated_by?: string | null;
+  content_length: number;
+}
+
+export interface AgentContentVersionListResponse {
+  agent_id: string;
+  kind: 'prompt' | 'skill';
+  chain_name?: string | null;
+  role?: string | null;
+  skill_key?: string | null;
+  versions: AgentContentVersionSummary[];
+}
+
+export interface AgentContentDiffResponse {
+  agent_id: string;
+  kind: 'prompt' | 'skill';
+  chain_name?: string | null;
+  role?: string | null;
+  skill_key?: string | null;
+  from_version: number;
+  to_version: number;
+  diff: string;
+  has_changes: boolean;
+}
+
+export interface AgentContentResetResponse {
+  agent_id: string;
+  prompts_reset: number;
+  skills_reset: number;
+  content: AgentContentResponse;
+}
+
 export interface EditableSettingsField {
   key: string;
   label: string;
@@ -700,6 +789,81 @@ export class ApiService {
         });
       })
     );
+  }
+
+  getAgentContent(agentId: string): Observable<AgentContentResponse> {
+    return this.http.get<AgentContentResponse>(`${API_BASE}/agents/${agentId}/content`);
+  }
+
+  updateAgentPrompt(
+    agentId: string,
+    chainName: string,
+    role: string,
+    content: string
+  ): Observable<AgentPromptContent> {
+    return this.http.put<AgentPromptContent>(
+      `${API_BASE}/agents/${agentId}/prompts/${chainName}/${role}`,
+      { content }
+    );
+  }
+
+  updateAgentSkill(
+    agentId: string,
+    skillKey: string,
+    body: { content: string; title?: string; description?: string }
+  ): Observable<AgentSkillContent> {
+    return this.http.put<AgentSkillContent>(
+      `${API_BASE}/agents/${agentId}/skills/${skillKey}`,
+      body
+    );
+  }
+
+  listAgentPromptVersions(
+    agentId: string,
+    chainName: string,
+    role: string
+  ): Observable<AgentContentVersionListResponse> {
+    return this.http.get<AgentContentVersionListResponse>(
+      `${API_BASE}/agents/${agentId}/prompts/${chainName}/${role}/versions`
+    );
+  }
+
+  listAgentSkillVersions(
+    agentId: string,
+    skillKey: string
+  ): Observable<AgentContentVersionListResponse> {
+    return this.http.get<AgentContentVersionListResponse>(
+      `${API_BASE}/agents/${agentId}/skills/${skillKey}/versions`
+    );
+  }
+
+  diffAgentPromptVersions(
+    agentId: string,
+    chainName: string,
+    role: string,
+    fromVersion: number,
+    toVersion: number
+  ): Observable<AgentContentDiffResponse> {
+    return this.http.get<AgentContentDiffResponse>(
+      `${API_BASE}/agents/${agentId}/prompts/${chainName}/${role}/diff`,
+      { params: { from_version: fromVersion.toString(), to_version: toVersion.toString() } }
+    );
+  }
+
+  diffAgentSkillVersions(
+    agentId: string,
+    skillKey: string,
+    fromVersion: number,
+    toVersion: number
+  ): Observable<AgentContentDiffResponse> {
+    return this.http.get<AgentContentDiffResponse>(
+      `${API_BASE}/agents/${agentId}/skills/${skillKey}/diff`,
+      { params: { from_version: fromVersion.toString(), to_version: toVersion.toString() } }
+    );
+  }
+
+  resetAgentContent(agentId: string): Observable<AgentContentResetResponse> {
+    return this.http.post<AgentContentResetResponse>(`${API_BASE}/agents/${agentId}/content/reset`, {});
   }
 
   getEditableSettings(agentId: string): Observable<{ agent_id: string; fields: EditableSettingsField[] }> {

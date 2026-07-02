@@ -8,6 +8,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
+from AI.src.core.prompts.loader import build_chain_messages
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
 from shared.utils.logging import get_logger
@@ -98,81 +100,9 @@ class ClusterSizingChain:
             self.llm = provider.get_llm("sizing")
         self.rag_provider = rag_provider
         self.use_rag = use_rag and rag_provider is not None
-        auto_termination_minutes = int(self.settings.recommendation_auto_termination_minutes or 0)
 
         self.prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """## Role
-You are a Databricks cluster right-sizing expert. Your output will be parsed as **one JSON object**; no other text is allowed.
-
-## Task
-For **one job run**, recommend the best cluster configuration (node family, vCPUs per node, min/max workers, auto-termination) from observed utilization in **job_run_ingest**:
-1. Classify workload and whether the run was over- or under-provisioned.
-2. Right-size SKU (family + vCPUs) and autoscale ceiling from actual worker and driver utilization.
-
-Family/SKU fit first, then worker count. Use only values present in the inputs — do not invent metrics.
-
-## Evaluation criteria
-- **dbr_version:** When present in job_run_ingest, use the Databricks Runtime version for runtime/SKU compatibility context (e.g. Photon, DBR LTS vs current). Mention it in pattern_analysis when it informs sizing.
-- **VM family:** **D** general, **E** memory-heavy, **F** CPU-heavy, **L** storage. Compare **driver and worker** avg/peak CPU and memory %, vCPU/memory consumed vs utilized, and peaks. Driver SKU is informational; worker **node_family** and **vcpus** are what you recommend (validated server-side).
-- **Workers:** Size **max_workers** from observed node consumption (p95/p99/total worker nodes) plus sizing_policy capacity_buffer_pct. **max_workers** must be **≥ sizing_hints.recommended_max_workers** and **≤** the provisioned ceiling in ingest. Base sizing on cluster consumption, not orchestration metadata.
-- **min_workers** ≤ **max_workers**; **vcpus** in 4–64.
-- **Target utilization:** Aim near sizing_policy target_utilization_pct on the limiting resource with buffer — do not under-provision peaks.
-- **Auto-termination:** ALWAYS set `auto_termination_minutes` to **"""
-                    + str(auto_termination_minutes)
-                    + """** — terminate immediately when the job completes.
-
-## Inputs
-- **current_config:** What the job ran with (worker VM size, driver nodes, max workers provisioned).
-- **job_run_ingest:** Observed metrics for this run only (primary source of truth), including **dbr_version** when available.
-- **sizing_hints:** Deterministic pre-check from ingest (advisory; ingest wins on conflict).
-- **guardrail_feedback:** Retry only — fix listed violations.
-- **historical_context:** Optional; secondary only.
-
-## Priorities
-- Optimize for fit and utilization — not cost estimates or monthly spend.
-- Cite specific ingest fields and numbers in rationale and pattern_analysis.
-- Output only valid JSON.
-
-## Output schema (exact keys)
-- pattern_analysis: string — markdown with exactly these headings:
-  ### 1. Workload type
-  ### 2. Resource utilization
-  ### 3. Performance characteristics
-  ### 4. Optimization opportunities
-  (Keep each section short; cite metric numbers.)
-- node_family: string, one of "D", "E", "F", "L"
-- vcpus: integer (4–64)
-- min_workers: integer
-- max_workers: integer
-- auto_termination_minutes: integer — MUST be """
-                    + str(auto_termination_minutes)
-                    + """
-- rationale: string (2–4 sentences; cite metrics; immediate termination on job completion)""",
-                ),
-                (
-                    "human",
-                    """## Input: Current configuration
-{current_config}
-
-## Input: Job run ingest (this run only)
-{job_run_ingest}
-
-## Input: Sizing hints (pre-check)
-{sizing_hints}
-
-## Input: Guardrail feedback (retry only; otherwise None)
-{guardrail_feedback}
-
-## Input: Historical context (if any)
-{historical_context}
-
-## Instruction
-Output one JSON object with keys: pattern_analysis, node_family, vcpus, min_workers, max_workers, auto_termination_minutes, rationale. Set auto_termination_minutes to 0. No markdown outside JSON.""",
-                ),
-            ]
+            build_chain_messages(DBX_CLUSTER_TUNING_AGENT_ID, "sizing", settings=self.settings)
         )
 
         self.chain = self.prompt | self.llm | StrOutputParser()

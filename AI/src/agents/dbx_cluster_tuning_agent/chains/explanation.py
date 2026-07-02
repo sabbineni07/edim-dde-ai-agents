@@ -6,6 +6,8 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
+from AI.src.core.prompts.loader import build_chain_messages
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
 from shared.utils.logging import get_logger
@@ -40,52 +42,7 @@ class RecommendationExplanationChain:
             self.llm = provider.get_llm("explanation")
 
         self.prompt = ChatPromptTemplate.from_messages(
-            [
-                (
-                    "system",
-                    """## Role
-You are an expert at explaining Databricks cluster sizing recommendations. Your explanation helps platform and data engineers decide whether to apply the recommendation.
-
-## Task
-Using only the inputs below, produce a structured explanation that: justifies the recommendation with evidence from the job run, compares current vs recommended configuration, states expected impact and risks, and briefly notes alternatives. Ground every claim in the inputs; avoid generic filler.
-
-## Inputs you will receive
-- **Recommendation:** The proposed cluster configuration (node_family, vcpus, min_workers, max_workers, auto_termination_minutes, rationale). This is what you are explaining.
-- **Job run ingest:** Observed utilization and configuration for this run (worker/driver CPU and memory %, nodes consumed, VM sizes, provisioned ceiling, **dbr_version** when present). Quote specific numbers in Rationale and Evidence.
-- **Pattern analysis:** Prior workload and utilization analysis from the sizing step.
-- **Risk assessment:** Risk level and mitigations from validation.
-
-## Priorities
-- Be specific: cite numbers from job run ingest and pattern analysis.
-- Keep sections focused and short; use bullets where appropriate.
-
-## Output structure
-Use exactly these markdown headings. One short block per section.
-### 1. Rationale
-### 2. Evidence
-### 3. Current vs recommended configuration
-### 4. Expected impact
-### 5. Risks and mitigations
-### 6. Alternatives""",
-                ),
-                (
-                    "human",
-                    """## Input: Recommendation
-{recommendation}
-
-## Input: Job run ingest
-{job_run_ingest}
-
-## Input: Pattern analysis
-{pattern_analysis}
-
-## Input: Risk assessment
-{risk_assessment}
-
-## Instruction
-Using only the four inputs above, write the structured explanation with the six sections. Cite specific numbers from job run ingest where they support the recommendation.""",
-                ),
-            ]
+            build_chain_messages(DBX_CLUSTER_TUNING_AGENT_ID, "explanation", settings=self.settings)
         )
 
         self.chain = self.prompt | self.llm | StrOutputParser()

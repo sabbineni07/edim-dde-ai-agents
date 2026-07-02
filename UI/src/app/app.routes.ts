@@ -20,6 +20,7 @@ export const routes: Routes = [
       { path: 'jobs/:workspaceId/:jobId', loadComponent: () => import('./features/job-detail/job-detail.component').then(m => m.JobDetailComponent) },
       { path: 'chat', loadComponent: () => import('./features/chat/chat.component').then(m => m.ChatComponent) },
       { path: 'agents', loadComponent: () => import('./features/agents/agents.component').then(m => m.AgentsComponent) },
+      { path: 'agents/:agentId', loadComponent: () => import('./features/agent-detail/agent-detail.component').then(m => m.AgentDetailComponent) },
       { path: '**', redirectTo: 'connections' },
     ],
   },

@@ -265,6 +265,11 @@ def init_database():
         inserted = seed_platform_environments_if_empty()
         if inserted:
             logger.info("platform_environments_seeded_on_init", count=inserted)
+        from shared.services.agent_content_service import seed_agent_content_if_empty
+
+        agent_inserted = seed_agent_content_if_empty()
+        if agent_inserted:
+            logger.info("agent_content_seeded_on_init", count=agent_inserted)
     except Exception as e:
         from shared.database.availability import handle_database_error
 
