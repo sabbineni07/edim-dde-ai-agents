@@ -78,11 +78,21 @@ class DatabricksCollector:
         server_hostname: Optional[str] = None,
         http_path: Optional[str] = None,
     ):
+        from shared.databricks.sql_config import normalize_databricks_sql_config
+
+        sql_cfg = normalize_databricks_sql_config(
+            {
+                "databricks_server_hostname": server_hostname
+                or settings.databricks_server_hostname,
+                "databricks_http_path": http_path or settings.databricks_http_path,
+            },
+            databricks_host=settings.databricks_host,
+        )
         self._metrics_table = (
             metrics_table or settings.databricks_job_cluster_metrics_table or ""
         ).strip() or None
-        self._server_hostname = server_hostname or settings.databricks_server_hostname
-        self._http_path = http_path or settings.databricks_http_path
+        self._server_hostname = sql_cfg["databricks_server_hostname"]
+        self._http_path = sql_cfg["databricks_http_path"]
         self._table_columns: Optional[set[str]] = None
 
     def _fetch_table_columns(self) -> set[str]:
@@ -141,7 +151,18 @@ class DatabricksCollector:
         """Build SQL connector params; token from request user OAuth, app SP, env, or Azure AD."""
         from shared.auth.databricks_tokens import resolve_databricks_sql_access_token
 
+        if not (self._server_hostname and self._http_path):
+            raise RuntimeError(
+                "Databricks SQL connection is not configured "
+                f"(hostname={self._server_hostname!r}, http_path={self._http_path!r})."
+            )
+
         token = resolve_databricks_sql_access_token()
+        if not token:
+            raise RuntimeError(
+                "No Databricks SQL access token available. On Databricks Apps, attach a "
+                "sql-warehouse resource; locally use az login or DATABRICKS_TOKEN."
+            )
         if token and not (settings.databricks_token or "").strip():
             logger.debug(
                 "databricks_sql_token_resolved",
@@ -151,8 +172,8 @@ class DatabricksCollector:
             "server_hostname": self._server_hostname,
             "http_path": self._http_path,
             "access_token": token,
-            "_socket_timeout": 30,
-            "_query_timeout": 60,
+            "_socket_timeout": 15,
+            "_query_timeout": 45,
         }
 
     def collect_job_cluster_metrics(
@@ -290,7 +311,14 @@ class DatabricksCollector:
                     logger.info("listed_workspaces_from_delta", count=len(workspaces), table=table)
                     return workspaces
         except Exception as e:
-            logger.error("list_workspaces_error", error=str(e), table=table)
+            logger.error(
+                "list_workspaces_error",
+                error=str(e),
+                error_type=type(e).__name__,
+                table=table,
+                server_hostname=self._server_hostname,
+                http_path=self._http_path,
+            )
             raise
 
     def list_jobs_for_workspace(

@@ -89,12 +89,15 @@ def reset_environment_connection_store_for_tests() -> None:
 
 
 def _databricks_config_from_env_row(item: Dict[str, Any]) -> Dict[str, Any]:
+    from shared.databricks.sql_config import normalize_databricks_sql_config
+
     cfg: Dict[str, Any] = {}
     if item.get("databricks_server_hostname"):
         cfg["databricks_server_hostname"] = item["databricks_server_hostname"]
     if item.get("databricks_http_path"):
         cfg["databricks_http_path"] = item["databricks_http_path"]
-    return cfg
+    normalized = normalize_databricks_sql_config(cfg)
+    return {k: v for k, v in normalized.items() if v}
 
 
 def seed_default_connections_for_environment(

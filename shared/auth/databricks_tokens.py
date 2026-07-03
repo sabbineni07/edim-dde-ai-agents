@@ -189,6 +189,15 @@ def resolve_databricks_sql_token(
     if app_token:
         return app_token
 
+    from shared.databricks.workspace_client import is_databricks_app_runtime
+
+    if is_databricks_app_runtime():
+        logger.warning(
+            "databricks_app_sql_token_unavailable",
+            hint="Attach sql-warehouse app resource and redeploy.",
+        )
+        return None
+
     return get_azure_identity_databricks_token()
 
 
