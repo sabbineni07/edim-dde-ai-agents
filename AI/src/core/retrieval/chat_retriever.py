@@ -97,7 +97,12 @@ def retrieve_for_chat(
                 emb = embeddings_from_settings(settings)
             else:
                 emb = FoundryLLMService(config=settings).get_embeddings()
-            vs = load_cached_faiss_vectorstore(path, emb)
+            vs = load_cached_faiss_vectorstore(
+                path,
+                emb,
+                faiss_storage_type=settings.faiss_storage_type,
+                databricks_server_hostname=settings.databricks_server_hostname,
+            )
             pairs = vs.similarity_search_with_score(q, k=k)
             out: List[RetrievedChunk] = []
             for doc, raw_score in pairs:

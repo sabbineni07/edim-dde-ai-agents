@@ -87,31 +87,15 @@ def _is_databricks_app_runtime() -> bool:
 
 
 def _databricks_workspace_host() -> Optional[str]:
-    host = (settings.databricks_host or "").strip()
-    if host:
-        return host if host.startswith("http") else f"https://{host}"
-    server_hostname = (settings.databricks_server_hostname or "").strip()
-    if server_hostname:
-        return f"https://{server_hostname}"
-    return None
+    from shared.databricks.workspace_client import databricks_workspace_host_from_settings
+
+    return databricks_workspace_host_from_settings(settings)
 
 
 def _get_workspace_client():
-    from databricks.sdk import WorkspaceClient
+    from shared.databricks.workspace_client import get_workspace_client_for_settings
 
-    if _is_databricks_app_runtime():
-        return WorkspaceClient()
-
-    kwargs: dict[str, Any] = {}
-    host = _databricks_workspace_host()
-    if host:
-        kwargs["host"] = host
-    client_id = (settings.databricks_client_id or "").strip()
-    client_secret = (settings.databricks_client_secret or "").strip()
-    if client_id and client_secret:
-        kwargs["client_id"] = client_id
-        kwargs["client_secret"] = client_secret
-    return WorkspaceClient(**kwargs)
+    return get_workspace_client_for_settings(settings)
 
 
 def _parse_credential_expiry(expire_time: Any) -> float:

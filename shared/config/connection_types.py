@@ -139,7 +139,8 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
             },
         ],
         "auth_note": (
-            "Databricks Volume paths require the app identity to have WRITE on the volume. "
+            "Databricks Volume paths use the workspace host from the environment's "
+            "Databricks metrics connection (via the agent's metrics dataset). "
             "Local paths use the API container filesystem."
         ),
     },

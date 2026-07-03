@@ -412,15 +412,12 @@ class WorkspaceAgentService:
             )
 
         metrics_wh_config: Optional[Dict[str, Any]] = None
-        if (
-            environment_id
-            and metrics_dataset
-            and metrics_dataset.get("source_type") == "databricks_delta"
-        ):
+        if environment_id:
             wh_id = resolve_metrics_connection_id(environment_id, None)
             if wh_id:
                 wh = self._connections.get_connection(wh_id)
-                metrics_wh_config = dict(wh.config or {}) if wh else None
+                if wh and wh.connection_type == "databricks":
+                    metrics_wh_config = dict(wh.config or {})
 
         flat, secrets = resolve_workspace_agent_settings(
             agent_id=rec.agent_id,

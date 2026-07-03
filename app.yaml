@@ -27,3 +27,9 @@ env:
     value: "production"
   - name: LOG_LEVEL
     value: "INFO"
+  - name: FAISS_VOLUME_ROOT
+    valueFrom: faiss-volume
+  - name: FAISS_INDEX_PATH
+    value: "/Volumes/dim_engineering_dev/sabbineni_adhoc/faiss_index"
+  - name: DATABRICKS_HTTP_PATH
+    valueFrom: sql-warehouse

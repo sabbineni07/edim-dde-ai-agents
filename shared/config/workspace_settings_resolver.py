@@ -46,10 +46,6 @@ def _metrics_dataset_to_settings_flat(
     source_type = (metrics_dataset.get("source_type") or "").strip()
     if source_type == "databricks_delta":
         flat["use_local_data"] = False
-        cfg = metrics_wh_config or {}
-        for k in ("databricks_server_hostname", "databricks_http_path"):
-            if cfg.get(k):
-                flat[k] = cfg[k]
         table = (metrics_dataset.get("table_fqn") or "").strip()
         if table:
             flat["databricks_job_cluster_metrics_table"] = table
@@ -59,6 +55,17 @@ def _metrics_dataset_to_settings_flat(
         if path:
             flat["local_data_path"] = path
     return flat
+
+
+def _apply_databricks_wh_config(
+    flat: Dict[str, Any],
+    metrics_wh_config: Optional[Dict[str, Any]],
+) -> None:
+    """Merge SQL warehouse host/path from the environment's Databricks connection."""
+    cfg = metrics_wh_config or {}
+    for key in ("databricks_server_hostname", "databricks_http_path"):
+        if cfg.get(key):
+            flat[key] = cfg[key]
 
 
 def resolve_workspace_agent_settings(
@@ -82,7 +89,9 @@ def resolve_workspace_agent_settings(
 
     metrics_binding_id = normalized_bindings.get("metrics")
     if metrics_binding_id and metrics_dataset:
-        flat.update(_metrics_dataset_to_settings_flat(metrics_dataset, metrics_wh_config))
+        flat.update(_metrics_dataset_to_settings_flat(metrics_dataset))
+    if metrics_wh_config:
+        _apply_databricks_wh_config(flat, metrics_wh_config)
 
     for role, cid in normalized_bindings.items():
         if role == "metrics":

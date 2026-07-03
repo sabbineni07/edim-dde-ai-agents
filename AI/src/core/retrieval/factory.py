@@ -59,7 +59,12 @@ def create_rag_context_provider(
             if emb is None:
                 logger.warning("rag_faiss_no_embeddings")
                 return None
-            vs = load_cached_faiss_vectorstore(path, emb)
+            vs = load_cached_faiss_vectorstore(
+                path,
+                emb,
+                faiss_storage_type=settings.faiss_storage_type,
+                databricks_server_hostname=settings.databricks_server_hostname,
+            )
             logger.info(
                 "rag_context_provider_ready",
                 backend="faiss",
