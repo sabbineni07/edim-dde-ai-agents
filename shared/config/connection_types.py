@@ -114,18 +114,34 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
         "auth_note": _AUTH_MI,
     },
     "faiss": {
-        "label": "FAISS (local index)",
-        "description": "On-disk vector index for RAG (no cloud service).",
+        "label": "FAISS (vector index)",
+        "description": "On-disk vector index for RAG on local filesystem or a Databricks Unity Catalog volume.",
         "fields": [
+            {
+                "key": "faiss_storage_type",
+                "label": "Storage",
+                "type": "select",
+                "required": True,
+                "default": "local",
+                "options": [
+                    {"value": "local", "label": "Local path"},
+                    {"value": "databricks_volume", "label": "Databricks Volume"},
+                ],
+                "help": "Local path for dev/Docker; Databricks Volume for Apps (/Volumes/...).",
+            },
             {
                 "key": "faiss_index_path",
                 "label": "Index path",
                 "type": "string",
                 "required": True,
                 "placeholder": "/app/data/faiss_index",
+                "help": "Folder containing index.faiss and index.pkl. For volumes use /Volumes/catalog/schema/volume/faiss_index.",
             },
         ],
-        "auth_note": "",
+        "auth_note": (
+            "Databricks Volume paths require the app identity to have WRITE on the volume. "
+            "Local paths use the API container filesystem."
+        ),
     },
 }
 
@@ -162,8 +178,23 @@ def validate_connection_config(connection_type: str, config: Dict[str, Any]) -> 
     for field in meta.get("fields", []):
         key = field["key"]
         val = config.get(key)
-        if field.get("required") and (val is None or str(val).strip() == ""):
-            raise ValueError(f"Missing required field: {key}")
+        if val is None or str(val).strip() == "":
+            if field.get("required") and field.get("default") is None:
+                raise ValueError(f"Missing required field: {key}")
+            if field.get("default") is not None:
+                val = field["default"]
         if val is not None and str(val).strip() != "":
             clean[key] = val
+    if connection_type == "faiss":
+        from shared.rag.faiss_paths import normalize_faiss_storage_type, resolve_faiss_index_path
+
+        storage = normalize_faiss_storage_type(
+            clean.get("faiss_storage_type"),
+            index_path=clean.get("faiss_index_path"),
+        )
+        clean["faiss_storage_type"] = storage
+        resolve_faiss_index_path(
+            faiss_index_path=clean.get("faiss_index_path"),
+            faiss_storage_type=storage,
+        )
     return clean

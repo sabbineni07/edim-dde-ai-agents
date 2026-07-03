@@ -33,6 +33,8 @@ def _connection_to_settings_flat(
         flat["vector_retrieval_backend"] = "faiss"
         if config.get("faiss_index_path"):
             flat["faiss_index_path"] = config["faiss_index_path"]
+        if config.get("faiss_storage_type"):
+            flat["faiss_storage_type"] = config["faiss_storage_type"]
     return flat
 
 

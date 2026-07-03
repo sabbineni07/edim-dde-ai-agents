@@ -152,8 +152,9 @@ def _index_to_faiss(settings: Settings, rec: Any, payload: dict, retrieval_text:
     from langchain_core.documents import Document
 
     from AI.src.core.retrieval.faiss_cache import append_to_faiss_index
+    from shared.rag.faiss_paths import resolve_faiss_index_path_from_settings
 
-    path = (settings.faiss_index_path or "").strip()
+    path = resolve_faiss_index_path_from_settings(settings)
     if not path:
         logger.warning("approved_indexing_faiss_missing_path")
         return False

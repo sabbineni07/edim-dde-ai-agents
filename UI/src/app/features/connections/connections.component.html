@@ -103,7 +103,15 @@
             <label class="form-label" [for]="'connField_' + f.key">
               {{ f.label }}<span class="text-danger" *ngIf="f.required"> *</span>
             </label>
+            <select
+              *ngIf="f.type === 'select'"
+              [id]="'connField_' + f.key"
+              class="form-select form-select-sm"
+              [(ngModel)]="formConfig[f.key]">
+              <option *ngFor="let o of f.options" [value]="o.value">{{ o.label }}</option>
+            </select>
             <input
+              *ngIf="f.type !== 'select'"
               [id]="'connField_' + f.key"
               class="form-control form-control-sm"
               [(ngModel)]="formConfig[f.key]"

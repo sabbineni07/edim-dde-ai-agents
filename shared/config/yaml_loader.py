@@ -146,6 +146,8 @@ def flatten_platform_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             flat["vector_retrieval_backend"] = vr["backend"]
         if "faiss_index_path" in vr:
             flat["faiss_index_path"] = vr["faiss_index_path"]
+        if "faiss_storage_type" in vr:
+            flat["faiss_storage_type"] = vr["faiss_storage_type"]
 
     return {k: v for k, v in flat.items() if v is not None}
 

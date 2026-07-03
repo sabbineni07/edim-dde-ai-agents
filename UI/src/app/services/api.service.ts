@@ -289,6 +289,11 @@ export interface UiHints {
   admin_usernames?: string[];
 }
 
+export interface ConnectionTypeFieldOption {
+  value: string;
+  label: string;
+}
+
 export interface ConnectionTypeField {
   key: string;
   label: string;
@@ -296,7 +301,8 @@ export interface ConnectionTypeField {
   required?: boolean;
   placeholder?: string;
   help?: string;
-  options?: string[];
+  default?: string;
+  options?: ConnectionTypeFieldOption[];
 }
 
 export interface ConnectionTypeMeta {
