@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError
+from API.src.middleware.databricks_auth import DatabricksUserTokenMiddleware
 from API.src.routes import (
     agents,
     chat,
@@ -104,6 +105,8 @@ app = FastAPI(
 )
 
 _register_exception_handlers(app)
+
+app.add_middleware(DatabricksUserTokenMiddleware)
 
 # CORS middleware
 app.add_middleware(

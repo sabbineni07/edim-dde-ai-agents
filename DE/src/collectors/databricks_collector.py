@@ -138,21 +138,15 @@ class DatabricksCollector:
         return "SELECT\n" + _METRICS_SELECT_BODY.format(job_run_id_select=self._job_run_id_select())
 
     def _connection_params(self) -> Dict[str, Any]:
-        """Build SQL connector params; token from env override or Azure identity at runtime."""
-        token = (settings.databricks_token or "").strip() or None
-        if not token:
-            try:
-                from shared.auth.azure_tokens import DATABRICKS_AAD_SCOPE, get_azure_access_token
+        """Build SQL connector params; token from request user OAuth, app SP, env, or Azure AD."""
+        from shared.auth.databricks_tokens import resolve_databricks_sql_access_token
 
-                token = get_azure_access_token(DATABRICKS_AAD_SCOPE)
-                settings.databricks_token = token
-                logger.debug("databricks_token_from_azure_identity", cached=True)
-            except Exception as e:
-                logger.warning(
-                    "databricks_token_unavailable",
-                    error=str(e),
-                    hint="Run az login or assign Managed Identity with Databricks access.",
-                )
+        token = resolve_databricks_sql_access_token()
+        if token and not (settings.databricks_token or "").strip():
+            logger.debug(
+                "databricks_sql_token_resolved",
+                source="request_or_runtime",
+            )
         return {
             "server_hostname": self._server_hostname,
             "http_path": self._http_path,
