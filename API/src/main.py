@@ -2,11 +2,18 @@
 
 from contextlib import asynccontextmanager
 
+# Configure corporate SSL trust BEFORE any httpx/requests clients are created.
+# httpx reads SSL_CERT_FILE at transport construction time (e.g. ChatOpenAI.__init__).
+from shared.ssl import configure_corporate_ssl
+
+configure_corporate_ssl()
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError
+from API.src.middleware.databricks_auth import DatabricksUserTokenMiddleware
 from API.src.routes import (
     agents,
     chat,
@@ -98,6 +105,8 @@ app = FastAPI(
 )
 
 _register_exception_handlers(app)
+
+app.add_middleware(DatabricksUserTokenMiddleware)
 
 # CORS middleware
 app.add_middleware(

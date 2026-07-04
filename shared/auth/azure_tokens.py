@@ -5,6 +5,8 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Callable
 
+from shared.ssl import configure_corporate_ssl
+
 # Azure Databricks first-party app (same resource as `az account get-access-token --resource …`)
 DATABRICKS_AAD_SCOPE = "2ff814a6-3304-4ab8-85cb-cd0e6f879c1d/.default"
 
@@ -17,6 +19,7 @@ AZURE_SEARCH_AAD_SCOPE = "https://search.azure.com/.default"
 
 @lru_cache(maxsize=1)
 def _default_credential():
+    configure_corporate_ssl()
     from azure.identity import DefaultAzureCredential
 
     return DefaultAzureCredential()

@@ -1,0 +1,337 @@
+<app-page-header
+  [title]="pageTitle"
+  icon="robot"
+  [subtitle]="pageSubtitle"
+  [breadcrumbs]="breadcrumbs"
+>
+  <div *ngIf="content" class="d-flex flex-wrap gap-2 align-items-center">
+    <app-status-badge [label]="'v' + content.definition.version" variant="default"></app-status-badge>
+    <app-status-badge [label]="content.source === 'database' ? 'Database' : 'Seed defaults'" variant="secondary"></app-status-badge>
+    <button
+      *ngIf="content.can_edit"
+      type="button"
+      class="btn btn-outline-warning btn-sm"
+      (click)="confirmReset()"
+      [disabled]="resetting"
+    >
+      Reset to seed
+    </button>
+  </div>
+</app-page-header>
+
+<app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="4"></app-loading-card>
+
+<div *ngIf="!loading && error" class="alert alert-danger">{{ error }}</div>
+
+<ng-container *ngIf="!loading && content">
+  <ul class="nav nav-tabs agent-detail-tabs mb-3">
+    <li class="nav-item">
+      <button
+        type="button"
+        class="nav-link"
+        [class.active]="activeTab === 'prompts'"
+        (click)="setTab('prompts')"
+      >
+        Prompts ({{ content.prompts.length }})
+      </button>
+    </li>
+    <li class="nav-item">
+      <button
+        type="button"
+        class="nav-link"
+        [class.active]="activeTab === 'skills'"
+        (click)="setTab('skills')"
+      >
+        Skills ({{ content.skills.length }})
+      </button>
+    </li>
+  </ul>
+
+  <div *ngIf="activeTab === 'prompts'" class="agent-detail-panel">
+    <p class="text-muted small mb-3">
+      Chain prompts loaded from the content store at runtime. Each save creates a new version; use
+      History to compare changes.
+    </p>
+    <div class="card mb-3" *ngFor="let chain of promptChains">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+          <strong class="text-capitalize">{{ chainLabel(chain) }}</strong>
+          <app-content-help
+            *ngIf="chainUsage(chain) as usage"
+            [summary]="usage.summary"
+            [detail]="usage.detail"
+            [backendRef]="usage.backend_ref || ''"
+            [label]="'About ' + chainLabel(chain) + ' chain'"
+          ></app-content-help>
+        </div>
+        <span class="small text-muted">{{ promptsForChain(chain).length }} message(s)</span>
+      </div>
+      <div class="card-body p-0">
+        <div
+          class="prompt-block border-bottom"
+          *ngFor="let prompt of promptsForChain(chain); let last = last"
+          [class.border-bottom-0]="last"
+        >
+          <div class="prompt-block-header px-3 py-2 bg-light d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+              <span class="badge text-bg-primary text-capitalize">{{ prompt.role }}</span>
+              <app-content-help
+                *ngIf="hasUsage(prompt)"
+                [summary]="prompt.usage_summary || ''"
+                [detail]="prompt.usage_detail || ''"
+                [backendRef]="prompt.backend_ref || ''"
+                [label]="'About ' + chainLabel(prompt.chain_name) + ' ' + prompt.role + ' prompt'"
+              ></app-content-help>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="small text-muted">v{{ prompt.version }}</span>
+              <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm py-0"
+                (click)="openPromptHistory(prompt)"
+              >
+                History
+              </button>
+              <button
+                *ngIf="content.can_edit && !isEditingPrompt(prompt.chain_name, prompt.role)"
+                type="button"
+                class="btn btn-outline-secondary btn-sm py-0"
+                (click)="startEditPrompt(prompt)"
+              >
+                Edit
+              </button>
+            </div>
+          </div>
+          <div class="prompt-block-body px-3 py-3">
+            <ng-container *ngIf="!isEditingPrompt(prompt.chain_name, prompt.role); else promptEdit">
+              <app-markdown-content [content]="prompt.content"></app-markdown-content>
+            </ng-container>
+            <ng-template #promptEdit>
+              <textarea
+                class="form-control font-monospace agent-edit-textarea"
+                rows="16"
+                [(ngModel)]="draftContent"
+                [disabled]="saving"
+              ></textarea>
+              <div *ngIf="saveError" class="alert alert-danger mt-2 mb-0 py-2 small">{{ saveError }}</div>
+              <div class="d-flex gap-2 mt-2">
+                <button
+                  type="button"
+                  class="btn btn-primary btn-sm"
+                  [disabled]="saving || !draftContent.trim()"
+                  (click)="savePromptEdit(prompt)"
+                >
+                  {{ saving ? 'Saving…' : 'Save' }}
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="saving" (click)="cancelEdit()">
+                  Cancel
+                </button>
+              </div>
+            </ng-template>
+          </div>
+        </div>
+      </div>
+    </div>
+    <app-empty-state
+      *ngIf="!content.prompts.length"
+      icon="chat-square-text"
+      title="No prompts"
+      description="Prompts will appear here after seed or admin configuration."
+    ></app-empty-state>
+  </div>
+
+  <div *ngIf="activeTab === 'skills'" class="agent-detail-panel">
+    <p class="text-muted small mb-3">
+      Reference knowledge blocks. Each save creates a new version; use History to compare changes.
+    </p>
+    <div class="card mb-3" *ngFor="let skill of content.skills">
+      <div class="card-header">
+        <div class="d-flex justify-content-between align-items-start gap-2">
+          <div>
+            <div class="d-flex align-items-center gap-2">
+              <strong>{{ skill.title }}</strong>
+              <app-content-help
+                *ngIf="hasUsage(skill)"
+                [summary]="skill.usage_summary || ''"
+                [detail]="skill.usage_detail || ''"
+                [backendRef]="skill.backend_ref || ''"
+                [label]="'About ' + skill.title"
+              ></app-content-help>
+            </div>
+            <div class="small text-muted"><code>{{ skill.skill_key }}</code></div>
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="small text-muted">v{{ skill.version }}</span>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0" (click)="openSkillHistory(skill)">
+              History
+            </button>
+            <button
+              *ngIf="content.can_edit && !isEditingSkill(skill.skill_key)"
+              type="button"
+              class="btn btn-outline-secondary btn-sm py-0"
+              (click)="startEditSkill(skill)"
+            >
+              Edit
+            </button>
+          </div>
+        </div>
+        <p *ngIf="skill.description" class="small text-muted mb-0 mt-2">{{ skill.description }}</p>
+      </div>
+      <div class="card-body">
+        <ng-container *ngIf="!isEditingSkill(skill.skill_key); else skillEdit">
+          <app-markdown-content [content]="skill.content"></app-markdown-content>
+        </ng-container>
+        <ng-template #skillEdit>
+          <textarea
+            class="form-control font-monospace agent-edit-textarea"
+            rows="14"
+            [(ngModel)]="draftContent"
+            [disabled]="saving"
+          ></textarea>
+          <div *ngIf="saveError" class="alert alert-danger mt-2 mb-0 py-2 small">{{ saveError }}</div>
+          <div class="d-flex gap-2 mt-2">
+            <button
+              type="button"
+              class="btn btn-primary btn-sm"
+              [disabled]="saving || !draftContent.trim()"
+              (click)="saveSkillEdit(skill)"
+            >
+              {{ saving ? 'Saving…' : 'Save' }}
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="saving" (click)="cancelEdit()">
+              Cancel
+            </button>
+          </div>
+        </ng-template>
+      </div>
+    </div>
+    <app-empty-state
+      *ngIf="!content.skills.length"
+      icon="journal-code"
+      title="No skills"
+      description="Skills will appear here after seed or admin configuration."
+    ></app-empty-state>
+  </div>
+
+  <div class="mt-3">
+    <a routerLink="/app/agents" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i> Back to agents
+    </a>
+    <a
+      *ngIf="content.definition.get_started_route"
+      class="btn btn-primary btn-sm ms-2"
+      [routerLink]="content.definition.get_started_route"
+    >
+      Get started
+    </a>
+  </div>
+</ng-container>
+
+<!-- Version history modal -->
+<ng-container *ngIf="historyTarget">
+  <div class="app-modal-backdrop" (click)="closeHistory()" aria-hidden="true"></div>
+  <div class="app-modal app-modal-wide" role="dialog" aria-labelledby="historyTitle" (click)="$event.stopPropagation()">
+    <div class="app-modal-header">
+      <div>
+        <h2 class="app-modal-title" id="historyTitle">Version history</h2>
+        <p class="app-modal-subtitle">{{ historyTarget.label }}</p>
+      </div>
+      <button type="button" class="btn-close" aria-label="Close" (click)="closeHistory()"></button>
+    </div>
+    <div class="app-modal-body">
+      <app-loading-card *ngIf="historyLoading" variant="skeleton" [skeletonRows]="3"></app-loading-card>
+      <div *ngIf="historyError" class="alert alert-danger py-2">{{ historyError }}</div>
+
+      <ng-container *ngIf="!historyLoading && !historyError">
+        <div class="table-responsive mb-3" *ngIf="historyVersions.length">
+          <table class="table table-sm table-compact align-middle mb-0">
+            <thead>
+              <tr>
+                <th>Version</th>
+                <th>Status</th>
+                <th>Updated</th>
+                <th>By</th>
+                <th>Size</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr *ngFor="let v of historyVersions">
+                <td>v{{ v.version }}</td>
+                <td>
+                  <span class="badge" [class.text-bg-success]="v.is_active" [class.text-bg-secondary]="!v.is_active">
+                    {{ v.is_active ? 'Active' : 'Archived' }}
+                  </span>
+                </td>
+                <td class="small">{{ v.updated_at || '—' }}</td>
+                <td class="small">{{ v.updated_by || '—' }}</td>
+                <td class="small">{{ v.content_length }} chars</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div *ngIf="historyVersions.length >= 2" class="border-top pt-3">
+          <h3 class="app-modal-section-title">Compare versions</h3>
+          <div class="row g-2 align-items-end mb-2">
+            <div class="col-md-4">
+              <label class="form-label small mb-1" for="diffFrom">From</label>
+              <select id="diffFrom" class="form-select form-select-sm" [(ngModel)]="diffFromVersion">
+                <option *ngFor="let v of historyVersions" [ngValue]="v.version">v{{ v.version }}</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-1" for="diffTo">To</label>
+              <select id="diffTo" class="form-select form-select-sm" [(ngModel)]="diffToVersion">
+                <option *ngFor="let v of historyVersions" [ngValue]="v.version">v{{ v.version }}</option>
+              </select>
+            </div>
+            <div class="col-md-4">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm w-100"
+                (click)="compareVersions()"
+                [disabled]="diffLoading"
+              >
+                {{ diffLoading ? 'Loading…' : 'Show diff' }}
+              </button>
+            </div>
+          </div>
+          <div *ngIf="diffError" class="alert alert-warning py-2 small">{{ diffError }}</div>
+          <pre *ngIf="diffText" class="agent-diff-output">{{ diffText }}</pre>
+        </div>
+
+        <p *ngIf="historyVersions.length === 1" class="text-muted small mb-0">
+          Only one version saved so far. Edit and save to create history.
+        </p>
+      </ng-container>
+    </div>
+    <div class="app-modal-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="closeHistory()">Close</button>
+    </div>
+  </div>
+</ng-container>
+
+<!-- Reset confirm modal -->
+<ng-container *ngIf="showResetConfirm">
+  <div class="app-modal-backdrop" (click)="cancelReset()" aria-hidden="true"></div>
+  <div class="app-modal" role="alertdialog" aria-labelledby="resetTitle" (click)="$event.stopPropagation()">
+    <div class="app-modal-header">
+      <h2 class="app-modal-title" id="resetTitle">Reset to seed defaults?</h2>
+      <button type="button" class="btn-close" aria-label="Close" (click)="cancelReset()"></button>
+    </div>
+    <div class="app-modal-body">
+      <p class="app-modal-danger-text mb-0">
+        This restores all prompts and skills to the built-in seed content. Items already matching seed
+        are skipped. A new version row is created for each changed item.
+      </p>
+    </div>
+    <div class="app-modal-footer">
+      <button type="button" class="btn btn-outline-secondary btn-sm" [disabled]="resetting" (click)="cancelReset()">
+        Cancel
+      </button>
+      <button type="button" class="btn btn-warning btn-sm" [disabled]="resetting" (click)="resetToSeed()">
+        {{ resetting ? 'Resetting…' : 'Reset all' }}
+      </button>
+    </div>
+  </div>
+</ng-container>

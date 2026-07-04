@@ -85,6 +85,7 @@ class Settings(BaseSettings):
     local_data_path: Optional[str] = None
 
     vector_retrieval_backend: str = "none"
+    faiss_storage_type: Optional[str] = None
     faiss_index_path: Optional[str] = None
 
     default_monthly_budget: float = 500.0

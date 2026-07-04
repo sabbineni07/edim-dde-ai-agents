@@ -102,9 +102,23 @@ def list_workspaces(
     )
     try:
         return collector.list_workspaces()
+    except ValueError as e:
+        logger.warning("list_workspaces_config_error", error=str(e), environment_id=environment_id)
+        raise HTTPException(status_code=400, detail=str(e)) from e
+    except RuntimeError as e:
+        logger.warning("list_workspaces_runtime_error", error=str(e), environment_id=environment_id)
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
-        logger.error("list_workspaces_error", error=str(e), environment_id=environment_id)
-        raise HTTPException(status_code=500, detail="Failed to load workspaces") from e
+        logger.error(
+            "list_workspaces_error",
+            error=str(e),
+            error_type=type(e).__name__,
+            environment_id=environment_id,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to load workspaces: {type(e).__name__}: {e}",
+        ) from e
 
 
 @router.get("/workspaces/{workspace_id}/jobs")

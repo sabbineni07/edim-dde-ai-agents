@@ -27,3 +27,11 @@ env:
     value: "production"
   - name: LOG_LEVEL
     value: "INFO"
+  - name: FAISS_VOLUME_ROOT
+    valueFrom: faiss-volume
+  - name: FAISS_INDEX_PATH
+    value: "/Volumes/../faiss_index"
+  - name: DATABRICKS_HOST
+    value: "adb-1234567890.1.azuredatabricks.net"
+  - name: DATABRICKS_HTTP_PATH
+    value: "/sql/1.0/warehouses/<id>"

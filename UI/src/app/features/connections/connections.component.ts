@@ -192,7 +192,10 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     const out: Record<string, unknown> = {};
     const meta = this.typeMeta(this.formType);
     for (const f of meta?.fields || []) {
-      const v = this.formConfig[f.key]?.trim();
+      let v = this.formConfig[f.key]?.trim();
+      if (!v && (f as { default?: string }).default) {
+        v = String((f as { default?: string }).default);
+      }
       if (v) out[f.key] = v;
     }
     return out;
@@ -204,7 +207,9 @@ export class ConnectionsComponent implements OnInit, OnDestroy {
     }
     const meta = this.typeMeta(this.formType);
     for (const f of meta?.fields || []) {
-      if (f.required && !this.formConfig[f.key]?.trim()) {
+      let v = this.formConfig[f.key]?.trim();
+      if (!v && f.default) v = String(f.default);
+      if (f.required && !v) {
         return `${f.label} is required.`;
       }
     }

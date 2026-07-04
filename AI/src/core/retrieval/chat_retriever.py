@@ -11,6 +11,7 @@ from AI.src.core.retrieval.faiss_cache import load_cached_faiss_vectorstore
 from shared.config.llm_sampling import resolve_rag_top_k
 from shared.config.rag_settings import is_rag_enabled, rag_backend
 from shared.config.settings import Settings
+from shared.rag.faiss_paths import resolve_faiss_index_path_from_settings
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -84,7 +85,7 @@ def retrieve_for_chat(
         return out
 
     if backend == "faiss":
-        path = (settings.faiss_index_path or "").strip()
+        path = resolve_faiss_index_path_from_settings(settings)
         if not path:
             logger.warning("chat_retrieve_faiss_missing_path")
             return []
@@ -96,7 +97,12 @@ def retrieve_for_chat(
                 emb = embeddings_from_settings(settings)
             else:
                 emb = FoundryLLMService(config=settings).get_embeddings()
-            vs = load_cached_faiss_vectorstore(path, emb)
+            vs = load_cached_faiss_vectorstore(
+                path,
+                emb,
+                faiss_storage_type=settings.faiss_storage_type,
+                databricks_server_hostname=settings.databricks_server_hostname,
+            )
             pairs = vs.similarity_search_with_score(q, k=k)
             out: List[RetrievedChunk] = []
             for doc, raw_score in pairs:

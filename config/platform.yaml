@@ -50,4 +50,5 @@ azure_key_vault_name: ${env:AZURE_KEY_VAULT_NAME}
 
 vector_retrieval:
   backend: none
+  faiss_storage_type: ${env:FAISS_STORAGE_TYPE}
   faiss_index_path: ${env:FAISS_INDEX_PATH}
