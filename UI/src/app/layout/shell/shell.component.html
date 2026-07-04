@@ -17,14 +17,16 @@
       <div class="header-right">
         <div class="dropdown env-dropdown" *ngIf="environments.length">
           <button
-            class="btn btn-outline-light btn-sm dropdown-toggle env-switcher"
+            class="btn btn-sm env-switcher"
             type="button"
             data-bs-toggle="dropdown"
             aria-expanded="false"
             title="Switch metrics environment"
+            [attr.aria-label]="'Environment: ' + selectedEnvironmentShortName"
           >
-            <i class="bi bi-layers me-1"></i>
-            {{ selectedEnvironment?.displayName || 'Select environment' }}
+            <span class="env-tier-badge" *ngIf="selectedEnvironmentTier">{{ selectedEnvironmentTier }}</span>
+            <span class="env-switcher-name">{{ selectedEnvironmentShortName }}</span>
+            <i class="bi bi-chevron-down env-switcher-chevron" aria-hidden="true"></i>
           </button>
           <ul class="dropdown-menu">
             <li *ngFor="let env of environments">
@@ -40,10 +42,16 @@
             </li>
           </ul>
         </div>
-        <span class="user-text d-none d-md-inline">{{ username }}</span>
         <div class="dropdown">
-          <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-            <i class="bi bi-person-circle me-1"></i> Account
+          <button
+            class="btn btn-sm account-menu-btn"
+            type="button"
+            data-bs-toggle="dropdown"
+            aria-expanded="false"
+            [attr.aria-label]="'Account menu for ' + username"
+            title="{{ username }}"
+          >
+            <span class="account-avatar" aria-hidden="true">{{ userInitials }}</span>
           </button>
           <ul class="dropdown-menu dropdown-menu-end">
             <li><span class="dropdown-item-text text-muted small">{{ username }}</span></li>
@@ -73,7 +81,9 @@
   </header>
 
   <app-context-bar
-    [environmentName]="selectedEnvironment?.displayName || ''"
+    *ngIf="showContextBar"
+    [datasetName]="contextDatasetName"
+    [connectionName]="contextConnectionName"
   ></app-context-bar>
 
   <div

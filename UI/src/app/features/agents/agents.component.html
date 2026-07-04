@@ -18,7 +18,10 @@
       <h3 class="agent-card-title">{{ a.name }}</h3>
       <p class="agent-card-id"><code>{{ a.agent_id }}</code></p>
       <p class="agent-card-desc">{{ a.description }}</p>
-      <div class="agent-card-actions mt-auto">
+      <div class="agent-card-actions mt-auto d-flex flex-wrap gap-2">
+        <a class="btn btn-outline-primary btn-sm" [routerLink]="['/app/agents', a.agent_id]">
+          <i class="bi bi-journal-text me-1"></i> View prompts &amp; skills
+        </a>
         <button type="button" class="btn btn-primary btn-sm" (click)="installInWorkspace()">
           <i class="bi bi-box-arrow-in-down me-1"></i> Install in workspace
         </button>

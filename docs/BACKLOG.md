@@ -35,6 +35,7 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 - [x] **Phase 5.0–5.1** — Run-centric UI, structured recommend response
 - [x] **Phase 5.2** — Agents catalog + workspace agent install
+- [x] **Phase 5.2b** — Agent prompts/skills store + admin UI — see [BACKLOG_AGENT_PROMPTS.md](./BACKLOG_AGENT_PROMPTS.md) (Phases 1–3 done)
 - [x] **Phase 5.3** — History with comparison, cost, lifecycle
 - [x] **Phase 5.4** — Adoption lifecycle
 - [x] **Phase 5.5 (backend)** — RAG index includes `job_run_id`

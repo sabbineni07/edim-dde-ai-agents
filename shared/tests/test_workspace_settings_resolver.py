@@ -59,6 +59,29 @@ def test_resolve_databricks_metrics_dataset_with_env_wh():
     assert flat["databricks_job_cluster_metrics_table"] == "dim_dev.dde_metrics.job_cluster_metrics"
 
 
+def test_resolve_local_csv_with_env_wh_for_volume():
+    metrics_id = str(uuid4())
+    llm_id = str(uuid4())
+    flat, _ = resolve_workspace_agent_settings(
+        agent_id="dbx_cluster_tuning_agent",
+        bindings={"metrics": metrics_id, "llm": llm_id},
+        agent_settings={},
+        connections=[_llm_connection(llm_id)],
+        metrics_dataset={
+            "id": metrics_id,
+            "schema_profile": "job_cluster_metrics",
+            "source_type": "local_csv",
+            "local_path": "data/sample_job_metrics.csv",
+        },
+        metrics_wh_config={
+            "databricks_server_hostname": "adb.example.net",
+            "databricks_http_path": "/sql/1.0/warehouses/x",
+        },
+    )
+    assert flat["use_local_data"] is True
+    assert flat["databricks_server_hostname"] == "adb.example.net"
+
+
 def test_resolve_no_rag_binding_disables_search():
     metrics_id = str(uuid4())
     llm_id = str(uuid4())

@@ -52,15 +52,12 @@ def _collector_from_databricks_config(
     dataset_name: Optional[str],
 ) -> tuple[Any, MetricsSourceContext]:
     from DE.src.collectors.databricks_collector import DatabricksCollector
+    from shared.databricks.sql_config import require_databricks_sql_config
 
-    hostname = (config.get("databricks_server_hostname") or "").strip()
-    http_path = (config.get("databricks_http_path") or "").strip()
+    sql_cfg = require_databricks_sql_config(config)
+    hostname = sql_cfg["databricks_server_hostname"]
+    http_path = sql_cfg["databricks_http_path"]
     table = (metrics_table or "").strip()
-    if not (hostname and http_path):
-        raise ValueError(
-            "Databricks metrics connection is incomplete. "
-            "Set SQL warehouse host and HTTP path in Connections."
-        )
     if not table:
         raise ValueError(
             "Metrics dataset is not configured. "
@@ -72,6 +69,8 @@ def _collector_from_databricks_config(
         connection_id=str(connection_id) if connection_id else None,
         dataset_id=dataset_id,
         table=table,
+        server_hostname=hostname,
+        http_path=http_path,
     )
     collector = DatabricksCollector(
         metrics_table=table,

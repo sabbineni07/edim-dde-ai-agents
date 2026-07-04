@@ -1,0 +1,15 @@
+# Databricks Apps manifest — Insights Hub UI (Angular static + /api proxy).
+# Deploy the UI/ folder AFTER `npm ci && npm run build` so dist/ exists.
+#
+# Set API_PROXY_TARGET to your FastAPI Databricks App URL (App overview page).
+# Example: https://edim-dde-ai-agents-api-1234567890.us-east-1.databricksapps.com
+
+command:
+  - node
+  - server.js
+
+env:
+  - name: NODE_ENV
+    value: production
+  - name: API_PROXY_TARGET
+    value: "https://REPLACE-WITH-YOUR-API-DATABRICKS-APP-URL"

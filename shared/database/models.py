@@ -234,3 +234,80 @@ class PlatformEnvironmentRow(Base):
     is_enabled = Column(Integer, nullable=False, default=1)
     created_at = Column(DateTime(timezone=True), default=func.now())
     updated_at = Column(DateTime(timezone=True), default=func.now(), onupdate=func.now())
+
+
+class AgentDefinitionRow(Base):
+    """Platform agent catalog metadata (prompts/skills stored separately)."""
+
+    __tablename__ = "agent_definitions"
+
+    agent_id = Column(String(255), primary_key=True)
+    display_name = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    version = Column(Integer, nullable=False, default=1)
+    is_enabled = Column(Boolean, nullable=False, default=True)
+    get_started_route = Column(String(255), nullable=False, default="/app/environments")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AgentPromptRow(Base):
+    """Versioned prompt fragment for an agent chain (system / human)."""
+
+    __tablename__ = "agent_prompts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    agent_id = Column(
+        String(255),
+        ForeignKey("agent_definitions.agent_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    chain_name = Column(String(64), nullable=False, index=True)
+    role = Column(String(16), nullable=False)
+    content = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )
+
+
+class AgentSkillRow(Base):
+    """Reusable knowledge block (skill) attached to an agent."""
+
+    __tablename__ = "agent_skills"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, index=True)
+    agent_id = Column(
+        String(255),
+        ForeignKey("agent_definitions.agent_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    skill_key = Column(String(64), nullable=False, index=True)
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    content = Column(Text, nullable=False)
+    version = Column(Integer, nullable=False, default=1)
+    is_active = Column(Boolean, nullable=False, default=True)
+    sort_order = Column(Integer, nullable=False, default=0)
+    updated_by = Column(String(255), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=func.now())
+    updated_at = Column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        default=func.now(),
+        onupdate=func.now(),
+    )
