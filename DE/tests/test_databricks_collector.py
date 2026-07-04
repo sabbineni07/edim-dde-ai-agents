@@ -73,11 +73,14 @@ def test_list_jobs_for_workspace_preserves_missing_worker_vm(monkeypatch):
             ("job_type",),
             ("avg_worker_cpu_utilization_pct",),
             ("avg_worker_memory_utilization_pct",),
+            ("avg_driver_cpu_utilization_pct",),
+            ("avg_driver_memory_utilization_pct",),
             ("total_runs",),
             ("avg_job_run_duration_seconds",),
             ("azure_driver_vm_size",),
             ("azure_worker_vm_size",),
             ("max_worker_nodes_provisioned",),
+            ("cluster_type",),
             ("last_job_run_date",),
             ("dbr_version",),
         ],
@@ -88,11 +91,14 @@ def test_list_jobs_for_workspace_preserves_missing_worker_vm(monkeypatch):
                 "ETL",
                 None,
                 None,
+                42.5,
+                55.0,
                 3,
                 120.0,
                 "Standard_DS3_v2",
                 None,
                 1,
+                "single_node",
                 "2026-07-01",
                 "14.3.x-scala2.12",
             )
@@ -108,6 +114,8 @@ def test_list_jobs_for_workspace_preserves_missing_worker_vm(monkeypatch):
     assert rows[0]["azure_driver_vm_size"] == "Standard_DS3_v2"
     assert rows[0]["azure_worker_vm_size"] is None
     assert rows[0]["avg_worker_cpu_utilization_pct"] is None
+    assert rows[0]["avg_driver_cpu_utilization_pct"] == 42.5
+    assert rows[0]["cluster_type"] == "single_node"
     assert "Standard_E8s_v3" not in cursor.executed_query
 
 

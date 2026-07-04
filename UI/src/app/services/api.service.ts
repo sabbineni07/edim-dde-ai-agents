@@ -97,8 +97,11 @@ export interface JobSummary {
   job_id: string;
   job_name?: string;
   job_type?: string;
+  cluster_type?: 'single_node' | 'multi_node';
   avg_worker_cpu_utilization_pct?: number;
   avg_worker_memory_utilization_pct?: number;
+  avg_driver_cpu_utilization_pct?: number;
+  avg_driver_memory_utilization_pct?: number;
   total_runs?: number;
   avg_job_run_duration_seconds?: number;
   azure_driver_vm_size?: string;

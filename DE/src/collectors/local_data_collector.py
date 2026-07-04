@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 import pandas as pd
 
+from shared.metrics.cluster_type import cluster_type_from_row
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
 
@@ -383,6 +384,12 @@ class LocalDataCollector:
                 df_filtered["job_type"] = None
             if "dbr_version" not in df_filtered.columns:
                 df_filtered["dbr_version"] = None
+            if "azure_driver_vm_size" not in df_filtered.columns:
+                df_filtered["azure_driver_vm_size"] = None
+            if "avg_driver_cpu_utilization_pct" not in df_filtered.columns:
+                df_filtered["avg_driver_cpu_utilization_pct"] = None
+            if "avg_driver_memory_utilization_pct" not in df_filtered.columns:
+                df_filtered["avg_driver_memory_utilization_pct"] = None
 
             grouped = (
                 df_filtered.groupby("job_id", dropna=False)
@@ -391,9 +398,12 @@ class LocalDataCollector:
                     workload_type=("job_type", "max"),
                     avg_cpu_utilization_pct=("avg_worker_cpu_utilization_pct", "mean"),
                     avg_memory_utilization_pct=("avg_worker_memory_utilization_pct", "mean"),
+                    avg_driver_cpu_utilization_pct=("avg_driver_cpu_utilization_pct", "mean"),
+                    avg_driver_memory_utilization_pct=("avg_driver_memory_utilization_pct", "mean"),
                     total_runs=("job_id", "count"),
                     avg_duration_seconds=("job_run_duration_seconds", "mean"),
                     current_node_type=("azure_worker_vm_size", "max"),
+                    driver_node_type=("azure_driver_vm_size", "max"),
                     current_max_workers=("max_worker_nodes_provisioned", "max"),
                     last_run_date=(date_col, "max"),
                     dbr_version=("dbr_version", "max"),
@@ -402,25 +412,46 @@ class LocalDataCollector:
                 .sort_values(by=["job_name", "job_id"], ascending=[True, True])
             )
 
-            return [
-                {
+            jobs: List[Dict[str, Any]] = []
+            for _, row in grouped.iterrows():
+                worker_vm = row["current_node_type"]
+                worker_vm_value = (
+                    str(worker_vm) if pd.notna(worker_vm) and str(worker_vm).strip() else None
+                )
+                driver_vm = row["driver_node_type"]
+                driver_vm_value = (
+                    str(driver_vm) if pd.notna(driver_vm) and str(driver_vm).strip() else None
+                )
+                job = {
                     "workspace_id": str(workspace_id),
                     "job_id": str(row["job_id"]),
                     "job_name": row["job_name"],
                     "job_type": row["workload_type"],
                     "avg_worker_cpu_utilization_pct": float(row["avg_cpu_utilization_pct"]),
                     "avg_worker_memory_utilization_pct": float(row["avg_memory_utilization_pct"]),
+                    "avg_driver_cpu_utilization_pct": (
+                        float(row["avg_driver_cpu_utilization_pct"])
+                        if pd.notna(row["avg_driver_cpu_utilization_pct"])
+                        else None
+                    ),
+                    "avg_driver_memory_utilization_pct": (
+                        float(row["avg_driver_memory_utilization_pct"])
+                        if pd.notna(row["avg_driver_memory_utilization_pct"])
+                        else None
+                    ),
                     "total_runs": int(row["total_runs"]),
                     "avg_job_run_duration_seconds": float(row["avg_duration_seconds"]),
-                    "azure_worker_vm_size": row["current_node_type"],
+                    "azure_worker_vm_size": worker_vm_value,
+                    "azure_driver_vm_size": driver_vm_value,
                     "max_worker_nodes_provisioned": int(row["current_max_workers"]),
                     "last_job_run_date": row["last_run_date"].strftime("%Y-%m-%d"),
                     "dbr_version": (
                         str(row["dbr_version"]) if pd.notna(row.get("dbr_version")) else None
                     ),
                 }
-                for _, row in grouped.iterrows()
-            ]
+                job["cluster_type"] = cluster_type_from_row(job)
+                jobs.append(job)
+            return jobs
         except Exception as e:
             logger.error(
                 "list_jobs_for_workspace_from_csv_error",

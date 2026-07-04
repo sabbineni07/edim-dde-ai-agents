@@ -74,19 +74,37 @@ export class JobsListComponent implements OnInit {
     return trimmed ? trimmed : null;
   }
 
-  jobHasWorkerMetrics(job: JobSummary): boolean {
-    return (
-      this.textValue(job.azure_worker_vm_size) != null ||
-      job.avg_worker_cpu_utilization_pct != null ||
-      job.avg_worker_memory_utilization_pct != null
-    );
+  isSingleNodeJob(job: JobSummary): boolean {
+    if (job.cluster_type === 'single_node') return true;
+    if (job.cluster_type === 'multi_node') return false;
+    const workerVm = this.textValue(job.azure_worker_vm_size);
+    const maxWorkers = job.max_worker_nodes_provisioned ?? 1;
+    return !workerVm && maxWorkers <= 1;
   }
 
-  jobWorkerVmDisplay(job: JobSummary): string {
-    const workerVm = this.textValue(job.azure_worker_vm_size);
-    if (workerVm) return workerVm;
-    const driverVm = this.textValue(job.azure_driver_vm_size);
-    return driverVm ? `N/A (driver: ${driverVm})` : 'N/A';
+  clusterTypeLabel(job: JobSummary): string {
+    return this.isSingleNodeJob(job) ? 'Single node' : 'Multi node';
+  }
+
+  jobCpuPct(job: JobSummary): number | null {
+    const pct = this.isSingleNodeJob(job)
+      ? job.avg_driver_cpu_utilization_pct
+      : job.avg_worker_cpu_utilization_pct;
+    return pct != null ? pct : null;
+  }
+
+  jobMemoryPct(job: JobSummary): number | null {
+    const pct = this.isSingleNodeJob(job)
+      ? job.avg_driver_memory_utilization_pct
+      : job.avg_worker_memory_utilization_pct;
+    return pct != null ? pct : null;
+  }
+
+  jobNodeTypeDisplay(job: JobSummary): string {
+    if (this.isSingleNodeJob(job)) {
+      return this.textValue(job.azure_driver_vm_size) ?? '–';
+    }
+    return this.textValue(job.azure_worker_vm_size) ?? '–';
   }
 
   ngOnInit(): void {
