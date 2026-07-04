@@ -45,8 +45,17 @@ def build_guardrail_feedback(adjustments: List[Dict[str, Any]], *, attempt: int)
     return {
         "attempt": attempt,
         "violations": violations,
-        "instruction": (
+        "instruction": _guardrail_retry_instruction(),
+    }
+
+
+def _guardrail_retry_instruction() -> str:
+    try:
+        from AI.src.core.prompts.loader import get_guardrail_retry_instruction
+
+        return get_guardrail_retry_instruction()
+    except Exception:
+        return (
             "Revise the JSON recommendation to satisfy all constraints. "
             "Use job_run_ingest as primary; sizing_hints are advisory pre-checks."
-        ),
-    }
+        )

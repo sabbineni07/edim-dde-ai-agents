@@ -1,0 +1,29 @@
+<div class="content-help" (click)="$event.stopPropagation()">
+  <button
+    #trigger
+    type="button"
+    class="content-help-trigger"
+    (click)="toggle($event)"
+    [attr.aria-expanded]="open"
+    [attr.aria-label]="label"
+    [title]="summary || label"
+  >
+    <i class="bi bi-info-circle" aria-hidden="true"></i>
+  </button>
+</div>
+
+<div
+  class="content-help-panel"
+  *ngIf="open"
+  [ngStyle]="panelStyle"
+  role="dialog"
+  [attr.aria-label]="label"
+  (click)="$event.stopPropagation()"
+>
+  <p class="content-help-summary mb-1">{{ summary }}</p>
+  <p class="content-help-detail mb-0">{{ detail }}</p>
+  <p class="content-help-ref mb-0" *ngIf="backendRef">
+    <span class="text-muted">Backend:</span>
+    <code>{{ backendRef }}</code>
+  </p>
+</div>

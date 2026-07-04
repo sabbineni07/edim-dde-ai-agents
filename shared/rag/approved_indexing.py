@@ -152,8 +152,9 @@ def _index_to_faiss(settings: Settings, rec: Any, payload: dict, retrieval_text:
     from langchain_core.documents import Document
 
     from AI.src.core.retrieval.faiss_cache import append_to_faiss_index
+    from shared.rag.faiss_paths import resolve_faiss_index_path_from_settings
 
-    path = (settings.faiss_index_path or "").strip()
+    path = resolve_faiss_index_path_from_settings(settings)
     if not path:
         logger.warning("approved_indexing_faiss_missing_path")
         return False
@@ -166,6 +167,12 @@ def _index_to_faiss(settings: Settings, rec: Any, payload: dict, retrieval_text:
 
     metadata = build_faiss_metadata(rec, payload, retrieval_text)
     doc = Document(page_content=retrieval_text, metadata=metadata)
-    append_to_faiss_index(path, embeddings, doc)
+    append_to_faiss_index(
+        path,
+        embeddings,
+        doc,
+        faiss_storage_type=settings.faiss_storage_type,
+        databricks_server_hostname=settings.databricks_server_hostname,
+    )
     logger.info("approved_indexing_faiss_complete", request_id=str(rec.request_id), path=path)
     return True
