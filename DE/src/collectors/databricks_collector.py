@@ -172,8 +172,9 @@ class DatabricksCollector:
             "server_hostname": self._server_hostname,
             "http_path": self._http_path,
             "access_token": token,
-            "_socket_timeout": 15,
-            "_query_timeout": 45,
+            # Allow SQL warehouse auto-srat (cold boot can take several minutes).
+            "_socket_timeout": 300,
+            "_query_timeout": 0,
         }
 
     def collect_job_cluster_metrics(

@@ -460,6 +460,14 @@ env:
     value: "true"
   - name: USE_MOCK_LLM
     value: "true"
+  - name: DATABRICKS_HOST
+    value: "adb-1234567890123456.7.azuredatabricks.net"
+  - name: DATABRICKS_HTTP_PATH
+    value: "/sql/1.0/warehouses/xxxxxxxxxxxxxxxx"
+  - name: FAISS_VOLUME_ROOT
+    valueFrom: faiss-volume
+  - name: FAISS_INDEX_PATH
+    value: "/Volumes/<catalog>/<schema>/<volume>/faiss_index"
 ```
 
 **Notes:**
@@ -467,6 +475,8 @@ env:
 - **`PGHOST`, `PGUSER`, `PGDATABASE`, `PGPORT`, `PGSSLMODE`** are auto-injected when Lakebase is an app resource; `settings.py` maps them via `PGHOST` → `postgres_host`, etc.
 - **`valueFrom: postgres`** requires a Lakebase **Database** resource with key **`postgres`** on the app.
 - Do **not** use `$PGHOST` in `value` fields — not supported.
+- For Databricks SQL, prefer setting **full literal values** for `DATABRICKS_HOST` and `DATABRICKS_HTTP_PATH` in the deploy manifest/script. `valueFrom: sql-warehouse` resolves to the **warehouse ID only**, not `/sql/1.0/warehouses/<id>`.
+- `FAISS_VOLUME_ROOT` comes from the Databricks App **Unity Catalog volume** resource. The actual FAISS index folder is still configured via `FAISS_INDEX_PATH` or the FAISS connection in the app UI.
 
 **Port:** Databricks Apps may set `DATABRICKS_APP_PORT`; `settings.api_port` reads it if you switch the uvicorn command to use that port later.
 
@@ -548,15 +558,246 @@ Alternative: connect a **Git repository** at app level and deploy from a branch/
 
 #### B2. Databricks SQL warehouse (when `USE_LOCAL_DATA=false`)
 
-1. App → **Resources** → **SQL warehouse** → grant **CAN USE**.
-2. Set `DATABRICKS_HTTP_PATH` via resource reference or env.
-3. App service principal auth may replace PAT (`DATABRICKS_TOKEN`) inside Apps — validate with your workspace policy.
+Use this checklist for browse/recommend flows that query Unity Catalog Delta tables through a SQL warehouse.
 
-#### B3. Azure AI Search (optional RAG)
+1. App → **Resources** → add **SQL warehouse** and grant **CAN USE**.
+2. App → **User authorization** → enable **Databricks SQL**. This was required for forwarded user tokens to work with the SQL connector inside the Databricks App. Without it, browse requests could time out even when host/path looked correct.
+3. Set:
+   - `DATABRICKS_HOST=adb-<workspace>.azuredatabricks.net`
+   - `DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<warehouse-id>`
+4. Keep the **environment default Databricks connection** in the app UI / Lakebase with the same hostname and HTTP path. App resources grant access, but the runtime still resolves browse/recommend settings from the environment connection + dataset records.
+5. Keep the **default metrics dataset** pointed at the real Delta table FQN.
+6. Grant the **app service principal** Unity Catalog data access on the metrics table:
+
+   ```sql
+   GRANT USE CATALOG ON CATALOG <catalog> TO `<app-sp-name>`;
+   GRANT USE SCHEMA ON SCHEMA <catalog>.<schema> TO `<app-sp-name>`;
+   GRANT SELECT ON TABLE <catalog>.<schema>.<table> TO `<app-sp-name>`;
+   ```
+
+7. Start the SQL warehouse before testing.
+
+**Important distinctions**
+
+- **SQL warehouse app resource**: lets the app/service principal **use the warehouse**.
+- **Unity Catalog grants**: let the app/service principal **read the table**.
+- **User authorization → Databricks SQL**: lets the forwarded **user token** be used with the Databricks SQL connector.
+
+All three were needed in our working setup.
+
+#### B3. Unity Catalog volume for FAISS (`databricks_volume`)
+
+1. App → **Resources** → add **Unity Catalog volume** with **Can read and write**.
+2. Bind the resource to an env var if desired:
+
+   ```yaml
+   env:
+     - name: FAISS_VOLUME_ROOT
+       valueFrom: faiss-volume
+     - name: FAISS_INDEX_PATH
+       value: "/Volumes/<catalog>/<schema>/<volume>/faiss_index"
+   ```
+
+3. In the app UI, keep the FAISS connection configured with:
+   - `faiss_storage_type = databricks_volume`
+   - `faiss_index_path = /Volumes/<catalog>/<schema>/<volume>/faiss_index`
+4. The FAISS connection stores the **path only**. The workspace host is derived from the environment's Databricks metrics connection.
+5. App resources auto-grant volume privileges to the app service principal; separate manual `GRANT READ VOLUME/WRITE VOLUME` is usually not needed unless the resource auto-grant fails in a locked-down UC setup.
+
+#### B4. Required manual post-deploy steps
+
+The deploy script and `databricks.yml` set up the **app**, **Lakebase**, **SQL warehouse resource**, and **FAISS volume resource**, but they do **not** complete every part of runtime authorization and Lakebase app data.
+
+Use this checklist **after every first deploy to a new workspace / environment**.
+
+##### Step 1 — Open the deployed app details
+
+1. In Databricks, go to **Compute** → **Apps**.
+2. Open the API app (for example `edim-dde-ai-agents-api`).
+3. Keep this page open; you will need:
+   - **Resources**
+   - **Configuration / Environment**
+   - **User authorization**
+   - **Logs**
+
+##### Step 2 — Verify App resources
+
+Confirm these resources exist on the app:
+
+| Resource key | Type | Expected permission | Purpose |
+|---|---|---|---|
+| `postgres` | Lakebase Autoscaling database | `CAN_CONNECT_AND_CREATE` | App database access |
+| `sql-warehouse` | SQL warehouse | `CAN_USE` | Browse / recommend queries against UC Delta |
+| `faiss-volume` | Unity Catalog volume | `WRITE_VOLUME` (or read/write equivalent in UI) | FAISS index storage |
+
+If any resource is missing, re-run the bundle deploy or add it manually in **App → Resources**.
+
+##### Step 3 — Enable User authorization for Databricks SQL
+
+This is required for forwarded user tokens to work with the Databricks SQL connector.
+
+1. Open **App** → **User authorization**.
+2. Enable **Databricks SQL**.
+3. Save the change.
+
+**Important:** Without this step, the app can have correct host/path, warehouse access, and table grants, yet still fail with browse timeouts or `list_workspaces_error`.
+
+##### Step 4 — Find the app service principal identity
+
+You need the app service principal when granting Unity Catalog access to the metrics table.
+
+Use one of these methods:
+
+**Option A — App UI**
+
+1. Open **App** → **Configuration** or **Environment**.
+2. Locate:
+   - `DATABRICKS_CLIENT_ID`
+   - app service principal name / identity (if shown)
+
+**Option B — Grant dialog**
+
+1. Open **Catalog Explorer**.
+2. Navigate to the target catalog / schema / table.
+3. Click **Permissions** → **Grant**.
+4. Search for the app by:
+   - app name
+   - service principal name
+   - or the client ID if your workspace displays identities that way
+
+Use the identity name that appears in the Databricks permission UI. That is the safest value for SQL `GRANT ... TO \`principal\`` statements.
+
+##### Step 5 — Grant Unity Catalog access to the metrics table
+
+The SQL warehouse resource lets the app **use the warehouse**. It does **not** by itself grant `SELECT` on your Delta table.
+
+Grant the app service principal access to:
+
+1. the **catalog**
+2. the **schema**
+3. the **metrics table**
+
+Example:
+
+```sql
+GRANT USE CATALOG ON CATALOG <catalog> TO `<app-sp-name>`;
+GRANT USE SCHEMA ON SCHEMA <catalog>.<schema> TO `<app-sp-name>`;
+GRANT SELECT ON TABLE <catalog>.<schema>.<table> TO `<app-sp-name>`;
+```
+
+For the current metrics table pattern, that often looks like:
+
+```sql
+GRANT USE CATALOG ON CATALOG dim_engineering_dev TO `<app-sp-name>`;
+GRANT USE SCHEMA ON SCHEMA dim_engineering_dev.maintenance_audit TO `<app-sp-name>`;
+GRANT SELECT ON TABLE dim_engineering_dev.maintenance_audit.dbx_cluster_metrics_all TO `<app-sp-name>`;
+```
+
+**How to apply**
+
+1. Open **SQL Editor** or a SQL notebook attached to an admin-capable warehouse.
+2. Run the grants as a user with permission to grant on that catalog/schema/table.
+3. Retry the app. No redeploy is required for these grants to take effect.
+
+##### Step 6 — Ensure the SQL warehouse is running
+
+1. Go to **SQL Warehouses**.
+2. Open the warehouse used by the app.
+3. Start it if it is stopped.
+4. Copy the **HTTP path** from **Connection details** if you need to verify the Lakebase connection row.
+
+##### Step 7 — Configure the environment default metrics connection in the app
+
+Even though the Databricks App has `DATABRICKS_HOST` and `DATABRICKS_HTTP_PATH`, the runtime still resolves browse/recommend settings from the Lakebase **Connections** and **Datasets** records.
+
+Inside the app UI:
+
+1. Open **Connections**.
+2. Select the target environment (for example `dim_engineering_dev`).
+3. Create or edit the default **Databricks** connection.
+4. Set:
+   - `databricks_server_hostname = adb-<workspace>.azuredatabricks.net`
+   - `databricks_http_path = /sql/1.0/warehouses/<warehouse-id>`
+5. Mark it as the **default metrics connection** for that environment.
+
+**Important:** use the **full HTTP path**, not just the warehouse ID.
+
+##### Step 8 — Configure the default metrics dataset
+
+Inside the app UI:
+
+1. Open **Datasets**.
+2. Select the same environment.
+3. Create or edit the metrics dataset.
+4. Set the correct `table_fqn`, for example:
+
+   ```text
+   dim_engineering_dev.maintenance_audit.dbx_cluster_metrics_all
+   ```
+
+5. Mark it as the **default dataset**.
+
+Browse APIs use the default metrics connection + default dataset unless you explicitly override them.
+
+##### Step 9 — Configure the FAISS connection for RAG
+
+If you are using FAISS on a Unity Catalog volume:
+
+1. Open **Connections**.
+2. Create or edit the **FAISS** connection.
+3. Set:
+   - `faiss_storage_type = databricks_volume`
+   - `faiss_index_path = /Volumes/<catalog>/<schema>/<volume>/faiss_index`
+4. Bind that FAISS connection to the workspace agent’s **rag** role.
+
+Note that the FAISS connection stores only the **path**. The Databricks workspace host is derived from the environment's metrics connection.
+
+##### Step 10 — Bind the workspace agent roles
+
+For each workspace agent installation:
+
+1. Open **Workspace setup / Agents**.
+2. Bind:
+   - `metrics` → the metrics dataset
+   - `llm` → the Azure OpenAI / Foundry connection
+   - `rag` → the FAISS or AI Search connection
+3. Save the agent configuration.
+
+Without these bindings, the app may deploy successfully but still lack runtime configuration for recommendations or RAG.
+
+##### Step 11 — Smoke test
+
+Use this order:
+
+1. `GET /api/health`
+2. `GET /api/environments`
+3. Browse **Workspaces**
+4. Open a workspace and list **Jobs**
+5. Open job details and metrics
+6. Test recommendation flow
+7. Test FAISS-backed chat / retrieval if enabled
+
+##### Step 12 — If browse still fails
+
+Check **App → Logs** and look for:
+
+- `job_metrics_collector_databricks`
+- `list_workspaces_error`
+- `databricks_sql_token_resolved`
+
+Interpretation:
+
+| Symptom | Likely issue |
+|---|---|
+| `list_workspaces_error` and no query in warehouse history | SQL user authorization, token, or warehouse handshake issue |
+| Query appears in history but fails | Table / schema / catalog permission issue or bad table FQN |
+| Correct host/path in logs but timeout in UI | Warehouse not running, token scope missing, or stale connection/dataset selection |
+
+#### B5. Azure AI Search (optional RAG)
 
 Same secret-scope pattern for `AZURE_SEARCH_ENDPOINT`, `AZURE_SEARCH_API_KEY`, `AZURE_SEARCH_INDEX_NAME`.
 
-#### B4. Databricks Asset Bundles (team CI/CD)
+#### B6. Databricks Asset Bundles (team CI/CD)
 
 For repeatable deploys, add `databricks.yml` declaring app, Lakebase resource, secrets, and warehouse. Reference: [App configuration (DABs)](https://developers.databricks.com/docs/apps/configuration).
 
@@ -979,6 +1220,9 @@ databricks apps run-local --app-dir . --entrypoint app.yaml
 | **`WorkspaceClient` has no attribute `postgres`** | Older `databricks-sdk` on Apps runtime | Redeploy with `databricks-sdk>=0.89.0`; code uses REST fallback |
 | `POSTGRES_LAKEBASE_ENDPOINT is required` | Missing endpoint path | CLI `list-endpoints` or `valueFrom: postgres` in Apps |
 | `database_initialization_failed` (auth) | SP role missing or wrong `PGUSER` | Re-add Lakebase resource; check app Environment tab client ID |
+| `Request timed out. The data source may be unreachable` while loading workspaces | Databricks SQL user authorization missing, wrong SQL host/path, stopped warehouse, or no table/query privileges | Enable **User authorization → Databricks SQL**, verify `DATABRICKS_HOST` + full `/sql/1.0/warehouses/<id>` path, confirm warehouse is running, and grant UC `SELECT` on the metrics table |
+| `list_workspaces_error` with no query visible in warehouse history | Connect/auth failed before statement submission | Check SQL user authorization, warehouse resource access, full HTTP path, and token resolution |
+| `DATABRICKS_HTTP_PATH` set from `valueFrom: sql-warehouse` but still failing | App resource resolved to **warehouse ID only** | Use a literal full path in the deploy manifest/script, or ensure the deployed code normalizes bare IDs to `/sql/1.0/warehouses/<id>` |
 | API works in Apps but not on laptop | Expected for private-only | Use App URL; pursue Private Link for direct access |
 | **Apps work; SQL Editor does not** | Expected until Service-Direct PL | Apps use in-workspace path; SQL Editor uses port 5432 ingress |
 | Docker API ignores Lakebase `.env` | Compose overrides `POSTGRES_HOST=postgres` | Run API on host or update compose for lakebase profile |
@@ -1000,6 +1244,37 @@ databricks postgres list-endpoints projects/<p>/branches/<b>
 databricks apps logs edim-dde-ai-agents-api
 ```
 
+### Databricks Apps deploy checklist
+
+Use this as the source of truth for the deploy script / bundle:
+
+- App resources:
+  - `postgres` (Lakebase)
+  - `sql-warehouse`
+  - `faiss-volume` (when `databricks_volume` is used)
+  - secret resources for Azure OpenAI / Search as needed
+- App user authorization:
+  - **Databricks SQL**
+- App env:
+  - `POSTGRES_BACKEND=lakebase`
+  - `POSTGRES_LAKEBASE_ENDPOINT` via `valueFrom: postgres`
+  - `DATABRICKS_HOST`
+  - `DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<id>` (literal full path)
+  - `FAISS_INDEX_PATH=/Volumes/<catalog>/<schema>/<volume>/faiss_index`
+- Lakebase app data:
+  - default metrics connection with same host/path
+  - default metrics dataset with correct table FQN
+  - workspace agent bindings for metrics/llm/rag
+- Unity Catalog:
+  - app SP `USE CATALOG`, `USE SCHEMA`, `SELECT` on metrics table
+  - volume resource access (`Can read and write`) for FAISS
+
+**Files now in repo**
+
+- `scripts/deploy-databricks-app.sh` — stages a slim runtime bundle and runs `databricks bundle validate/deploy`
+- `databricks.yml` — Databricks Asset Bundles config for the API app resources (`postgres`, `sql-warehouse`, `faiss-volume`)
+- `app.yaml` — runtime env for the app itself; the deploy script generates a staging copy with environment-specific host / warehouse / volume values
+
 ---
 
 ## Implementation backlog (not yet in repo)
@@ -1008,10 +1283,11 @@ Track these as follow-up engineering tasks:
 
 - [x] Add root `app.yaml` and `app.minimal.yaml` for Databricks Apps deploy
 - [x] Auto-map `PGHOST`, `PGUSER`, `PGDATABASE`, `PGPORT`, `PGSSLMODE` in `settings.py`
+- [x] `scripts/deploy-databricks-app.sh` — stage slim bundle + `databricks bundle deploy`
 - [ ] `Makefile` target: `deploy-databricks-app` (sync + deploy)
 - [ ] `docker-compose.yml` — skip `POSTGRES_HOST=postgres` override when `POSTGRES_BACKEND=lakebase`
 - [ ] Phase C: mount Angular static assets from FastAPI
-- [ ] `databricks.yml` (Asset Bundles) for CI/CD
+- [x] `databricks.yml` (Asset Bundles) for CI/CD
 
 ---
 
