@@ -139,10 +139,10 @@
             <span class="jobs-name-text" [title]="j.job_name || ''">{{ j.job_name || '–' }}</span>
           </td>
           <td>{{ j.job_type || '–' }}</td>
-          <td>{{ j.avg_worker_cpu_utilization_pct != null ? (j.avg_worker_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
-          <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+          <td>{{ jobHasWorkerMetrics(j) && j.avg_worker_cpu_utilization_pct != null ? (j.avg_worker_cpu_utilization_pct | number:'1.1-1') + '%' : 'N/A' }}</td>
+          <td>{{ jobHasWorkerMetrics(j) && j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : 'N/A' }}</td>
           <td>{{ j.total_runs ?? '–' }}</td>
-          <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
+          <td class="small">{{ jobWorkerVmDisplay(j) }}</td>
           <td class="small">{{ j.dbr_version || '–' }}</td>
           <td>
             <button

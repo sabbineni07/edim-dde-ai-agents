@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 from uuid import UUID
 
 from shared.config.settings import settings
+from shared.database import availability as database_availability
 from shared.database.availability import handle_database_error, require_database_import
 from shared.utils.logging import get_logger
 
@@ -35,6 +36,8 @@ class ObservabilityService:
 
     def _ensure_database(self) -> bool:
         """Return False when Postgres is off and DB is optional; raise when required."""
+        if not database_availability.postgres_required():
+            return False
         require_database_import(DATABASE_AVAILABLE)
         return DATABASE_AVAILABLE
 

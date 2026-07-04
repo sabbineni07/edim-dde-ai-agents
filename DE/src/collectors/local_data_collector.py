@@ -1,6 +1,6 @@
 """Local CSV data collector for testing and development."""
 
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -19,6 +19,10 @@ def _json_safe_value(value: Any) -> Any:
     """Convert pandas/numpy scalars to native Python types for JSON/API responses."""
     if value is None:
         return None
+    if isinstance(value, pd.Timestamp):
+        return value.isoformat()
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
     if isinstance(value, (str, bool, int, float)):
         return value
     if hasattr(value, "item"):

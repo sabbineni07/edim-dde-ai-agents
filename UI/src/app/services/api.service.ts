@@ -101,6 +101,7 @@ export interface JobSummary {
   avg_worker_memory_utilization_pct?: number;
   total_runs?: number;
   avg_job_run_duration_seconds?: number;
+  azure_driver_vm_size?: string;
   azure_worker_vm_size?: string;
   max_worker_nodes_provisioned?: number;
   last_job_run_date?: string;

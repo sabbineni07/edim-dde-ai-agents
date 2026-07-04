@@ -68,6 +68,27 @@ export class JobsListComponent implements OnInit {
     return `${name} · ${this.startDate} to ${this.endDate}`;
   }
 
+  private textValue(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  jobHasWorkerMetrics(job: JobSummary): boolean {
+    return (
+      this.textValue(job.azure_worker_vm_size) != null ||
+      job.avg_worker_cpu_utilization_pct != null ||
+      job.avg_worker_memory_utilization_pct != null
+    );
+  }
+
+  jobWorkerVmDisplay(job: JobSummary): string {
+    const workerVm = this.textValue(job.azure_worker_vm_size);
+    if (workerVm) return workerVm;
+    const driverVm = this.textValue(job.azure_driver_vm_size);
+    return driverVm ? `N/A (driver: ${driverVm})` : 'N/A';
+  }
+
   ngOnInit(): void {
     if (!this.environmentSelection.getSelectedId()) {
       void this.router.navigate(['/app/workspaces']);

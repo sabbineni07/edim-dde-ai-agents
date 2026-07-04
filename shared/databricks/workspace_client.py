@@ -43,13 +43,21 @@ def databricks_workspace_host_from_settings(settings: Any) -> Optional[str]:
     )
 
 
+def _workspace_client_cls():
+    try:
+        from databricks.sdk import WorkspaceClient
+    except Exception as exc:
+        raise RuntimeError("databricks-sdk is required for WorkspaceClient operations") from exc
+    return WorkspaceClient
+
+
 def get_workspace_client(
     *,
     databricks_host: Optional[str] = None,
     databricks_server_hostname: Optional[str] = None,
 ):
     """Build ``WorkspaceClient`` for UC volume Files API or other workspace calls."""
-    from databricks.sdk import WorkspaceClient
+    WorkspaceClient = _workspace_client_cls()
 
     if is_databricks_app_runtime():
         return WorkspaceClient()

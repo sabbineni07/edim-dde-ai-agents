@@ -62,6 +62,15 @@ def test_platform_settings_cached():
     assert a is b
 
 
+def test_env_override_beats_platform_yaml(monkeypatch):
+    monkeypatch.setenv("USE_POSTGRES", "false")
+    monkeypatch.setenv("USE_LOCAL_DATA", "false")
+    reset_settings_cache()
+    settings = get_agent_settings("dbx_cluster_tuning_agent")
+    assert settings.use_postgres is False
+    assert settings.use_local_data is False
+
+
 def test_config_dir_from_env(tmp_path, monkeypatch):
     cfg = tmp_path / "config"
     (cfg / "agents").mkdir(parents=True)
