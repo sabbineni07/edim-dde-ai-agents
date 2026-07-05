@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
+from AI.src.core.llm.chat_model_factory import resolve_chain_llm
 from AI.src.core.prompts.loader import build_chain_messages
 from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.settings import Settings
@@ -91,13 +91,7 @@ class ClusterSizingChain:
         settings: Optional[Settings] = None,
     ):
         self.settings: Settings = settings or default_settings  # proxy resolves default agent
-        if can_create_chat_model(self.settings):
-            self.llm = create_chat_model(self.settings, chain="sizing")
-        else:
-            from AI.src.core.platform import get_llm_provider
-
-            provider = llm_provider or get_llm_provider()
-            self.llm = provider.get_llm("sizing")
+        self.llm = resolve_chain_llm(self.settings, chain="sizing", llm_provider=llm_provider)
         self.rag_provider = rag_provider
         self.use_rag = use_rag and rag_provider is not None
 

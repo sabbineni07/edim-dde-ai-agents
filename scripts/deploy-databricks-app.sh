@@ -20,6 +20,7 @@
 #   USE_LOCAL_DATA            true|false (default: false)
 #   LOCAL_DATA_PATH           CSV path when USE_LOCAL_DATA=true
 #   USE_MOCK_LLM             true|false (default: true)
+#   AZURE_TENANT_ID          Microsoft Entra tenant id (required for Foundry keyless auth on Apps)
 #   APP_ENV                   App env string (default: production)
 #   LOG_LEVEL                 Log level (default: INFO)
 #   SKIP_VALIDATE             1 to skip `databricks bundle validate`
@@ -174,6 +175,8 @@ env:
     value: "${host}"
   - name: DATABRICKS_HTTP_PATH
     value: "${http_path}"
+  - name: AZURE_TENANT_ID
+    value: "${AZURE_TENANT_ID:-}"
 EOF
 }
 
@@ -198,7 +201,11 @@ Manual post-deploy checks:
        - USE CATALOG on the metrics catalog
        - USE SCHEMA on the metrics schema
        - SELECT on the metrics table
-  4. Ensure the SQL warehouse is running before testing browse APIs
+  4. For Azure AI Foundry (no API key): grant Foundry User on the Foundry resource to the
+     app service principal (DATABRICKS_CLIENT_ID) and set AZURE_TENANT_ID on the app.
+     See docs/LAKEBASE_POSTGRES_AND_DATABRICKS_APPS.md § Foundry service principal.
+  5. Set USE_MOCK_LLM=false when using real Foundry connections from the workspace agent UI.
+  6. Ensure the SQL warehouse is running before testing browse APIs
 
 Useful commands:
   databricks ${DATABRICKS_PROFILE:+-p "${DATABRICKS_PROFILE}"} apps get ${APP_NAME}

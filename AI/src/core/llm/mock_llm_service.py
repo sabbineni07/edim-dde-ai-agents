@@ -8,6 +8,7 @@ from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 
+from shared.config.llm_sampling import ChainKind
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -85,7 +86,8 @@ class MockLLMService:
         self.llm = MockChatModel()
         logger.info("mock_llm_service_initialized")
 
-    def get_llm(self):
+    def get_llm(self, chain: ChainKind = "default"):
+        del chain
         return self.llm
 
     def get_embeddings(self):

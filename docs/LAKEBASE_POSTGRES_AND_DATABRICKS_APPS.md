@@ -765,6 +765,51 @@ For each workspace agent installation:
 
 Without these bindings, the app may deploy successfully but still lack runtime configuration for recommendations or RAG.
 
+##### Step 10a — Grant the app service principal access to Azure AI Foundry (no API key)
+
+When you do **not** have `AZURE_OPENAI_API_KEY`, the API app authenticates to Foundry with the **Databricks App service principal** using Entra ID tokens (scope `https://ai.azure.com/.default`).
+
+**A. Find the app service principal**
+
+1. Databricks → **Compute** → **Apps** → `edim-dde-ai-agents-api` → **Environment**.
+2. Copy **`DATABRICKS_CLIENT_ID`** (UUID). This is the app’s OAuth client id / Postgres user.
+3. In **Azure Portal** → **Microsoft Entra ID** → **Enterprise applications**, search for that client id (or open **App registrations** if your org exposes it there).
+4. Note the service principal **Object ID** (different from the client id).
+
+**B. Assign Foundry RBAC on the Azure resource**
+
+1. Azure Portal → your **Azure AI Foundry** (or Cognitive Services) resource.
+2. **Access control (IAM)** → **Add role assignment**.
+3. Role: **Foundry User** (preferred for Foundry resources) or **Cognitive Services User** (inference on the resource).
+4. Members: **User, group, or service principal** → select the app service principal from step A.
+5. **Review + assign**.
+
+Your org needs **Owner** or **User Access Administrator** on the Foundry resource (or a parent scope) to create the assignment.
+
+**C. Set tenant id on the Databricks App**
+
+The app runtime already receives `DATABRICKS_CLIENT_ID` and `DATABRICKS_CLIENT_SECRET`. Add your Entra **tenant id** so token acquisition uses the app SP:
+
+In `app.yaml` (or redeploy with):
+
+```yaml
+  - name: AZURE_TENANT_ID
+    value: "<your-tenant-id-guid>"
+  - name: USE_MOCK_LLM
+    value: "false"
+```
+
+The API maps `DATABRICKS_CLIENT_ID` + `DATABRICKS_CLIENT_SECRET` + `AZURE_TENANT_ID` to a client-credentials flow for Foundry chat and embeddings.
+
+**D. Verify**
+
+1. Redeploy the API app after setting `USE_MOCK_LLM=false` and `AZURE_TENANT_ID`.
+2. Generate a recommendation from the UI with your workspace agent selected (so `llm` + `rag` bindings apply).
+3. App logs should **not** show `DefaultAzureCredential: EnvironmentCredential authentication unavailable` or `using_mock_llm_provider`.
+4. If you see **403 Forbidden** from Foundry, the RBAC role or scope is wrong. If **401**, check tenant id and that the app SP secret is present in the app Environment tab.
+
+Reference: [Configure keyless authentication with Microsoft Entra ID](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/configure-entra-id).
+
 ##### Step 11 — Smoke test
 
 Use this order:
