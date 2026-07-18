@@ -7,7 +7,7 @@ from typing import Optional
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-from shared.auth.azure_tokens import AZURE_FOUNDRY_AAD_SCOPE, get_azure_access_token
+from shared.auth.foundry_tokens import foundry_token_provider
 from shared.azure.endpoint_resolver import resolve_openai_v1_base_url
 from shared.config.llm_sampling import ChainKind, resolve_llm_sampling
 from shared.config.settings import Settings
@@ -17,14 +17,7 @@ logger = get_logger(__name__)
 
 
 def _token_provider_for_settings(cfg: Settings):
-    def token_provider() -> str:
-        token = (cfg.azure_openai_access_token or "").strip()
-        if not token:
-            token = get_azure_access_token(AZURE_FOUNDRY_AAD_SCOPE)
-            cfg.azure_openai_access_token = token
-        return token
-
-    return token_provider
+    return foundry_token_provider(cfg)
 
 
 def can_create_chat_model(cfg: Settings) -> bool:

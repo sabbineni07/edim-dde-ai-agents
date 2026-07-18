@@ -17,6 +17,7 @@ databricks:
   server_hostname: ${env:DATABRICKS_SERVER_HOSTNAME}
   http_path: ${env:DATABRICKS_HTTP_PATH}
   token: ${env:DATABRICKS_TOKEN}
+  service_credential_name: ${env:DATABRICKS_SERVICE_CREDENTIAL_NAME}
   metrics_table: ${env:DATABRICKS_JOB_CLUSTER_METRICS_TABLE}
 
 postgres:

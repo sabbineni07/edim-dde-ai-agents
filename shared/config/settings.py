@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     databricks_server_hostname: Optional[str] = None
     databricks_http_path: Optional[str] = None
     databricks_token: Optional[str] = None
+    databricks_service_credential_name: Optional[str] = None
     databricks_job_cluster_metrics_table: Optional[str] = None
 
     app_env: str = "development"

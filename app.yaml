@@ -27,6 +27,10 @@ env:
     value: "production"
   - name: LOG_LEVEL
     value: "INFO"
+  - name: AZURE_OPENAI_ENDPOINT
+    value: "https://project_name.services.ai.azure.com"
+  - name: AZURE_OPENAI_DEPLOYMENT_NAME
+    value: "model-name"
   - name: FAISS_VOLUME_ROOT
     valueFrom: faiss-volume
   - name: FAISS_INDEX_PATH
@@ -35,3 +39,5 @@ env:
     value: "adb-1234567890.1.azuredatabricks.net"
   - name: DATABRICKS_HTTP_PATH
     value: "/sql/1.0/warehouses/<id>"
+  - name: DATABRICKS_SERVICE_CREDENTIAL_NAME
+    value: "project_name-service-cred-name"

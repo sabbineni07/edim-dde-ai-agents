@@ -21,6 +21,7 @@ def _connection_to_settings_flat(
             "azure_openai_endpoint",
             "azure_openai_deployment_name",
             "azure_openai_embedding_deployment",
+            "databricks_service_credential_name",
         ):
             if config.get(k):
                 flat[k] = config[k]
