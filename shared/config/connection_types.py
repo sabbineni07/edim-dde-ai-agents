@@ -90,6 +90,18 @@ CONNECTION_TYPE_UI: Dict[str, Dict[str, Any]] = {
                 "required": False,
                 "placeholder": "text-embedding-3-small",
             },
+            {
+                "key": "databricks_service_credential_name",
+                "label": "Databricks service credential name",
+                "type": "string",
+                "required": False,
+                "placeholder": "my-foundry-service-credential",
+                "help": (
+                    "Optional for Databricks cluster/job/notebook runtimes. "
+                    "Uses this Unity Catalog service credential before Azure identity. "
+                    "Not supported on Databricks Apps — use App SP + AZURE_TENANT_ID + Foundry RBAC there."
+                ),
+            },
         ],
         "auth_note": _AUTH_MI,
     },

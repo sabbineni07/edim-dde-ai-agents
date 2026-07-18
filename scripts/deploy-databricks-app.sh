@@ -201,9 +201,11 @@ Manual post-deploy checks:
        - USE CATALOG on the metrics catalog
        - USE SCHEMA on the metrics schema
        - SELECT on the metrics table
-  4. For Azure AI Foundry (no API key): grant Foundry User on the Foundry resource to the
-     app service principal (DATABRICKS_CLIENT_ID) and set AZURE_TENANT_ID on the app.
-     See docs/LAKEBASE_POSTGRES_AND_DATABRICKS_APPS.md § Foundry service principal.
+  4. For Azure AI Foundry (no API key): find the EXISTING app SP in Entra by
+     DATABRICKS_CLIENT_ID (do NOT create a new Enterprise Application), grant
+     Foundry User / Cognitive Services User on the Foundry resource, set
+     AZURE_TENANT_ID, and set USE_MOCK_LLM=false.
+     See docs/LAKEBASE_POSTGRES_AND_DATABRICKS_APPS.md § Step 10a.
   5. Set USE_MOCK_LLM=false when using real Foundry connections from the workspace agent UI.
   6. Ensure the SQL warehouse is running before testing browse APIs
 

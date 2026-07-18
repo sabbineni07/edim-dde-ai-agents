@@ -83,6 +83,7 @@ def flatten_platform_yaml(data: Dict[str, Any]) -> Dict[str, Any]:
             "server_hostname": "databricks_server_hostname",
             "http_path": "databricks_http_path",
             "token": "databricks_token",
+            "service_credential_name": "databricks_service_credential_name",
             "metrics_table": "databricks_job_cluster_metrics_table",
         }
         for src, dst in mapping.items():
