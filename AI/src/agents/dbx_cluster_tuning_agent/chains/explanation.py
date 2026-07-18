@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Optional
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
-from AI.src.core.llm.chat_model_factory import can_create_chat_model, create_chat_model
+from AI.src.core.llm.chat_model_factory import resolve_chain_llm
 from AI.src.core.prompts.loader import build_chain_messages
 from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
 from shared.config.settings import Settings
@@ -33,13 +33,7 @@ class RecommendationExplanationChain:
             settings: Effective agent settings (workspace overrides + YAML)
         """
         self.settings: Settings = settings or default_settings
-        if can_create_chat_model(self.settings):
-            self.llm = create_chat_model(self.settings, chain="explanation")
-        else:
-            from AI.src.core.platform import get_llm_provider
-
-            provider = llm_provider or get_llm_provider()
-            self.llm = provider.get_llm("explanation")
+        self.llm = resolve_chain_llm(self.settings, chain="explanation", llm_provider=llm_provider)
 
         self.prompt = ChatPromptTemplate.from_messages(
             build_chain_messages(DBX_CLUSTER_TUNING_AGENT_ID, "explanation", settings=self.settings)

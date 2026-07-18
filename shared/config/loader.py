@@ -41,6 +41,17 @@ def _filter_settings_kwargs(flat: Dict) -> Dict:
     return {k: v for k, v in flat.items() if k in allowed and v is not None}
 
 
+def _env_has_override(field_name: str) -> bool:
+    field = Settings.model_fields[field_name]
+    candidate_keys = {field_name, field_name.upper()}
+    validation_alias = getattr(field, "validation_alias", None)
+    if isinstance(validation_alias, str):
+        candidate_keys.add(validation_alias)
+    elif validation_alias is not None and hasattr(validation_alias, "choices"):
+        candidate_keys.update(str(choice) for choice in validation_alias.choices)
+    return any(os.environ.get(key) not in (None, "") for key in candidate_keys)
+
+
 def _build_settings(flat: Dict, *, from_env: bool = True) -> Settings:
     """Build Settings from a flat dict.
 
@@ -51,9 +62,10 @@ def _build_settings(flat: Dict, *, from_env: bool = True) -> Settings:
     clean = _filter_settings_kwargs(resolved)
     if from_env:
         try:
+            env_wins = {k: v for k, v in clean.items() if not _env_has_override(k)}
             if _env_file_usable():
-                return Settings(**clean)
-            return Settings(_env_file=None, **clean)
+                return Settings(**env_wins)
+            return Settings(_env_file=None, **env_wins)
         except Exception as e:
             warnings.warn(f"Error loading settings: {e}. Using merged values only.")
     return Settings.model_validate(clean)

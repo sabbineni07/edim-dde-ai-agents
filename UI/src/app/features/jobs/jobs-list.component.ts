@@ -68,6 +68,45 @@ export class JobsListComponent implements OnInit {
     return `${name} · ${this.startDate} to ${this.endDate}`;
   }
 
+  private textValue(value: unknown): string | null {
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  isSingleNodeJob(job: JobSummary): boolean {
+    if (job.cluster_type === 'single_node') return true;
+    if (job.cluster_type === 'multi_node') return false;
+    const workerVm = this.textValue(job.azure_worker_vm_size);
+    const maxWorkers = job.max_worker_nodes_provisioned ?? 1;
+    return !workerVm && maxWorkers <= 1;
+  }
+
+  clusterTypeLabel(job: JobSummary): string {
+    return this.isSingleNodeJob(job) ? 'Single node' : 'Multi node';
+  }
+
+  jobCpuPct(job: JobSummary): number | null {
+    const pct = this.isSingleNodeJob(job)
+      ? job.avg_driver_cpu_utilization_pct
+      : job.avg_worker_cpu_utilization_pct;
+    return pct != null ? pct : null;
+  }
+
+  jobMemoryPct(job: JobSummary): number | null {
+    const pct = this.isSingleNodeJob(job)
+      ? job.avg_driver_memory_utilization_pct
+      : job.avg_worker_memory_utilization_pct;
+    return pct != null ? pct : null;
+  }
+
+  jobNodeTypeDisplay(job: JobSummary): string {
+    if (this.isSingleNodeJob(job)) {
+      return this.textValue(job.azure_driver_vm_size) ?? '–';
+    }
+    return this.textValue(job.azure_worker_vm_size) ?? '–';
+  }
+
   ngOnInit(): void {
     if (!this.environmentSelection.getSelectedId()) {
       void this.router.navigate(['/app/workspaces']);

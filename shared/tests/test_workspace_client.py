@@ -54,7 +54,9 @@ def test_get_workspace_client_uses_resolved_host():
         "shared.databricks.workspace_client.is_databricks_app_runtime",
         return_value=False,
     ):
-        with patch("databricks.sdk.WorkspaceClient") as wc:
+        with patch("shared.databricks.workspace_client._workspace_client_cls") as cls:
+            wc = MagicMock()
+            cls.return_value = wc
             get_workspace_client(databricks_server_hostname="adb.example.net")
             wc.assert_called_once()
             assert wc.call_args.kwargs["host"] == "https://adb.example.net"

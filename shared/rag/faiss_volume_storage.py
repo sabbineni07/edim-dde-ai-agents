@@ -25,6 +25,17 @@ logger = get_logger(__name__)
 
 FAISS_INDEX_FILENAMES = ("index.faiss", "index.pkl")
 
+try:
+    from databricks.sdk.errors import AlreadyExists as _DatabricksAlreadyExists
+    from databricks.sdk.errors import NotFound as _DatabricksNotFound
+except Exception:
+
+    class _DatabricksAlreadyExists(Exception):
+        """Fallback used when databricks-sdk is unavailable in tests."""
+
+    class _DatabricksNotFound(Exception):
+        """Fallback used when databricks-sdk is unavailable in tests."""
+
 
 def is_databricks_app_runtime() -> bool:
     return bool(os.environ.get("DATABRICKS_APP_NAME"))
@@ -96,10 +107,8 @@ def _parse_last_modified(value: Optional[str]) -> Optional[float]:
 
 def _remote_mtime(client: object, remote_path: str) -> Optional[float]:
     try:
-        from databricks.sdk.errors import NotFound
-
         meta = client.files.get_metadata(remote_path)
-    except NotFound:
+    except _DatabricksNotFound:
         return None
     except Exception as e:
         logger.debug("faiss_volume_metadata_failed", path=remote_path, error=str(e))
@@ -109,10 +118,8 @@ def _remote_mtime(client: object, remote_path: str) -> Optional[float]:
 
 def _ensure_remote_directory(client: object, directory_path: str) -> None:
     try:
-        from databricks.sdk.errors import AlreadyExists
-
         client.files.create_directory(directory_path.rstrip("/"))
-    except AlreadyExists:
+    except _DatabricksAlreadyExists:
         pass
     except Exception as e:
         logger.debug("faiss_volume_mkdir", path=directory_path, error=str(e))

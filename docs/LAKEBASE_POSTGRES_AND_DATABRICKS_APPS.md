@@ -9,6 +9,7 @@ This document captures the Lakebase Postgres migration context for **EDIM DDE AI
 - `scripts/lakebase_bootstrap_grants.sql` — OAuth role + schema grants for Databricks Apps service principal
 - `.env.example` — local default
 - `.env.lakebase.example` — Lakebase profile template
+- [Databricks Apps vs Azure hosting (cost & security)](./DATABRICKS_APPS_VS_AZURE_HOSTING.md) — leadership one-pager
 
 ---
 
@@ -765,6 +766,237 @@ For each workspace agent installation:
 
 Without these bindings, the app may deploy successfully but still lack runtime configuration for recommendations or RAG.
 
+##### Step 10a — Grant the app service principal access to Azure AI Foundry (no API key)
+
+When you do **not** have `AZURE_OPENAI_API_KEY`, the API Databricks App authenticates to Azure AI Foundry with the **Databricks App service principal** using Microsoft Entra ID client credentials and scope `https://ai.azure.com/.default`.
+
+Code path: `shared/auth/foundry_tokens.py` → `shared/auth/azure_tokens.py` (`ClientSecretCredential` from App SP env vars).
+
+###### Why this path (and what not to use on Apps)
+
+| Approach | Use on Databricks Apps? |
+|----------|-------------------------|
+| **App SP + `AZURE_TENANT_ID` + Foundry RBAC** (this section) | **Yes — required keyless path** |
+| `AZURE_OPENAI_API_KEY` | Yes, if your org provides a key |
+| Unity Catalog service credential (`dbutils.credentials.getServiceCredentialsProvider`) | **No** — not supported on Apps (cluster/job/notebook only). If `DATABRICKS_SERVICE_CREDENTIAL_NAME` is set, logs show `foundry_dbx_service_credential_skipped_on_apps` and auth falls through to App SP |
+| Forward UI → API Databricks user OAuth token to Foundry | **No** — that token is for Databricks APIs, not Foundry (`https://ai.azure.com/.default`) |
+
+###### Critical: do **not** create a new Entra Enterprise Application
+
+Databricks **automatically** creates a dedicated service principal when you create the API app and injects:
+
+| Env var (Apps → Environment) | Meaning |
+|------------------------------|---------|
+| `DATABRICKS_CLIENT_ID` | Application (client) ID of the **existing** app SP |
+| `DATABRICKS_CLIENT_SECRET` | Secret for that same SP |
+
+Your process already authenticates as **that** identity. Creating a **new** Entra app registration / Enterprise application produces a **different** client id and secret that the Databricks App runtime does **not** use. Foundry RBAC must be granted to the **existing** SP whose Application (client) ID equals `DATABRICKS_CLIENT_ID`.
+
+| Action | Correct? |
+|--------|----------|
+| Find the existing SP by searching Entra for `DATABRICKS_CLIENT_ID` | Yes |
+| Create a new Enterprise Application / App Registration for Foundry | **No** |
+| Paste a different client id/secret into the app | **No** — Apps inject their own |
+
+###### Guided setup
+
+**A1. Copy the app service principal client ID from Databricks**
+
+1. Open the Azure Databricks workspace.
+2. Go to **Compute** → **Apps**.
+3. Open the API app (for example `edim-dde-ai-agents-api`).
+4. Open the **Environment** tab.
+5. Copy **`DATABRICKS_CLIENT_ID`** (a UUID). Keep it handy.
+6. Confirm **`DATABRICKS_CLIENT_SECRET`** is present (value is hidden; you do not need to copy it for RBAC).
+
+Optional CLI:
+
+```bash
+databricks apps get edim-dde-ai-agents-api
+# Inspect Environment / status for the client id if shown by your CLI version
+```
+
+**A2. Open the correct Entra tenant**
+
+1. Open [Azure Portal](https://portal.azure.com).
+2. Switch directory to the **same Microsoft Entra tenant** that owns your Azure Databricks workspace (wrong tenant = SP will not appear).
+3. Go to **Microsoft Entra ID**.
+
+**A3. Find the existing service principal (do not create one)**
+
+Try in this order:
+
+1. **Enterprise applications**
+   - Open **Enterprise applications**.
+   - Clear or widen any default filter that hides non-gallery apps (for example show **All applications** if available).
+   - In search, paste the exact **`DATABRICKS_CLIENT_ID`** UUID (Application / client ID), not a display name.
+   - Open the matching enterprise application.
+2. If not found → **App registrations**
+   - Open **App registrations** → **All applications**.
+   - Search by the same UUID under **Application (client) ID**.
+   - Open the registration, then open its **Managed application in local directory** / enterprise application link if you need the enterprise object.
+3. On the service principal / enterprise app overview, note:
+   - **Application (client) ID** — must equal `DATABRICKS_CLIENT_ID`
+   - **Object ID** — used by some IAM pickers (different from the client ID)
+
+**A4. If you still cannot find it**
+
+- Confirm you are in the workspace’s Entra tenant (directory switcher top-right in Azure Portal).
+- Ask an Entra / Databricks admin to search by Application (client) ID = `DATABRICKS_CLIENT_ID`.
+- Do **not** create a replacement app. Escalating is safer than inventing a new identity (otherwise Foundry calls fail with 401 / wrong principal).
+
+**B. Assign Foundry RBAC to that service principal**
+
+You need **Owner** or **User Access Administrator** on the Foundry resource (or a parent resource group / subscription).
+
+1. Azure Portal → your **Azure AI Foundry** resource (or the Cognitive Services / AI Services resource that hosts the model deployment).
+2. Open **Access control (IAM)**.
+3. **Add** → **Add role assignment**.
+4. **Role** tab:
+   - Prefer **Foundry User** for Foundry resources.
+   - Or **Cognitive Services User** when that is the role your org uses for inference.
+5. **Members** tab:
+   - **User, group, or service principal**
+   - **Select members** → search by **display name**, or paste **Object ID** / client ID depending on portal UI.
+   - Select the **existing** Databricks App SP from step A (the one whose Application ID is `DATABRICKS_CLIENT_ID`).
+6. **Review + assign**.
+7. Wait a few minutes for RBAC propagation if needed.
+
+Optional Azure CLI (replace placeholders):
+
+```bash
+# APP_SP_OBJECT_ID = Entra Object ID of the Databricks App service principal
+# FOUNDRY_RESOURCE_ID = Azure resource ID of the Foundry / Cognitive Services account
+az role assignment create \
+  --assignee-object-id "<APP_SP_OBJECT_ID>" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Cognitive Services User" \
+  --scope "<FOUNDRY_RESOURCE_ID>"
+```
+
+If your tenant exposes the **Foundry User** role, prefer that role name instead of `Cognitive Services User`.
+
+**C. Configure the Databricks App for keyless Foundry**
+
+The runtime already has `DATABRICKS_CLIENT_ID` and `DATABRICKS_CLIENT_SECRET`. You must add the Entra **tenant id** and turn off mock LLM.
+
+1. Find the tenant id: Azure Portal → **Microsoft Entra ID** → **Overview** → **Tenant ID**.
+2. Add to `app.yaml` (or set via your deploy script / Apps UI env):
+
+```yaml
+  - name: AZURE_TENANT_ID
+    value: "<your-tenant-id-guid>"
+  - name: USE_MOCK_LLM
+    value: "false"
+```
+
+3. Ensure Foundry **endpoint** and **deployment** are configured (workspace agent **llm** connection in the UI, and/or platform env such as `AZURE_OPENAI_ENDPOINT` / `AZURE_OPENAI_DEPLOYMENT_NAME`).
+4. Redeploy, for example:
+
+```bash
+AZURE_TENANT_ID=<your-tenant-id-guid> USE_MOCK_LLM=false ./scripts/deploy-databricks-app.sh
+```
+
+How token acquisition works at runtime:
+
+```text
+DATABRICKS_APP_NAME is set
+  → azure_tokens uses ClientSecretCredential(
+       tenant_id = AZURE_TENANT_ID,
+       client_id = DATABRICKS_CLIENT_ID,
+       client_secret = DATABRICKS_CLIENT_SECRET
+     )
+  → get_token("https://ai.azure.com/.default")
+  → Chat / embeddings call your Foundry endpoint with that bearer token
+```
+
+**D. Verify**
+
+1. Redeploy the API app with `USE_MOCK_LLM=false` and `AZURE_TENANT_ID` set.
+2. In the UI, open Job Detail, select the workspace agent that binds **llm** (and optional **rag**), then generate a recommendation.
+3. Check **Compute → Apps → API app → Logs**:
+
+| Log / symptom | Meaning |
+|---------------|---------|
+| `foundry_token_from_azure_identity` | App SP path succeeded |
+| `foundry_dbx_service_credential_skipped_on_apps` | Expected on Apps if a UC service credential name is still configured; non-fatal |
+| `using_mock_llm_provider` | `USE_MOCK_LLM` still true — set to `false` and redeploy |
+| `EnvironmentCredential authentication unavailable` | Missing `AZURE_TENANT_ID` or App SP client secret mapping |
+| Foundry **401** | Wrong tenant, missing secret, or wrong identity |
+| Foundry **403** | RBAC missing or assigned to the wrong principal / resource |
+
+4. Confirm recommendations return real model output (not deterministic mock sizing JSON).
+
+###### Checklist
+
+- [ ] Copied `DATABRICKS_CLIENT_ID` from API app **Environment**
+- [ ] Located the **same** SP in Entra (Enterprise applications and/or App registrations) — **did not create a new app**
+- [ ] Application (client) ID in Entra equals `DATABRICKS_CLIENT_ID`
+- [ ] Assigned **Foundry User** or **Cognitive Services User** on the Foundry resource to that SP
+- [ ] Set `AZURE_TENANT_ID` on the API app
+- [ ] Set `USE_MOCK_LLM=false`
+- [ ] Workspace agent has Foundry endpoint + deployment bound to **llm**
+- [ ] Recommendation logs show `foundry_token_from_azure_identity`
+
+###### CI/CD and app identity stability
+
+The Databricks App service principal is stable across normal code deployments, but it is
+tied to the **App resource**, not to the source code or bundle name:
+
+| CI/CD action | App SP / `DATABRICKS_CLIENT_ID` | Foundry RBAC |
+|--------------|----------------------------------|--------------|
+| `databricks bundle deploy` updates the existing App | Preserved | Existing assignment remains valid |
+| `databricks apps deploy` updates code on the existing App | Preserved | Existing assignment remains valid |
+| Delete the App and create it again | **New SP and client ID** | Must be assigned to the new SP |
+| `databricks bundle destroy` followed by deploy/create | **New SP and client ID** | Must be assigned to the new SP |
+
+Do not delete and recreate the App during routine deployments. Prefer an in-place,
+idempotent deployment using the same App resource and name. The repository's
+`scripts/deploy-databricks-app.sh` uses `databricks bundle deploy`; it should not be
+changed to run `apps delete` or `bundle destroy` as a normal pre-deploy step.
+
+If recreation is unavoidable:
+
+1. Deploy/create the new App.
+2. Read its new `DATABRICKS_CLIENT_ID`.
+3. Locate the automatically created SP in Entra; do **not** create another enterprise
+   application manually.
+4. Assign **Foundry User** / **Cognitive Services User** to the new SP at the Foundry
+   resource scope.
+5. Reapply other identity-specific permissions, including UC grants, Lakebase grants,
+   SQL warehouse access, and UI App → API App `CAN USE` permissions where applicable.
+6. Run the recommendation smoke test before directing users to the new deployment.
+
+For pipelines allowed to administer Azure RBAC, the Foundry assignment can be
+self-healing after creation:
+
+```bash
+APP_CLIENT_ID="<new DATABRICKS_CLIENT_ID>"
+APP_SP_OBJECT_ID="$(
+  az ad sp show --id "${APP_CLIENT_ID}" --query id --output tsv
+)"
+
+az role assignment create \
+  --assignee-object-id "${APP_SP_OBJECT_ID}" \
+  --assignee-principal-type ServicePrincipal \
+  --role "Cognitive Services User" \
+  --scope "<FOUNDRY_RESOURCE_ID>"
+```
+
+The pipeline identity needs permission to read Entra service principals and create role
+assignments, typically **User Access Administrator** or **Owner** at the target scope.
+Role assignment creation is idempotent only when the same principal, role, and scope are
+used; handle an “already exists” response as success.
+
+If organizational policy requires frequent App recreation, use a separately managed,
+stable Entra identity for Foundry instead. Supply its `AZURE_CLIENT_ID`,
+`AZURE_CLIENT_SECRET`, and `AZURE_TENANT_ID` securely to the App. The code prefers
+`AZURE_CLIENT_*` over the Databricks-injected App SP values, so Foundry RBAC remains
+stable while the Databricks App SP can change. This introduces a customer-managed
+secret and rotation responsibility, so in-place deployment is preferred.
+
+Reference: [Configure keyless authentication with Microsoft Entra ID](https://learn.microsoft.com/en-us/azure/ai-foundry/foundry-models/how-to/configure-entra-id).
+
 ##### Step 11 — Smoke test
 
 Use this order:
@@ -1229,6 +1461,11 @@ databricks apps run-local --app-dir . --entrypoint app.yaml
 | Token / OAuth errors after ~1 hour | Token expiry on long-lived connections | Already handled via `do_connect` refresh in `connection.py` |
 | `ModuleNotFoundError` on deploy | Missing dep in Apps `requirements.txt` | Add package; redeploy |
 | Azure OpenAI 503 | Secrets not configured | Phase B secret scope + `app.yaml` references |
+| Recommendation fails with `EnvironmentCredential` / no Foundry token | Apps missing keyless Foundry setup | Follow [Step 10a](#step-10a--grant-the-app-service-principal-access-to-azure-ai-foundry-no-api-key): find existing App SP by `DATABRICKS_CLIENT_ID` (do **not** create a new Entra app), grant Foundry RBAC, set `AZURE_TENANT_ID`, set `USE_MOCK_LLM=false` |
+| Foundry **401** after App SP setup | Wrong tenant id, missing `DATABRICKS_CLIENT_SECRET`, or RBAC on a different SP | Re-check `AZURE_TENANT_ID`; confirm Entra Application ID equals app `DATABRICKS_CLIENT_ID`; re-assign role to that SP |
+| Foundry **403** | Role missing or wrong resource scope | Assign **Foundry User** / **Cognitive Services User** on the Foundry resource that hosts the deployment |
+| `foundry_dbx_service_credential_skipped_on_apps` | UC service credentials not supported on Apps | Expected; ensure App SP + `AZURE_TENANT_ID` path is configured |
+| `using_mock_llm_provider` while expecting real Foundry | `USE_MOCK_LLM=true` in `app.yaml` | Set `USE_MOCK_LLM=false` and redeploy |
 
 ### Useful CLI commands
 
@@ -1304,11 +1541,13 @@ Track these as follow-up engineering tasks:
 | Is `POSTGRES_LAKEBASE_ENDPOINT` mandatory for OAuth? | **Yes** for app-driven token minting |
 | Is connection string alone enough? | **No** — need endpoint path + OAuth rotation |
 | Local dev default? | **`POSTGRES_BACKEND=local`** with Docker Postgres |
+| Databricks Apps vs Azure App Service / Container Apps? | See **[DATABRICKS_APPS_VS_AZURE_HOSTING.md](./DATABRICKS_APPS_VS_AZURE_HOSTING.md)** — prefer Apps for this private, Databricks-data-centric product |
 
 ---
 
 ## References
 
+- [Databricks Apps vs Azure hosting (cost & security)](./DATABRICKS_APPS_VS_AZURE_HOSTING.md)
 - [About authentication (Lakebase OAuth)](https://learn.microsoft.com/en-us/azure/databricks/oltp/projects/authentication)
 - [Connection strings (Lakebase)](https://docs.databricks.com/aws/en/oltp/projects/connection-strings)
 - [Private Link for Lakebase Autoscaling](https://learn.microsoft.com/en-us/azure/databricks/oltp/projects/private-link)

@@ -124,6 +124,7 @@
           <th>Job ID</th>
           <th class="jobs-col-name">Name</th>
           <th>Workload</th>
+          <th>Cluster type</th>
           <th>Avg CPU %</th>
           <th>Avg Mem %</th>
           <th>Runs</th>
@@ -139,10 +140,11 @@
             <span class="jobs-name-text" [title]="j.job_name || ''">{{ j.job_name || '–' }}</span>
           </td>
           <td>{{ j.job_type || '–' }}</td>
-          <td>{{ j.avg_worker_cpu_utilization_pct != null ? (j.avg_worker_cpu_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
-          <td>{{ j.avg_worker_memory_utilization_pct != null ? (j.avg_worker_memory_utilization_pct | number:'1.1-1') + '%' : '–' }}</td>
+          <td>{{ clusterTypeLabel(j) }}</td>
+          <td>{{ jobCpuPct(j) != null ? (jobCpuPct(j)! | number:'1.1-1') + '%' : '–' }}</td>
+          <td>{{ jobMemoryPct(j) != null ? (jobMemoryPct(j)! | number:'1.1-1') + '%' : '–' }}</td>
           <td>{{ j.total_runs ?? '–' }}</td>
-          <td class="small">{{ j.azure_worker_vm_size || '–' }}</td>
+          <td class="small">{{ jobNodeTypeDisplay(j) }}</td>
           <td class="small">{{ j.dbr_version || '–' }}</td>
           <td>
             <button

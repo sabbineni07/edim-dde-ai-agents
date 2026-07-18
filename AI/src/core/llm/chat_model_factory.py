@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from typing import Optional
+
 from langchain_core.language_models import BaseChatModel
 from langchain_openai import ChatOpenAI
 
-from shared.auth.azure_tokens import AZURE_FOUNDRY_AAD_SCOPE, get_azure_access_token
+from shared.auth.foundry_tokens import foundry_token_provider
 from shared.azure.endpoint_resolver import resolve_openai_v1_base_url
 from shared.config.llm_sampling import ChainKind, resolve_llm_sampling
 from shared.config.settings import Settings
@@ -15,14 +17,7 @@ logger = get_logger(__name__)
 
 
 def _token_provider_for_settings(cfg: Settings):
-    def token_provider() -> str:
-        token = (cfg.azure_openai_access_token or "").strip()
-        if not token:
-            token = get_azure_access_token(AZURE_FOUNDRY_AAD_SCOPE)
-            cfg.azure_openai_access_token = token
-        return token
-
-    return token_provider
+    return foundry_token_provider(cfg)
 
 
 def can_create_chat_model(cfg: Settings) -> bool:
@@ -57,3 +52,35 @@ def create_chat_model(cfg: Settings, *, chain: ChainKind = "default") -> BaseCha
         top_p=top_p,
     )
     return llm
+
+
+def resolve_chain_llm(
+    settings: Settings,
+    *,
+    chain: ChainKind = "default",
+    llm_provider=None,
+) -> BaseChatModel:
+    """Pick chat model: workspace/agent Foundry → platform Foundry → mock (dev only).
+
+    Order:
+    1. ``azure_openai_endpoint`` on effective agent/workspace settings
+    2. ``azure_openai_endpoint`` on platform settings
+    3. ``USE_MOCK_LLM=true`` → mock LLM
+    4. Else platform Foundry provider (raises when not configured)
+    """
+    from AI.src.core.platform import get_llm_provider, use_mock_llm
+    from shared.config.loader import get_platform_settings
+
+    if can_create_chat_model(settings):
+        return create_chat_model(settings, chain=chain)
+
+    platform = get_platform_settings()
+    if can_create_chat_model(platform):
+        return create_chat_model(platform, chain=chain)
+
+    if use_mock_llm():
+        provider = llm_provider or get_llm_provider()
+        return provider.get_llm(chain)
+
+    provider = llm_provider or get_llm_provider()
+    return provider.get_llm(chain)

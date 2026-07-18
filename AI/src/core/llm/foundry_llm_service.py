@@ -20,9 +20,9 @@ def _build_settings_cached_token_provider(cfg: Settings):
     def token_provider() -> str:
         token = (cfg.azure_openai_access_token or "").strip()
         if not token:
-            from shared.auth.azure_tokens import AZURE_FOUNDRY_AAD_SCOPE, get_azure_access_token
+            from shared.auth.foundry_tokens import get_foundry_access_token
 
-            token = get_azure_access_token(AZURE_FOUNDRY_AAD_SCOPE)
+            token = get_foundry_access_token(cfg)
             cfg.azure_openai_access_token = token
             logger.debug("foundry_llm_token_from_azure_identity", cached=True)
         return token

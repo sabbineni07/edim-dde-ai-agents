@@ -103,6 +103,9 @@
       <span *ngIf="selectedRun.dbr_version" class="ms-2 text-muted">
         · DBR {{ selectedRun.dbr_version }}
       </span>
+      <div *ngIf="selectedRunWorkerMetricsNote" class="text-muted mt-1">
+        {{ selectedRunWorkerMetricsNote }}
+      </div>
     </div>
     <div class="table-responsive job-runs-table-scroll" *ngIf="!loadingRuns && runs.length > 0">
       <table class="table table-sm table-hover mb-0">
@@ -153,10 +156,10 @@
             <td class="border-start">{{ run.avg_driver_cpu_utilization_pct != null ? (run.avg_driver_cpu_utilization_pct | number:'1.0-1') : '–' }}</td>
             <td>{{ run.avg_driver_memory_utilization_pct != null ? (run.avg_driver_memory_utilization_pct | number:'1.0-1') : '–' }}</td>
             <td class="small">{{ run.azure_driver_vm_size ?? '–' }}</td>
-            <td class="border-start">{{ run.avg_worker_cpu_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_worker_memory_utilization_pct | number:'1.0-1' }}</td>
-            <td>{{ run.avg_worker_nodes_consumed | number:'1.1-1' }}</td>
-            <td class="small">{{ run.azure_worker_vm_size ?? '–' }}</td>
+            <td class="border-start">{{ workerMetricNumber(run, 'avg_worker_cpu_utilization_pct') != null ? (workerMetricNumber(run, 'avg_worker_cpu_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
+            <td>{{ workerMetricNumber(run, 'avg_worker_memory_utilization_pct') != null ? (workerMetricNumber(run, 'avg_worker_memory_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
+            <td>{{ workerMetricNumber(run, 'avg_worker_nodes_consumed') != null ? (workerMetricNumber(run, 'avg_worker_nodes_consumed')! | number:'1.1-1') : 'N/A' }}</td>
+            <td class="small">{{ workerVmDisplay(run) }}</td>
           </tr>
         </tbody>
       </table>
@@ -205,7 +208,10 @@
 <!-- Metrics tab -->
 <div class="card mb-2 job-metrics-card" *ngIf="activeTab === 'metrics'">
   <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
-    <strong>Job metrics (date range aggregate)</strong>
+    <div class="d-flex flex-column">
+      <strong>Job metrics (date range aggregate)</strong>
+      <span class="small text-muted" *ngIf="aggregateWorkerMetricsNote">{{ aggregateWorkerMetricsNote }}</span>
+    </div>
     <span class="small text-muted" *ngIf="metricsSummaryLine">{{ metricsSummaryLine }}</span>
   </div>
   <div class="card-body p-0">
@@ -244,30 +250,31 @@
           <tr>
             <td class="metric-label">VM size</td>
             <td class="border-start">{{ metricText('azure_driver_vm_size') ?? '–' }}</td>
-            <td class="border-start">{{ metricText('azure_worker_vm_size') ?? '–' }}</td>
+            <td class="border-start">{{ workerVmDisplay(jobAggregateMetrics) }}</td>
           </tr>
           <tr>
             <td class="metric-label">Nodes</td>
             <td class="border-start">{{ metricNumber('driver_node_count') ?? '–' }}</td>
             <td class="border-start">
-              <span *ngIf="metricNumber('avg_worker_nodes_consumed') as avg">
+              <span *ngIf="hasWorkerMetrics(jobAggregateMetrics) && metricNumber('avg_worker_nodes_consumed') as avg">
                 {{ avg | number:'1.1-1' }} avg
               </span>
-              <span *ngIf="metricNumber('max_worker_nodes_provisioned') as max">
+              <span *ngIf="hasWorkerMetrics(jobAggregateMetrics) && metricNumber('max_worker_nodes_provisioned') as max">
                 <span *ngIf="metricNumber('avg_worker_nodes_consumed')"> · </span>{{ max }} max
               </span>
-              <span *ngIf="metricNumber('avg_worker_nodes_consumed') == null && metricNumber('max_worker_nodes_provisioned') == null">–</span>
+              <span *ngIf="!hasWorkerMetrics(jobAggregateMetrics)">N/A</span>
+              <span *ngIf="hasWorkerMetrics(jobAggregateMetrics) && metricNumber('avg_worker_nodes_consumed') == null && metricNumber('max_worker_nodes_provisioned') == null">–</span>
             </td>
           </tr>
           <tr>
             <td class="metric-label">Avg CPU %</td>
             <td class="border-start">{{ metricNumber('avg_driver_cpu_utilization_pct') != null ? (metricNumber('avg_driver_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-            <td class="border-start">{{ metricNumber('avg_worker_cpu_utilization_pct') != null ? (metricNumber('avg_worker_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+            <td class="border-start">{{ workerMetricNumber(jobAggregateMetrics, 'avg_worker_cpu_utilization_pct') != null ? (workerMetricNumber(jobAggregateMetrics, 'avg_worker_cpu_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
           </tr>
           <tr>
             <td class="metric-label">Avg memory %</td>
             <td class="border-start">{{ metricNumber('avg_driver_memory_utilization_pct') != null ? (metricNumber('avg_driver_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-            <td class="border-start">{{ metricNumber('avg_worker_memory_utilization_pct') != null ? (metricNumber('avg_worker_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+            <td class="border-start">{{ workerMetricNumber(jobAggregateMetrics, 'avg_worker_memory_utilization_pct') != null ? (workerMetricNumber(jobAggregateMetrics, 'avg_worker_memory_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
           </tr>
         </tbody>
       </table>
@@ -287,12 +294,12 @@
             <tr>
               <td class="metric-label">Peak CPU %</td>
               <td class="border-start">{{ metricNumber('peak_driver_cpu_utilization_pct') != null ? (metricNumber('peak_driver_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
-              <td class="border-start">{{ metricNumber('peak_worker_cpu_utilization_pct') != null ? (metricNumber('peak_worker_cpu_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+              <td class="border-start">{{ workerMetricNumber(jobAggregateMetrics, 'peak_worker_cpu_utilization_pct') != null ? (workerMetricNumber(jobAggregateMetrics, 'peak_worker_cpu_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
             </tr>
             <tr>
               <td class="metric-label">Peak memory %</td>
               <td class="border-start">–</td>
-              <td class="border-start">{{ metricNumber('peak_worker_memory_utilization_pct') != null ? (metricNumber('peak_worker_memory_utilization_pct')! | number:'1.0-1') : '–' }}</td>
+              <td class="border-start">{{ workerMetricNumber(jobAggregateMetrics, 'peak_worker_memory_utilization_pct') != null ? (workerMetricNumber(jobAggregateMetrics, 'peak_worker_memory_utilization_pct')! | number:'1.0-1') : 'N/A' }}</td>
             </tr>
           </tbody>
         </table>

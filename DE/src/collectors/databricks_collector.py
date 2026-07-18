@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 from databricks import sql
 
 from shared.config.settings import settings
+from shared.metrics.cluster_type import cluster_type_from_row
 from shared.models.job_cluster_metrics import JobClusterMetrics
 from shared.utils.logging import get_logger
 
@@ -339,12 +340,21 @@ class DatabricksCollector:
           CAST(job_id AS STRING) AS job_id,
           COALESCE(MAX(job_name), CAST(job_id AS STRING)) AS job_name,
           COALESCE(MAX(job_type)) AS job_type,
-          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
-          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
+          AVG(avg_worker_cpu_utilization_pct) AS avg_worker_cpu_utilization_pct,
+          AVG(avg_worker_memory_utilization_pct) AS avg_worker_memory_utilization_pct,
+          AVG(avg_driver_cpu_utilization_pct) AS avg_driver_cpu_utilization_pct,
+          AVG(avg_driver_memory_utilization_pct) AS avg_driver_memory_utilization_pct,
           CAST(COUNT(*) AS BIGINT) AS total_runs,
           COALESCE(AVG(job_run_duration_seconds), 0.0) AS avg_job_run_duration_seconds,
-          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,
+          MAX(azure_worker_vm_size) AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
+          CASE
+            WHEN MAX(azure_worker_vm_size) IS NULL
+             AND COALESCE(MAX(max_worker_nodes_provisioned), 1) <= 1
+            THEN 'single_node'
+            ELSE 'multi_node'
+          END AS cluster_type,
           CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
           MAX(dbr_version) AS dbr_version
         FROM {table}
@@ -362,10 +372,11 @@ class DatabricksCollector:
                     cursor.execute(query, params)
                     columns = [desc[0] for desc in cursor.description]
                     results = cursor.fetchall()
-                    jobs = [
-                        {"workspace_id": workspace_id, **row}
-                        for row in _rows_to_dicts(columns, results)
-                    ]
+                    jobs = []
+                    for row in _rows_to_dicts(columns, results):
+                        job = {"workspace_id": workspace_id, **row}
+                        job["cluster_type"] = cluster_type_from_row(job)
+                        jobs.append(job)
                     logger.info(
                         "listed_jobs_for_workspace_from_delta",
                         workspace_id=workspace_id,
@@ -406,14 +417,14 @@ class DatabricksCollector:
           COALESCE(AVG(avg_driver_cpu_utilization_pct), 0.0) AS avg_driver_cpu_utilization_pct,
           COALESCE(AVG(avg_driver_memory_utilization_pct), 0.0) AS avg_driver_memory_utilization_pct,
           COALESCE(MAX(peak_driver_cpu_utilization_pct), 0.0) AS peak_driver_cpu_utilization_pct,
-          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
-          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
-          COALESCE(AVG(avg_worker_nodes_consumed), 0.0) AS avg_worker_nodes_consumed,
-          COALESCE(MAX(total_worker_vcpus_provisioned), 0.0) AS total_worker_vcpus_provisioned,
-          COALESCE(MAX(total_worker_memory_gb_provisioned), 0.0) AS total_worker_memory_gb_provisioned,
-          COALESCE(MAX(peak_worker_cpu_utilization_pct), 0.0) AS peak_worker_cpu_utilization_pct,
-          COALESCE(MAX(peak_worker_memory_utilization_pct), 0.0) AS peak_worker_memory_utilization_pct,
-          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          AVG(avg_worker_cpu_utilization_pct) AS avg_worker_cpu_utilization_pct,
+          AVG(avg_worker_memory_utilization_pct) AS avg_worker_memory_utilization_pct,
+          AVG(avg_worker_nodes_consumed) AS avg_worker_nodes_consumed,
+          MAX(total_worker_vcpus_provisioned) AS total_worker_vcpus_provisioned,
+          MAX(total_worker_memory_gb_provisioned) AS total_worker_memory_gb_provisioned,
+          MAX(peak_worker_cpu_utilization_pct) AS peak_worker_cpu_utilization_pct,
+          MAX(peak_worker_memory_utilization_pct) AS peak_worker_memory_utilization_pct,
+          MAX(azure_worker_vm_size) AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
           MAX(job_type) AS job_type,
           MAX(dbr_version) AS dbr_version
@@ -465,17 +476,17 @@ class DatabricksCollector:
           COALESCE(MAX(peak_driver_cpu_utilization_pct), 0.0) AS peak_driver_cpu_utilization_pct,
           COALESCE(AVG(driver_vcpus_consumed), 0.0) AS avg_driver_vcpus_consumed,
           COALESCE(AVG(driver_memory_gb_consumed), 0.0) AS avg_driver_memory_gb_consumed,
-          COALESCE(AVG(avg_worker_cpu_utilization_pct), 0.0) AS avg_worker_cpu_utilization_pct,
-          COALESCE(AVG(avg_worker_memory_utilization_pct), 0.0) AS avg_worker_memory_utilization_pct,
-          COALESCE(MAX(peak_worker_cpu_utilization_pct), 0.0) AS peak_worker_cpu_utilization_pct,
-          COALESCE(MAX(peak_worker_memory_utilization_pct), 0.0) AS peak_worker_memory_utilization_pct,
-          COALESCE(AVG(avg_worker_nodes_consumed), 0.0) AS avg_worker_nodes_consumed,
-          COALESCE(percentile_approx(avg_worker_nodes_consumed, 0.95), 0.0) AS p95_worker_nodes_consumed,
-          COALESCE(AVG(total_worker_vcpus_provisioned), 0.0) AS avg_total_worker_vcpus_provisioned,
-          COALESCE(AVG(total_worker_memory_gb_provisioned), 0.0) AS avg_total_worker_memory_gb_provisioned,
-          COALESCE(percentile_approx(p99_worker_nodes_consumed, 0.99), 0.0) AS p99_worker_nodes_consumed,
+          AVG(avg_worker_cpu_utilization_pct) AS avg_worker_cpu_utilization_pct,
+          AVG(avg_worker_memory_utilization_pct) AS avg_worker_memory_utilization_pct,
+          MAX(peak_worker_cpu_utilization_pct) AS peak_worker_cpu_utilization_pct,
+          MAX(peak_worker_memory_utilization_pct) AS peak_worker_memory_utilization_pct,
+          AVG(avg_worker_nodes_consumed) AS avg_worker_nodes_consumed,
+          percentile_approx(avg_worker_nodes_consumed, 0.95) AS p95_worker_nodes_consumed,
+          AVG(total_worker_vcpus_provisioned) AS avg_total_worker_vcpus_provisioned,
+          AVG(total_worker_memory_gb_provisioned) AS avg_total_worker_memory_gb_provisioned,
+          percentile_approx(p99_worker_nodes_consumed, 0.99) AS p99_worker_nodes_consumed,
           COUNT(*) AS total_runs,
-          COALESCE(MAX(azure_worker_vm_size), 'Standard_E8s_v3') AS azure_worker_vm_size,
+          MAX(azure_worker_vm_size) AS azure_worker_vm_size,
           CAST(COALESCE(MAX(max_worker_nodes_provisioned), 1) AS BIGINT) AS max_worker_nodes_provisioned,
           CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
           MAX(job_name) AS job_name,

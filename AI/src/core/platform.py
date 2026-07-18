@@ -1,5 +1,6 @@
 """Platform singletons shared by all agents (LLM, search, RAG)."""
 
+import os
 from typing import Any, Optional
 
 from AI.src.core.llm.azure_search_service import AzureSearchService, create_search_service
@@ -19,13 +20,16 @@ _rag_context_provider: Optional[Any] = None
 _cost_logger: Optional[ObservabilityService] = None
 
 
+def use_mock_llm() -> bool:
+    """True when USE_MOCK_LLM is enabled (local/dev without Azure OpenAI)."""
+    return os.environ.get("USE_MOCK_LLM", "").lower() in ("true", "1", "yes")
+
+
 def get_llm_provider():
     """Azure AI Foundry or mock when USE_MOCK_LLM=true."""
     global _llm_provider
     if _llm_provider is None:
-        import os
-
-        if os.environ.get("USE_MOCK_LLM", "").lower() in ("true", "1", "yes"):
+        if use_mock_llm():
             _llm_provider = MockLLMService()
             logger.info("using_mock_llm_provider")
         else:

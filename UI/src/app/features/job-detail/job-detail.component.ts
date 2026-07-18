@@ -563,6 +563,62 @@ export class JobDetailComponent implements OnInit {
     return null;
   }
 
+  private sourceValue(source: JobRunSummary | Record<string, unknown> | null, key: string): unknown {
+    if (!source) return null;
+    return (source as Record<string, unknown>)[key];
+  }
+
+  private sourceText(source: JobRunSummary | Record<string, unknown> | null, key: string): string | null {
+    const value = this.sourceValue(source, key);
+    if (typeof value !== 'string') return null;
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+
+  private sourceNumber(source: JobRunSummary | Record<string, unknown> | null, key: string): number | null {
+    const value = this.sourceValue(source, key);
+    return typeof value === 'number' && !Number.isNaN(value) ? value : null;
+  }
+
+  hasWorkerMetrics(source: JobRunSummary | Record<string, unknown> | null): boolean {
+    return (
+      this.sourceText(source, 'azure_worker_vm_size') != null ||
+      this.sourceNumber(source, 'avg_worker_cpu_utilization_pct') != null ||
+      this.sourceNumber(source, 'avg_worker_memory_utilization_pct') != null ||
+      this.sourceNumber(source, 'avg_worker_nodes_consumed') != null ||
+      this.sourceNumber(source, 'peak_worker_cpu_utilization_pct') != null ||
+      this.sourceNumber(source, 'peak_worker_memory_utilization_pct') != null
+    );
+  }
+
+  workerVmDisplay(source: JobRunSummary | Record<string, unknown> | null): string {
+    const workerVm = this.sourceText(source, 'azure_worker_vm_size');
+    if (workerVm) return workerVm;
+    const driverVm = this.sourceText(source, 'azure_driver_vm_size');
+    return driverVm ? `N/A (driver: ${driverVm})` : 'N/A';
+  }
+
+  workerMetricNumber(source: JobRunSummary | Record<string, unknown> | null, key: string): number | null {
+    if (!this.hasWorkerMetrics(source)) return null;
+    return this.sourceNumber(source, key);
+  }
+
+  private workerMetricsNoteForSource(source: JobRunSummary | Record<string, unknown> | null): string | null {
+    if (this.hasWorkerMetrics(source)) return null;
+    const driverVm = this.sourceText(source, 'azure_driver_vm_size');
+    return driverVm
+      ? `Single-node or driver-only cluster: worker metrics are unavailable, showing driver details (${driverVm}).`
+      : 'Worker metrics are unavailable for this selection.';
+  }
+
+  get selectedRunWorkerMetricsNote(): string | null {
+    return this.workerMetricsNoteForSource(this.selectedRun);
+  }
+
+  get aggregateWorkerMetricsNote(): string | null {
+    return this.workerMetricsNoteForSource(this.jobAggregateMetrics);
+  }
+
   metricNumber(key: string): number | null {
     const v = this.jobAggregateMetrics?.[key];
     return typeof v === 'number' && !Number.isNaN(v) ? v : null;
