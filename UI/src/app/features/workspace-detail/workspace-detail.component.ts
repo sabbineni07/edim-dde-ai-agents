@@ -483,7 +483,9 @@ export class WorkspaceDetailComponent implements OnInit {
 
   bindingSummary(wa: WorkspaceAgent): string {
     const roleLabels: Record<string, string> = {
-      metrics: 'Job metrics',
+      metrics: 'Job cluster metrics',
+      spark_logs: 'Spark logs',
+      spark_metrics: 'Spark metrics',
       llm: 'Language model',
       rag: 'Knowledge search',
     };

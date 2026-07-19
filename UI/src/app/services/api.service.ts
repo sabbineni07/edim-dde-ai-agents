@@ -90,6 +90,7 @@ export interface SchemaProfileMeta {
   label: string;
   description: string;
   source_types: string[];
+  is_browse_default?: boolean;
 }
 
 export interface JobSummary {

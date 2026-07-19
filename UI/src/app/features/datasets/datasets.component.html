@@ -15,6 +15,11 @@
   </div>
 </app-page-header>
 
+<p class="small text-muted px-1 mb-2" *ngIf="environmentId">
+  <strong>Browse inventory</strong> (<code>job_inventory</code>) is the environment default for Workspaces / Jobs / Runs.
+  Agent evidence datasets (<code>job_cluster_metrics</code>, <code>spark_logs</code>, <code>spark_metrics</code>) are bound per agent install.
+</p>
+
 <app-error-alert [message]="error" variant="warning" (dismiss)="error = ''"></app-error-alert>
 
 <app-loading-card *ngIf="loading" variant="skeleton" [skeletonRows]="4"></app-loading-card>
@@ -38,8 +43,22 @@
         <td>{{ sourceTypeLabel(d.source_type) }}</td>
         <td class="small"><code>{{ datasetRef(d) }}</code></td>
         <td>
-          <app-status-badge *ngIf="d.is_default" label="Default" variant="success"></app-status-badge>
-          <button *ngIf="isAdmin && !d.is_default" class="btn btn-link btn-sm p-0" type="button" (click)="setDefault(d)">Set default</button>
+          <app-status-badge *ngIf="d.is_default" label="Browse default" variant="success"></app-status-badge>
+          <button
+            *ngIf="isAdmin && !d.is_default && isBrowseInventoryProfile(d.schema_profile)"
+            class="btn btn-link btn-sm p-0"
+            type="button"
+            (click)="setDefault(d)"
+          >
+            Set browse default
+          </button>
+          <span
+            *ngIf="isAdmin && !d.is_default && !isBrowseInventoryProfile(d.schema_profile)"
+            class="small text-muted"
+            title="Only job_inventory datasets can be the browse default"
+          >
+            —
+          </span>
         </td>
         <td class="text-end text-nowrap">
           <button *ngIf="isAdmin" class="btn btn-outline-secondary btn-sm me-1" type="button" (click)="startEdit(d)">Edit</button>
@@ -98,6 +117,9 @@
           >
             <option *ngFor="let p of schemaProfiles" [value]="p.schema_profile">{{ p.label }}</option>
           </select>
+          <p class="small text-muted mt-1 mb-0" *ngIf="profileDescription(formSchemaProfile)">
+            {{ profileDescription(formSchemaProfile) }}
+          </p>
         </div>
         <div class="col-md-6" *ngIf="editingId">
           <label class="form-label">Schema profile</label>
@@ -134,8 +156,19 @@
       </div>
 
       <div class="form-check" *ngIf="!editingId">
-        <input class="form-check-input" type="checkbox" id="setDefaultDataset" [(ngModel)]="formSetDefault" />
-        <label class="form-check-label small" for="setDefaultDataset">Set as default metrics dataset</label>
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="setDefaultDataset"
+          [(ngModel)]="formSetDefault"
+          [disabled]="!canSetAsBrowseDefault"
+        />
+        <label class="form-check-label small" for="setDefaultDataset">
+          Set as default browse (job inventory) dataset
+        </label>
+        <p class="small text-muted mb-0 mt-1" *ngIf="!canSetAsBrowseDefault">
+          Only the Job inventory profile can be the environment browse default.
+        </p>
       </div>
     </div>
     <div class="app-modal-footer">

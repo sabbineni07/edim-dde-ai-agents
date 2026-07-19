@@ -45,7 +45,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
   formName = '';
   formDescription = '';
   formSourceType: 'databricks_delta' | 'local_csv' = 'databricks_delta';
-  formSchemaProfile = 'job_cluster_metrics';
+  formSchemaProfile = 'job_inventory';
   formTableFqn = '';
   formLocalPath = '';
   formSetDefault = false;
@@ -70,6 +70,18 @@ export class DatasetsComponent implements OnInit, OnDestroy {
 
   get formTitle(): string {
     return this.editingId ? 'Edit dataset' : 'New dataset';
+  }
+
+  get canSetAsBrowseDefault(): boolean {
+    return this.formSchemaProfile === 'job_inventory';
+  }
+
+  isBrowseInventoryProfile(profile: string): boolean {
+    return profile === 'job_inventory';
+  }
+
+  profileDescription(profile: string): string {
+    return this.schemaProfiles.find((p) => p.schema_profile === profile)?.description || '';
   }
 
   ngOnInit(): void {
@@ -149,7 +161,7 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     this.editingId = null;
     this.formName = '';
     this.formDescription = '';
-    this.formSchemaProfile = 'job_cluster_metrics';
+    this.formSchemaProfile = 'job_inventory';
     this.formSourceType = this.environmentId === 'local' ? 'local_csv' : 'databricks_delta';
     this.formTableFqn = '';
     this.formLocalPath = '';
@@ -189,6 +201,9 @@ export class DatasetsComponent implements OnInit, OnDestroy {
     const allowed = this.allowedSourceTypes();
     if (!allowed.includes(this.formSourceType)) {
       this.formSourceType = allowed[0] as 'databricks_delta' | 'local_csv';
+    }
+    if (!this.canSetAsBrowseDefault) {
+      this.formSetDefault = false;
     }
   }
 
@@ -269,9 +284,15 @@ export class DatasetsComponent implements OnInit, OnDestroy {
 
   setDefault(d: EnvironmentDataset): void {
     if (!this.isAdmin) return;
+    if (!this.isBrowseInventoryProfile(d.schema_profile)) {
+      this.error =
+        'Only a Job inventory dataset can be the environment browse default. ' +
+        'Agent evidence datasets are bound on workspace agent installs.';
+      return;
+    }
     this.api.setDefaultEnvironmentDataset(this.environmentId, d.id).subscribe({
       next: () => {
-        this.toast.success(`"${d.name}" set as default.`);
+        this.toast.success(`"${d.name}" set as browse default.`);
         this.loadDatasets();
         this.environmentSelection.loadEnvironments().subscribe();
       },

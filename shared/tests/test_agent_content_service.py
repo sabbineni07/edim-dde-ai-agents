@@ -22,8 +22,10 @@ def test_seed_agent_content_in_memory():
     bundle = get_agent_content(DBX_CLUSTER_TUNING_AGENT_ID)
     assert bundle is not None
     assert bundle.agent_id == DBX_CLUSTER_TUNING_AGENT_ID
-    assert len(bundle.prompts) == len(AGENT_PROMPTS)
-    assert len(bundle.skills) == len(AGENT_SKILLS)
+    tuning_prompts = [p for p in AGENT_PROMPTS if p["agent_id"] == DBX_CLUSTER_TUNING_AGENT_ID]
+    tuning_skills = [s for s in AGENT_SKILLS if s["agent_id"] == DBX_CLUSTER_TUNING_AGENT_ID]
+    assert len(bundle.prompts) == len(tuning_prompts)
+    assert len(bundle.skills) == len(tuning_skills)
     assert any(p["chain_name"] == "sizing" and p["role"] == "system" for p in bundle.prompts)
     assert any(s["skill_key"] == "vm_family_rules" for s in bundle.skills)
 

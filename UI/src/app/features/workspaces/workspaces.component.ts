@@ -183,14 +183,18 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
   }
 
   private applyDatasets(list: EnvironmentDataset[], preferredId: string | null): void {
-    this.datasets = list;
-    this.showDatasetPicker = list.length > 1;
+    this.datasets = this.datasetCache.browseDatasets(list);
+    this.showDatasetPicker = this.datasets.length > 1;
     const ds = this.datasetCache.pickDataset(list, preferredId);
     if (ds) {
       this.selectedDatasetId = ds.id;
       this.metricsDatasetName = ds.name;
       this.metricsDatasetRef = ds.table_ref || ds.table_fqn || ds.local_path || '';
       this.environmentSelection.setSelectedDataset(ds.id);
+    } else {
+      this.selectedDatasetId = '';
+      this.metricsDatasetName = '';
+      this.metricsDatasetRef = '';
     }
   }
 

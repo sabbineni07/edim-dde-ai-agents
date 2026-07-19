@@ -9,7 +9,10 @@ from shared.services.environment_connection_service import (
     EnvironmentConnectionService,
     reset_environment_connection_store_for_tests,
 )
-from shared.services.environment_dataset_service import reset_environment_dataset_store_for_tests
+from shared.services.environment_dataset_service import (
+    EnvironmentDatasetService,
+    reset_environment_dataset_store_for_tests,
+)
 from shared.services.environment_service import resolve_metrics_table_fqn
 from shared.services.platform_environment_service import (
     list_environments,
@@ -24,9 +27,19 @@ def setup_function():
     list_environments()
 
 
-def test_resolve_metrics_table_from_environment():
-    table = resolve_metrics_table_fqn("dim_dev")
+def test_resolve_metrics_table_from_seeded_evidence_dataset():
+    svc = EnvironmentDatasetService()
+    rows = svc.list_datasets(environment_id="dim_dev")
+    metrics = next(r for r in rows if r.schema_profile == "job_cluster_metrics")
+    table = resolve_metrics_table_fqn("dim_dev", dataset_id=str(metrics.id), for_browse=False)
     assert table == "dim_dev.dde_metrics.job_cluster_metrics"
+
+
+def test_resolve_browse_table_requires_inventory_default():
+    import pytest
+
+    with pytest.raises(ValueError, match="job_inventory"):
+        resolve_metrics_table_fqn("dim_dev", for_browse=True)
 
 
 def test_resolve_metrics_table_legacy_connection_fallback():

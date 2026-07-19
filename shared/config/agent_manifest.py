@@ -8,16 +8,19 @@ RoleSpec = Union[List[str], Dict[str, Any]]
 
 ROLE_UI: Dict[str, Dict[str, str]] = {
     "metrics": {
-        "label": "Job metrics dataset",
-        "help": "Required. Dataset (Delta table or local CSV) with job run metrics for this agent.",
+        "label": "Job cluster metrics dataset",
+        "help": (
+            "Required. Utilization metrics (job_cluster_metrics profile) for cluster sizing. "
+            "Not the environment browse inventory."
+        ),
     },
     "spark_logs": {
         "label": "Spark logs dataset",
-        "help": "Required. Delta table (or local CSV/JSON) with spark application logs.",
+        "help": "Required. Delta table (or local CSV/JSON) with spark application logs (RCA evidence).",
     },
     "spark_metrics": {
         "label": "Spark metrics dataset",
-        "help": "Required. Delta table (or local CSV/JSON) with spark job/SQL/stage telemetry.",
+        "help": "Required. Delta table (or local CSV/JSON) with spark job/SQL/stage telemetry (RCA evidence).",
     },
     "llm": {
         "label": "Language model",

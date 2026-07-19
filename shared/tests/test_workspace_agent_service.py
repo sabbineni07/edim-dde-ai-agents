@@ -66,7 +66,7 @@ def test_resolve_settings_uses_dataset_table_and_env_wh():
         source_type="databricks_delta",
         schema_profile="job_cluster_metrics",
         table_fqn="dim_dev.dde_metrics.job_cluster_metrics",
-        set_default=True,
+        set_default=False,
     )
 
     wa = wa_svc.create_agent(

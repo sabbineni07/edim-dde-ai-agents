@@ -271,6 +271,10 @@ class PlatformEnvironmentService:
                     session.close()
 
     def _seed_default_datasets(self) -> None:
+        """Seed agent-evidence datasets when missing; do not set browse default.
+
+        Browse default must be a ``job_inventory`` dataset set explicitly in the UI.
+        """
         from shared.services.environment_dataset_service import (
             seed_default_datasets_for_environment,
         )
@@ -279,35 +283,12 @@ class PlatformEnvironmentService:
             source = item.get("source_type")
             if source not in ("databricks_uc", "local_csv"):
                 continue
-            dataset_id = seed_default_datasets_for_environment(
+            seed_default_datasets_for_environment(
                 item["id"],
                 display_name=item["display_name"],
                 source_type=source,
                 seed_item=item,
             )
-            if dataset_id and not _db_enabled():
-                row = _MEM.get(item["id"])
-                if row:
-                    row["default_dataset_id"] = str(dataset_id)
-            elif dataset_id and _db_enabled():
-                from shared.database.connection import get_database_session
-                from shared.database.models import PlatformEnvironmentRow
-
-                session = get_database_session()
-                try:
-                    env_row = (
-                        session.query(PlatformEnvironmentRow)
-                        .filter(PlatformEnvironmentRow.id == item["id"])
-                        .first()
-                    )
-                    if env_row and not env_row.default_dataset_id:
-                        env_row.default_dataset_id = dataset_id
-                        session.commit()
-                except Exception:
-                    session.rollback()
-                    raise
-                finally:
-                    session.close()
 
     def list_environments(self, *, include_disabled: bool = False) -> List[PlatformEnvironment]:
         self.seed_if_empty()

@@ -4,13 +4,13 @@
   [subtitle]="environmentName ? 'Browse Databricks workspaces in ' + environmentName : 'Select an environment from the header to browse workspaces.'"
 >
   <div subtitle-extra *ngIf="environmentName && metricsDatasetName" class="page-subtitle">
-    Dataset: <strong>{{ metricsDatasetName }}</strong>
+    Browse inventory: <strong>{{ metricsDatasetName }}</strong>
     <span *ngIf="metricsDatasetRef"> (<code>{{ metricsDatasetRef }}</code>)</span>
     <a routerLink="/app/datasets" class="ms-1">Manage</a>
   </div>
   <div actions class="page-actions">
     <div *ngIf="showDatasetPicker" class="d-flex align-items-center gap-2">
-      <label class="form-label small mb-0">Dataset</label>
+      <label class="form-label small mb-0">Inventory</label>
       <select
         class="form-select form-select-sm"
         style="min-width: 10rem;"
@@ -79,7 +79,7 @@
     <app-empty-state
       icon="building"
       title="No workspaces found"
-      description="Configure a Databricks connection and metrics dataset, then refresh."
+      description="Configure a Databricks connection and a job inventory dataset (schema profile job_inventory), then refresh."
       actionLabel="Go to Connections"
       actionLink="/app/connections"
     ></app-empty-state>

@@ -94,13 +94,20 @@ def resolve_metrics_source(
     *,
     connection_id: Optional[str] = None,
     dataset_id: Optional[str] = None,
+    for_browse: bool = True,
 ) -> tuple[Any, MetricsSourceContext]:
-    """Build collector and resolved dataset/connection metadata."""
+    """Build collector and resolved dataset/connection metadata.
+
+    ``for_browse=True`` (default) requires a ``job_inventory`` dataset for Workspaces/Jobs/Runs.
+    Pass ``for_browse=False`` when resolving agent evidence (e.g. job_cluster_metrics for tuning).
+    """
     env = get_environment(environment_id)
     if not env:
         raise ValueError(f"Unknown environment: {environment_id}")
 
-    resolved_dataset_uuid = resolve_metrics_dataset_id(environment_id, dataset_id)
+    resolved_dataset_uuid = resolve_metrics_dataset_id(
+        environment_id, dataset_id, for_browse=for_browse
+    )
     resolved_dataset_id = str(resolved_dataset_uuid) if resolved_dataset_uuid else None
     ds_rec = get_environment_dataset(resolved_dataset_uuid) if resolved_dataset_uuid else None
     ds_name = ds_rec.name if ds_rec else None
@@ -126,6 +133,7 @@ def resolve_metrics_source(
             environment_id=environment_id,
             dataset_id=resolved_dataset_id,
             csv_path=str(csv_path),
+            for_browse=for_browse,
         )
         ctx = MetricsSourceContext(
             environment_id=environment_id,
@@ -148,6 +156,7 @@ def resolve_metrics_source(
                     environment_id,
                     conn_config,
                     dataset_id=resolved_dataset_id,
+                    for_browse=for_browse,
                 )
                 return _collector_from_databricks_config(
                     conn_config,
@@ -163,6 +172,7 @@ def resolve_metrics_source(
     table = resolve_metrics_table_fqn(
         environment_id,
         dataset_id=resolved_dataset_id,
+        for_browse=for_browse,
     )
     if hostname and http_path and table:
         return _collector_from_databricks_config(
@@ -179,7 +189,8 @@ def resolve_metrics_source(
 
     raise ValueError(
         f"Databricks is not configured for environment '{env.display_name}'. "
-        "Add a default metrics connection in Connections and a dataset in Datasets."
+        "Add a default metrics connection in Connections and a job inventory "
+        "dataset (schema profile job_inventory) in Datasets."
     )
 
 
@@ -189,12 +200,14 @@ def get_collector(
     *,
     connection_id: Optional[str] = None,
     dataset_id: Optional[str] = None,
+    for_browse: bool = True,
 ):
-    """Build a collector for workspace/job browse APIs (job cluster metrics)."""
+    """Build a collector for workspace/job browse APIs (job inventory by default)."""
     collector, _ctx = resolve_metrics_source(
         environment_id,
         user_id,
         connection_id=connection_id,
         dataset_id=dataset_id,
+        for_browse=for_browse,
     )
     return collector

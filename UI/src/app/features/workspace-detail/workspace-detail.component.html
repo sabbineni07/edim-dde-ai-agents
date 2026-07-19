@@ -23,8 +23,9 @@
       <li class="setup-checklist-item" [class.done]="hasMetricsDataset">
         <i class="bi setup-check-icon" [ngClass]="hasMetricsDataset ? 'bi-check-circle-fill' : 'bi-circle'"></i>
         <span class="setup-check-text">
-          <strong>Metrics dataset</strong> — configure in
+          <strong>Evidence datasets</strong> — configure typed datasets in
           <a routerLink="/app/datasets">Datasets</a>
+          (browse inventory is separate; agents bind evidence below)
         </span>
       </li>
       <li class="setup-checklist-item" [class.done]="hasLlmConnection">
@@ -80,7 +81,7 @@
     <div
       *ngIf="!loadingAgents && canAddAgent() && workspaceAgents.length === 0"
       class="p-3 text-muted small">
-      No agents installed yet. Add an agent and link a job metrics dataset and language model connection.
+      No agents installed yet. Add an agent and bind its required evidence datasets and language model connection.
     </div>
     <table class="table table-sm mb-0" *ngIf="!loadingAgents && workspaceAgents.length > 0">
       <thead>
@@ -165,7 +166,9 @@
       <p class="small fw-semibold mb-1">Link datasets and connections</p>
       <p class="small text-muted mb-2" *ngIf="wizardManifest.auth_note">{{ wizardManifest.auth_note }}</p>
       <p class="small text-muted mb-2">
-        Job metrics come from an environment dataset; SQL warehouse access uses the environment default metrics connection.
+        Bind agent evidence datasets here (typed by schema profile). Workspaces / Jobs / Runs browse uses the
+        environment <strong>job inventory</strong> default configured on the
+        <a routerLink="/app/datasets">Datasets</a> page. SQL warehouse access uses the environment default metrics connection.
       </p>
       <div class="row g-2" *ngFor="let role of wizardRoles()">
         <div class="col-md-6">
@@ -181,7 +184,7 @@
             [(ngModel)]="wizardBindings[role]">
             <option value="">{{ isRoleRequired(role) ? 'Select a dataset…' : 'None' }}</option>
             <option *ngFor="let d of datasetsForRole(role)" [value]="d.id">
-              {{ d.name }}{{ d.is_default ? ' (default)' : '' }} — {{ d.table_ref || d.table_fqn || d.local_path }}
+              {{ d.name }}{{ d.is_default ? ' (browse default)' : '' }} — {{ d.table_ref || d.table_fqn || d.local_path }}
             </option>
           </select>
           <select
@@ -194,7 +197,7 @@
             </option>
           </select>
           <p class="small text-danger mb-0" *ngIf="isDatasetRole(role) && isRoleRequired(role) && datasetsForRole(role).length === 0">
-            Add a job cluster metrics dataset on the
+            Add a {{ roleLabel(role).toLowerCase() }} on the
             <a routerLink="/app/datasets">Datasets</a> page first.
           </p>
           <p class="small text-danger mb-0" *ngIf="isConnectionRole(role) && isRoleRequired(role) && connectionsForTypes(allowedTypesForRole(role)).length === 0">
