@@ -80,6 +80,10 @@
     History
     <span class="badge bg-secondary ms-1" *ngIf="historyCount">{{ historyCount }}</span>
   </button>
+  <button type="button" class="nav-link" [class.active]="activeTab === 'rca'" (click)="selectTab('rca')">
+    Failures / RCA
+    <span class="badge bg-secondary ms-1" *ngIf="failedRuns.length">{{ failedRuns.length }}</span>
+  </button>
 </nav>
 
 <!-- Runs tab -->
@@ -579,6 +583,159 @@
               </div>
               <div class="mb-2" *ngIf="rec.pattern_analysis"><strong>Pattern analysis:</strong><pre class="mt-1 mb-0 bg-light p-2 rounded small">{{ rec.pattern_analysis }}</pre></div>
               <div *ngIf="rec.cost_usage_summary"><strong>Cost summary:</strong> {{ formatCost(rec.cost_usage_summary) }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Failures / RCA tab -->
+<div class="card mb-2" *ngIf="activeTab === 'rca'">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <strong>Spark failures &amp; RCA</strong>
+    <div class="d-flex flex-wrap align-items-center gap-2">
+      <label class="small mb-0" for="rcaWorkspaceAgent">RCA agent</label>
+      <select
+        id="rcaWorkspaceAgent"
+        class="form-select form-select-sm"
+        style="min-width: 12rem"
+        [(ngModel)]="selectedRcaWorkspaceAgentId"
+        (ngModelChange)="onRcaAgentChange()"
+      >
+        <option value="" disabled>Select install…</option>
+        <option *ngFor="let wa of rcaWorkspaceAgents" [ngValue]="wa.id">{{ wa.name }}</option>
+      </select>
+      <button
+        type="button"
+        class="btn btn-sm btn-primary"
+        [disabled]="runningRca || !selectedFailedRun || !selectedRcaWorkspaceAgentId"
+        (click)="runRca(false)"
+      >
+        {{ runningRca ? 'Running…' : 'Run RCA' }}
+      </button>
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary"
+        [disabled]="runningRca || !selectedFailedRun || !selectedRcaWorkspaceAgentId"
+        (click)="runRca(true)"
+      >
+        Re-run
+      </button>
+    </div>
+  </div>
+  <div class="card-body">
+    <div *ngIf="!rcaWorkspaceAgents.length" class="mb-3">
+      <app-empty-state
+        icon="robot"
+        title="No RCA agent installed"
+        description="Install the Spark Job Failure RCA Agent on this workspace and bind spark_logs + spark_metrics datasets."
+        [compact]="true"
+      ></app-empty-state>
+    </div>
+
+    <div class="row g-3">
+      <div class="col-lg-5">
+        <h6 class="mb-2">Failed runs</h6>
+        <app-loading-card *ngIf="loadingFailedRuns" variant="skeleton" [skeletonRows]="4"></app-loading-card>
+        <div *ngIf="!loadingFailedRuns && failedRuns.length === 0" class="small text-muted">
+          No Spark failure events in this date range.
+        </div>
+        <div class="list-group list-group-flush border rounded" *ngIf="!loadingFailedRuns && failedRuns.length > 0">
+          <button
+            type="button"
+            class="list-group-item list-group-item-action py-2"
+            *ngFor="let run of failedRuns"
+            [class.active]="failedRunKey(run) === selectedFailedRunKey"
+            (click)="selectedFailedRunKey = failedRunKey(run)"
+          >
+            <div class="d-flex justify-content-between gap-2">
+              <code class="small">{{ run.job_run_id }}</code>
+              <span class="small text-muted">{{ run.job_run_date || '–' }}</span>
+            </div>
+            <div class="small text-truncate" *ngIf="run.task_key">task: {{ run.task_key }}</div>
+            <div class="small text-truncate text-danger" *ngIf="run.failure_reason">{{ run.failure_reason }}</div>
+          </button>
+        </div>
+
+        <h6 class="mt-3 mb-2">RCA history</h6>
+        <app-loading-card *ngIf="loadingRcaHistory" variant="skeleton" [skeletonRows]="3"></app-loading-card>
+        <div *ngIf="!loadingRcaHistory && rcaHistory.length === 0" class="small text-muted">No stored RCAs yet.</div>
+        <div class="list-group list-group-flush border rounded" *ngIf="!loadingRcaHistory && rcaHistory.length > 0">
+          <button
+            type="button"
+            class="list-group-item list-group-item-action py-2"
+            *ngFor="let entry of rcaHistory"
+            (click)="viewRcaHistoryEntry(entry)"
+          >
+            <div class="d-flex justify-content-between gap-2">
+              <span class="badge bg-secondary">{{ entry.category || 'unknown' }}</span>
+              <span class="small text-muted">{{ entry.created_at || '' }}</span>
+            </div>
+            <div class="small text-truncate mt-1">{{ entry.summary || entry.job_run_id }}</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <h6 class="mb-2">Analysis</h6>
+        <div *ngIf="runningRca" class="small text-muted mb-2">Running RCA…</div>
+        <div *ngIf="!lastRcaResult && !runningRca" class="small text-muted">
+          Select a failed run and click Run RCA.
+        </div>
+        <div *ngIf="lastRcaResult as rca">
+          <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+            <span class="badge bg-danger">{{ rca.root_cause?.category || 'unknown' }}</span>
+            <span class="small text-muted" *ngIf="rca.root_cause?.confidence != null">
+              confidence {{ rca.root_cause?.confidence | number:'1.0-2' }}
+            </span>
+            <span class="badge bg-light text-dark border" *ngIf="rca.cached">cached</span>
+            <code class="small">{{ rca.job_run_id }}</code>
+          </div>
+          <p class="mb-3">{{ rca.root_cause?.summary }}</p>
+
+          <div class="mb-3" *ngIf="rca.recommended_actions?.length">
+            <strong class="d-block mb-1">Recommended actions</strong>
+            <ul class="mb-0">
+              <li *ngFor="let a of rca.recommended_actions">{{ a }}</li>
+            </ul>
+          </div>
+
+          <div class="mb-3" *ngIf="rca.contributing_factors?.length">
+            <strong class="d-block mb-1">Contributing factors</strong>
+            <ul class="mb-0">
+              <li *ngFor="let f of rca.contributing_factors">{{ f }}</li>
+            </ul>
+          </div>
+
+          <div class="mb-3" *ngIf="rca.timeline?.length">
+            <strong class="d-block mb-1">Timeline</strong>
+            <div class="table-responsive">
+              <table class="table table-sm mb-0">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Summary</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let t of rca.timeline">
+                    <td class="small text-nowrap">{{ t.ts || '–' }}</td>
+                    <td class="small">{{ t.event_type || '–' }}</td>
+                    <td class="small">{{ t.summary || '–' }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div *ngIf="rca.evidence?.length">
+            <strong class="d-block mb-1">Evidence</strong>
+            <div class="border rounded p-2 bg-light small" *ngFor="let e of rca.evidence" style="margin-bottom: 0.5rem">
+              <div class="text-muted">{{ e.source }} · <code>{{ e.ref }}</code></div>
+              <pre class="mb-0 mt-1" style="white-space: pre-wrap">{{ e.excerpt }}</pre>
             </div>
           </div>
         </div>

@@ -14,6 +14,44 @@ def _llm_connection(conn_id: str) -> dict:
     }
 
 
+def test_resolve_spark_rca_datasets():
+    logs_id = str(uuid4())
+    metrics_id = str(uuid4())
+    llm_id = str(uuid4())
+    flat, _ = resolve_workspace_agent_settings(
+        agent_id="spark_job_rca_agent",
+        bindings={
+            "spark_logs": logs_id,
+            "spark_metrics": metrics_id,
+            "llm": llm_id,
+        },
+        agent_settings={},
+        connections=[_llm_connection(llm_id)],
+        datasets_by_role={
+            "spark_logs": {
+                "id": logs_id,
+                "schema_profile": "spark_logs",
+                "source_type": "databricks_delta",
+                "table_fqn": "cat.schema.spark_logs",
+            },
+            "spark_metrics": {
+                "id": metrics_id,
+                "schema_profile": "spark_metrics",
+                "source_type": "databricks_delta",
+                "table_fqn": "cat.schema.spark_metrics",
+            },
+        },
+        metrics_wh_config={
+            "databricks_server_hostname": "adb.example.com",
+            "databricks_http_path": "/sql/1.0/warehouses/abc",
+        },
+    )
+    assert flat["databricks_spark_logs_table"] == "cat.schema.spark_logs"
+    assert flat["databricks_spark_metrics_table"] == "cat.schema.spark_metrics"
+    assert flat["databricks_server_hostname"] == "adb.example.com"
+    assert flat["azure_openai_deployment_name"] == "gpt-4o"
+
+
 def test_resolve_local_csv_metrics_dataset():
     metrics_id = str(uuid4())
     llm_id = str(uuid4())

@@ -1,0 +1,4 @@
+# Spark Job Failure RCA Agent — prompts/skills live in Postgres seed (agent_content_seed).
+# Runtime settings inherit platform defaults; bind spark_logs + spark_metrics datasets + LLM.
+
+agent_id: spark_job_rca_agent

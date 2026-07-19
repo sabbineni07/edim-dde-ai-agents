@@ -75,6 +75,8 @@ class Settings(BaseSettings):
     databricks_token: Optional[str] = None
     databricks_service_credential_name: Optional[str] = None
     databricks_job_cluster_metrics_table: Optional[str] = None
+    databricks_spark_logs_table: Optional[str] = None
+    databricks_spark_metrics_table: Optional[str] = None
 
     app_env: str = "development"
     log_level: str = "INFO"
@@ -84,6 +86,8 @@ class Settings(BaseSettings):
     )
     use_local_data: bool = True
     local_data_path: Optional[str] = None
+    local_spark_logs_path: Optional[str] = None
+    local_spark_metrics_path: Optional[str] = None
 
     vector_retrieval_backend: str = "none"
     faiss_storage_type: Optional[str] = None

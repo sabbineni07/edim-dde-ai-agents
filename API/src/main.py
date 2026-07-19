@@ -24,6 +24,7 @@ from API.src.routes import (
     health,
     jobs,
     platform,
+    rca,
     recommendations,
     workspace_agents,
     workspace_connections,
@@ -120,6 +121,7 @@ app.add_middleware(
 # Include routers
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
+app.include_router(rca.router, prefix="/api/rca", tags=["rca"])
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(cost_analytics.router, prefix="/api/cost", tags=["cost-analytics"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])

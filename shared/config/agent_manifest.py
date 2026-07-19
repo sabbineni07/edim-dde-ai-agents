@@ -11,6 +11,14 @@ ROLE_UI: Dict[str, Dict[str, str]] = {
         "label": "Job metrics dataset",
         "help": "Required. Dataset (Delta table or local CSV) with job run metrics for this agent.",
     },
+    "spark_logs": {
+        "label": "Spark logs dataset",
+        "help": "Required. Delta table (or local CSV/JSON) with spark application logs.",
+    },
+    "spark_metrics": {
+        "label": "Spark metrics dataset",
+        "help": "Required. Delta table (or local CSV/JSON) with spark job/SQL/stage telemetry.",
+    },
     "llm": {
         "label": "Language model",
         "help": "Required. Azure OpenAI endpoint for recommendations and explanations.",
@@ -30,6 +38,15 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
         },
         "required_roles": ["metrics", "llm"],
         "optional_roles": ["rag"],
+    },
+    "spark_job_rca_agent": {
+        "roles": {
+            "spark_logs": {"kind": "dataset", "schema_profile": "spark_logs"},
+            "spark_metrics": {"kind": "dataset", "schema_profile": "spark_metrics"},
+            "llm": {"kind": "connection", "connection_types": ["ai_foundry"]},
+        },
+        "required_roles": ["spark_logs", "spark_metrics", "llm"],
+        "optional_roles": [],
     },
 }
 

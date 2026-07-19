@@ -12,6 +12,16 @@ SCHEMA_PROFILES: Dict[str, Dict[str, Any]] = {
         "description": "Per-run Databricks cluster utilization (DDE metrics pipeline).",
         "source_types": ["databricks_delta", "local_csv"],
     },
+    "spark_logs": {
+        "label": "Spark logs",
+        "description": "Append-only operational Spark/application logs for pipeline runs.",
+        "source_types": ["databricks_delta", "local_csv"],
+    },
+    "spark_metrics": {
+        "label": "Spark metrics",
+        "description": "Append-only Spark Connect telemetry (SQL, jobs, stages, pipeline lifecycle).",
+        "source_types": ["databricks_delta", "local_csv"],
+    },
 }
 
 

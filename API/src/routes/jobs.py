@@ -512,3 +512,137 @@ def list_job_recommendations(
             session.close()
         except Exception:
             pass
+
+
+class FailedRunSummary(BaseModel):
+    job_id: Optional[str] = None
+    job_run_id: str
+    job_run_date: Optional[str] = None
+    task_key: Optional[str] = None
+    job_name: Optional[str] = None
+    pipeline: Optional[str] = None
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
+    last_event_ts: Optional[str] = None
+    failure_reason: Optional[str] = None
+    failure_event_count: Optional[int] = None
+
+
+class RcaHistoryEntry(BaseModel):
+    request_id: str
+    job_id: Optional[str] = None
+    job_run_id: str
+    task_key: Optional[str] = None
+    category: Optional[str] = None
+    confidence: Optional[float] = None
+    summary: Optional[str] = None
+    trigger_source: Optional[str] = None
+    created_at: Optional[str] = None
+    result: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _resolve_spark_telemetry_collector(
+    workspace_agent_id: Optional[str],
+):
+    """Resolve spark telemetry collector from a workspace RCA agent install."""
+    from uuid import UUID
+
+    if not workspace_agent_id:
+        raise HTTPException(
+            status_code=400,
+            detail="workspace_agent_id is required to resolve spark_metrics dataset bindings",
+        )
+    from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
+    from shared.config.loader import get_agent_settings
+    from shared.factories.spark_telemetry_factory import get_spark_telemetry_collector
+    from shared.services.workspace_agent_service import WorkspaceAgentService
+
+    try:
+        wa_uuid = UUID(workspace_agent_id)
+        agent_id, flat, secrets = WorkspaceAgentService().resolve_settings_for_agent(wa_uuid)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Workspace agent not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if agent_id != SPARK_JOB_RCA_AGENT_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=f"workspace_agent_id must be a {SPARK_JOB_RCA_AGENT_ID} install",
+        )
+    effective = get_agent_settings(agent_id, overrides=flat, secrets=secrets)
+    return get_spark_telemetry_collector(effective)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/jobs/{job_id}/failed-runs",
+    response_model=List[FailedRunSummary],
+)
+def list_failed_spark_runs(
+    workspace_id: str,
+    job_id: str,
+    workspace_agent_id: str = Query(
+        ...,
+        description="spark_job_rca_agent install id used to resolve spark_metrics table.",
+    ),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+) -> List[FailedRunSummary]:
+    """List Spark runs with failure anchors for the RCA UI."""
+    dr = _default_date_range(start_date, end_date)
+    collector = _resolve_spark_telemetry_collector(workspace_agent_id)
+    try:
+        rows = collector.list_failed_runs(
+            job_id=job_id,
+            start_date=dr["start_date"],
+            end_date=dr["end_date"],
+            limit=limit,
+        )
+        # Prefer rows matching workspace when present
+        filtered = [
+            r
+            for r in rows
+            if not r.get("workspace_id") or str(r.get("workspace_id")) == str(workspace_id)
+        ]
+        return [FailedRunSummary(**r) for r in (filtered or rows)]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "list_failed_spark_runs_error",
+            error=str(e),
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to load failed Spark runs") from e
+
+
+@router.get(
+    "/workspaces/{workspace_id}/jobs/{job_id}/rca",
+    response_model=List[RcaHistoryEntry],
+)
+def list_job_rca_history(
+    workspace_id: str,
+    job_id: str,
+    limit: int = Query(50, ge=1, le=200),
+) -> List[RcaHistoryEntry]:
+    """List stored RCA analyses for a job."""
+    from shared.services.rca_analysis_service import RcaAnalysisService
+
+    rows = RcaAnalysisService().list_for_job(job_id, workspace_id=workspace_id, limit=limit)
+    return [
+        RcaHistoryEntry(
+            request_id=str(r.request_id),
+            job_id=r.job_id,
+            job_run_id=r.job_run_id,
+            task_key=r.task_key,
+            category=r.category,
+            confidence=r.confidence,
+            summary=r.summary,
+            trigger_source=r.trigger_source,
+            created_at=r.created_at.isoformat() if r.created_at else None,
+            result=r.result or {},
+        )
+        for r in rows
+    ]

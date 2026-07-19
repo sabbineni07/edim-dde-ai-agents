@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
+from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID, SPARK_JOB_RCA_AGENT_ID
 
 # Placeholder used in sizing prompts; resolved at invoke time in Phase 2.
 AUTO_TERMINATION_PLACEHOLDER = "{auto_termination_minutes}"
@@ -156,11 +156,81 @@ Recommended node types are validated server-side against an allow-list ported fr
 If the LLM proposes a SKU outside the allow-list, guardrails map to the nearest allowed family/vCPU combination.
 Families supported: D, E, F, L with vCPUs 4–64."""
 
+RCA_SYSTEM_PROMPT = """## Role
+You are a Databricks Spark job failure root-cause analyst. Your output will be parsed as **one JSON object**; no other text is allowed.
+
+## Task
+Given a bounded **evidence_pack** for one failed job run (and optional task), produce a grounded RCA:
+1. Identify the most likely root cause category and a one-sentence summary.
+2. Cite specific evidence refs from the pack (do not invent events, SQL, or stack traces).
+3. List contributing factors and concrete next actions an engineer can take.
+
+## Categories (use exactly one)
+- sql_error
+- data_quality
+- resource
+- skew_shuffle
+- timeout_or_cancel
+- config
+- unknown
+
+## Rules
+- Prefer failure anchors (pipeline_end, spark_sql_query_error) and exception stacks over INFO noise.
+- If evidence is thin, lower confidence and use category unknown when appropriate.
+- recommended_actions must be actionable and tied to evidence (not generic advice).
+- Output only valid JSON.
+
+## Output schema (exact keys)
+- category: string (one of the categories above)
+- summary: string (one sentence)
+- confidence: number 0.0–1.0
+- failure_signature: string (short normalized error key, e.g. AnalysisException:table_not_found)
+- contributing_factors: array of strings
+- recommended_actions: array of strings
+- evidence_refs: array of strings (refs from evidence_pack.evidence[].ref)
+- timeline_highlights: array of objects with keys ts, event_type, summary"""
+
+RCA_HUMAN_PROMPT = """## Input: Evidence pack
+{evidence_pack}
+
+## Input: Rule-based classification hint
+{classification_hint}
+
+## Instruction
+Output one JSON object with keys: category, summary, confidence, failure_signature, contributing_factors, recommended_actions, evidence_refs, timeline_highlights. No markdown outside JSON."""
+
+SKILL_RCA_TAXONOMY = """## Spark failure taxonomy
+
+| Category | Typical signals |
+|----------|-----------------|
+| sql_error | spark_sql_query_error, AnalysisException, table/column not found |
+| data_quality | null/constraint/schema mismatch messages |
+| resource | OOM, disk full, executor lost, many failed tasks |
+| skew_shuffle | extreme shuffle read/write imbalance in stage metrics |
+| timeout_or_cancel | cancelled, timeout, killed language |
+| config | permission denied, missing secret, Connect/config errors |
+| unknown | insufficient or conflicting evidence |"""
+
+SKILL_RCA_EVIDENCE = """## Evidence pack usage
+
+- Prefer pipeline_end.failure_reason and spark_sql_query_error attributes.
+- Correlate logs via job_run_id, task_key, spark_app_id.
+- Cite evidence[].ref values only — never fabricate refs.
+- Keep timeline_highlights short (3–8 items around the failure)."""
+
 AGENT_DEFINITIONS: List[Dict[str, Any]] = [
     {
         "agent_id": DBX_CLUSTER_TUNING_AGENT_ID,
         "display_name": "DBX Cluster Tuning Agent",
         "description": "Per-run utilization right-sizing (Databricks cluster config).",
+        "version": 1,
+        "is_enabled": True,
+        "get_started_route": "/app/environments",
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "display_name": "Spark Job Failure RCA Agent",
+        "description": "Root-cause analysis for Spark job failures from logs and metrics.",
         "version": 1,
         "is_enabled": True,
         "get_started_route": "/app/environments",
@@ -203,6 +273,20 @@ AGENT_PROMPTS: List[Dict[str, Any]] = [
         "content": GUARDRAIL_RETRY_INSTRUCTION,
         "sort_order": 5,
     },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "chain_name": "rca",
+        "role": "system",
+        "content": RCA_SYSTEM_PROMPT,
+        "sort_order": 1,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "chain_name": "rca",
+        "role": "human",
+        "content": RCA_HUMAN_PROMPT,
+        "sort_order": 2,
+    },
 ]
 
 AGENT_SKILLS: List[Dict[str, Any]] = [
@@ -237,5 +321,21 @@ AGENT_SKILLS: List[Dict[str, Any]] = [
         "description": "Server-side validation against approved Azure node types.",
         "content": SKILL_SKU_ALLOWLIST,
         "sort_order": 4,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_taxonomy",
+        "title": "RCA failure taxonomy",
+        "description": "Categories and typical signals for Spark job failures.",
+        "content": SKILL_RCA_TAXONOMY,
+        "sort_order": 1,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_evidence",
+        "title": "RCA evidence usage",
+        "description": "How to cite evidence_pack refs without inventing data.",
+        "content": SKILL_RCA_EVIDENCE,
+        "sort_order": 2,
     },
 ]

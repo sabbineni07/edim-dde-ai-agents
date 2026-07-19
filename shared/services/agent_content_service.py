@@ -153,7 +153,7 @@ def _chain_usage_for_prompts(prompts: List[Dict[str, Any]]) -> Dict[str, Dict[st
 
 class AgentContentService:
     def seed_if_empty(self) -> int:
-        """Insert seed rows when agent_definitions is empty."""
+        """Insert seed rows when empty; also add any missing seeded agents."""
         global _SEED_CHECKED
         if not _db_enabled():
             _init_mem_from_seed()
@@ -167,15 +167,16 @@ class AgentContentService:
 
         session = get_database_session()
         try:
-            count = session.query(AgentDefinitionRow).count()
-            if count > 0:
-                _SEED_CHECKED = True
-                return 0
+            existing_ids = {r.agent_id for r in session.query(AgentDefinitionRow.agent_id).all()}
             now = _utcnow()
+            inserted = 0
             for item in AGENT_DEFINITIONS:
+                agent_id = item["agent_id"]
+                if agent_id in existing_ids:
+                    continue
                 session.add(
                     AgentDefinitionRow(
-                        agent_id=item["agent_id"],
+                        agent_id=agent_id,
                         display_name=item["display_name"],
                         description=item.get("description"),
                         version=item.get("version", 1),
@@ -185,41 +186,47 @@ class AgentContentService:
                         updated_at=now,
                     )
                 )
-            for item in AGENT_PROMPTS:
-                session.add(
-                    AgentPromptRow(
-                        agent_id=item["agent_id"],
-                        chain_name=item["chain_name"],
-                        role=item["role"],
-                        content=item["content"],
-                        version=1,
-                        is_active=True,
-                        sort_order=int(item.get("sort_order", 0)),
-                        updated_by=None,
-                        created_at=now,
-                        updated_at=now,
+                for p in AGENT_PROMPTS:
+                    if p["agent_id"] != agent_id:
+                        continue
+                    session.add(
+                        AgentPromptRow(
+                            agent_id=agent_id,
+                            chain_name=p["chain_name"],
+                            role=p["role"],
+                            content=p["content"],
+                            version=1,
+                            is_active=True,
+                            sort_order=int(p.get("sort_order", 0)),
+                            updated_by=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
                     )
-                )
-            for item in AGENT_SKILLS:
-                session.add(
-                    AgentSkillRow(
-                        agent_id=item["agent_id"],
-                        skill_key=item["skill_key"],
-                        title=item["title"],
-                        description=item.get("description"),
-                        content=item["content"],
-                        version=1,
-                        is_active=True,
-                        sort_order=int(item.get("sort_order", 0)),
-                        updated_by=None,
-                        created_at=now,
-                        updated_at=now,
+                for s in AGENT_SKILLS:
+                    if s["agent_id"] != agent_id:
+                        continue
+                    session.add(
+                        AgentSkillRow(
+                            agent_id=agent_id,
+                            skill_key=s["skill_key"],
+                            title=s["title"],
+                            description=s.get("description"),
+                            content=s["content"],
+                            version=1,
+                            is_active=True,
+                            sort_order=int(s.get("sort_order", 0)),
+                            updated_by=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
                     )
-                )
-            session.commit()
+                inserted += 1
+            if inserted:
+                session.commit()
+                logger.info("agent_content_seeded", agents=inserted)
             _SEED_CHECKED = True
-            logger.info("agent_content_seeded", agents=len(AGENT_DEFINITIONS))
-            return len(AGENT_DEFINITIONS)
+            return inserted
         except Exception:
             session.rollback()
             raise

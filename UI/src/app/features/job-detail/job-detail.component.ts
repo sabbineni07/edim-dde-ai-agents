@@ -6,10 +6,14 @@ import { FormsModule } from '@angular/forms';
 import { combineLatest } from 'rxjs';
 import {
   ApiService,
+  AnalyzeRcaRequest,
+  FailedSparkRunSummary,
   GenerateRecommendationRequest,
   GenerateRecommendationResponse,
   JobMetricsResponse,
   JobRunSummary,
+  RcaAnalysisResponse,
+  RcaHistoryEntry,
   RecommendationHistoryEntry,
   WorkspaceAgent,
 } from '../../services/api.service';
@@ -61,6 +65,15 @@ export class JobDetailComponent implements OnInit {
 
   workspaceAgents: WorkspaceAgent[] = [];
   selectedWorkspaceAgentId = '';
+  rcaWorkspaceAgents: WorkspaceAgent[] = [];
+  selectedRcaWorkspaceAgentId = '';
+  failedRuns: FailedSparkRunSummary[] = [];
+  selectedFailedRunKey = '';
+  rcaHistory: RcaHistoryEntry[] = [];
+  lastRcaResult: RcaAnalysisResponse | null = null;
+  loadingFailedRuns = false;
+  loadingRcaHistory = false;
+  runningRca = false;
 
   loadingMetrics = true;
   loadingRuns = true;
@@ -79,7 +92,7 @@ export class JobDetailComponent implements OnInit {
 
   uiHints: UiHints | null = null;
   loadError = '';
-  activeTab: 'runs' | 'metrics' | 'recommendations' | 'history' = 'runs';
+  activeTab: 'runs' | 'metrics' | 'recommendations' | 'history' | 'rca' = 'runs';
   showAdvancedMetrics = false;
 
   private readonly destroyRef = inject(DestroyRef);
@@ -140,8 +153,24 @@ export class JobDetailComponent implements OnInit {
     return this.recommendations.length;
   }
 
-  selectTab(tab: 'runs' | 'metrics' | 'recommendations' | 'history'): void {
+  get rcaHistoryCount(): number {
+    return this.rcaHistory.length;
+  }
+
+  get selectedFailedRun(): FailedSparkRunSummary | null {
+    return this.failedRuns.find((r) => this.failedRunKey(r) === this.selectedFailedRunKey) || null;
+  }
+
+  selectTab(tab: 'runs' | 'metrics' | 'recommendations' | 'history' | 'rca'): void {
     this.activeTab = tab;
+    if (tab === 'rca') {
+      this.loadFailedRuns();
+      this.loadRcaHistory();
+    }
+  }
+
+  failedRunKey(run: FailedSparkRunSummary): string {
+    return `${run.job_run_id}|${run.task_key || ''}`;
   }
 
   metricGaugeWidth(pct: number | null): number {
@@ -310,15 +339,125 @@ export class JobDetailComponent implements OnInit {
     const ws = this.workspaceId();
     this.api.getWorkspaceAgents(ws).subscribe({
       next: (list) => {
-        this.workspaceAgents = list;
-        if (list.length && !this.selectedWorkspaceAgentId) {
-          this.selectedWorkspaceAgentId = list[0].id;
+        this.workspaceAgents = list.filter(
+          (a) => !a.agent_id || a.agent_id === 'dbx_cluster_tuning_agent'
+        );
+        this.rcaWorkspaceAgents = list.filter((a) => a.agent_id === 'spark_job_rca_agent');
+        if (this.workspaceAgents.length && !this.selectedWorkspaceAgentId) {
+          this.selectedWorkspaceAgentId = this.workspaceAgents[0].id;
         } else if (
           this.selectedWorkspaceAgentId &&
-          !list.some((a) => a.id === this.selectedWorkspaceAgentId)
+          !this.workspaceAgents.some((a) => a.id === this.selectedWorkspaceAgentId)
         ) {
-          this.selectedWorkspaceAgentId = list[0]?.id || '';
+          this.selectedWorkspaceAgentId = this.workspaceAgents[0]?.id || '';
         }
+        if (this.rcaWorkspaceAgents.length && !this.selectedRcaWorkspaceAgentId) {
+          this.selectedRcaWorkspaceAgentId = this.rcaWorkspaceAgents[0].id;
+        } else if (
+          this.selectedRcaWorkspaceAgentId &&
+          !this.rcaWorkspaceAgents.some((a) => a.id === this.selectedRcaWorkspaceAgentId)
+        ) {
+          this.selectedRcaWorkspaceAgentId = this.rcaWorkspaceAgents[0]?.id || '';
+        }
+      },
+    });
+  }
+
+  loadFailedRuns(): void {
+    const ws = this.workspaceId();
+    const j = this.jobId();
+    if (!this.selectedRcaWorkspaceAgentId) {
+      this.failedRuns = [];
+      return;
+    }
+    this.loadingFailedRuns = true;
+    this.api
+      .getFailedSparkRuns(
+        ws,
+        j,
+        this.selectedRcaWorkspaceAgentId,
+        this.startDate || undefined,
+        this.endDate || undefined
+      )
+      .subscribe({
+        next: (rows) => {
+          this.failedRuns = rows;
+          this.loadingFailedRuns = false;
+          if (rows.length && !this.selectedFailedRunKey) {
+            this.selectedFailedRunKey = this.failedRunKey(rows[0]);
+          }
+        },
+        error: () => {
+          this.failedRuns = [];
+          this.loadingFailedRuns = false;
+        },
+      });
+  }
+
+  loadRcaHistory(): void {
+    const ws = this.workspaceId();
+    const j = this.jobId();
+    this.loadingRcaHistory = true;
+    this.api.getJobRcaHistory(ws, j).subscribe({
+      next: (rows) => {
+        this.rcaHistory = rows;
+        this.loadingRcaHistory = false;
+      },
+      error: () => {
+        this.rcaHistory = [];
+        this.loadingRcaHistory = false;
+      },
+    });
+  }
+
+  onRcaAgentChange(): void {
+    this.loadFailedRuns();
+  }
+
+  runRca(force = false): void {
+    const run = this.selectedFailedRun;
+    if (!run || !this.selectedRcaWorkspaceAgentId) {
+      this.error = 'Select a failed run and an RCA workspace agent first.';
+      return;
+    }
+    const body: AnalyzeRcaRequest = {
+      job_run_id: run.job_run_id,
+      workspace_agent_id: this.selectedRcaWorkspaceAgentId,
+      agent_id: 'spark_job_rca_agent',
+      job_id: run.job_id || this.jobId(),
+      job_run_date: run.job_run_date,
+      task_key: run.task_key,
+      workspace_id: this.workspaceId(),
+      trigger_source: 'ui',
+      force,
+    };
+    this.runningRca = true;
+    this.error = '';
+    this.api.analyzeRca(body).subscribe({
+      next: (result) => {
+        this.lastRcaResult = result;
+        this.runningRca = false;
+        this.loadRcaHistory();
+        this.toast.success(result.cached ? 'Loaded cached RCA' : 'RCA completed');
+      },
+      error: (err) => {
+        this.runningRca = false;
+        this.error = parseApiError(err, 'RCA analysis failed');
+      },
+    });
+  }
+
+  viewRcaHistoryEntry(entry: RcaHistoryEntry): void {
+    if (entry.result && entry.result.root_cause) {
+      this.lastRcaResult = entry.result as RcaAnalysisResponse;
+      return;
+    }
+    this.api.getRca(entry.request_id).subscribe({
+      next: (result) => {
+        this.lastRcaResult = result;
+      },
+      error: (err) => {
+        this.error = parseApiError(err, 'Failed to load RCA');
       },
     });
   }

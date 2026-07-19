@@ -14,6 +14,15 @@ def test_manifest_metrics_is_dataset_role():
     assert role_kind(manifest["roles"]["llm"]) == "connection"
 
 
+def test_spark_rca_manifest_requires_two_datasets():
+    manifest = manifest_for_api("spark_job_rca_agent")
+    assert manifest is not None
+    assert set(manifest["required_roles"]) == {"spark_logs", "spark_metrics", "llm"}
+    assert role_kind(manifest["roles"]["spark_logs"]) == "dataset"
+    assert manifest["roles"]["spark_logs"]["schema_profile"] == "spark_logs"
+    assert manifest["roles"]["spark_metrics"]["schema_profile"] == "spark_metrics"
+
+
 def test_validate_bindings_accepts_dataset_for_metrics_role():
     ds_id = "11111111-1111-1111-1111-111111111111"
     llm_id = "22222222-2222-2222-2222-222222222222"

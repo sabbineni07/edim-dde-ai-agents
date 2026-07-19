@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Literal, Tuple
 
-ChainKind = Literal["sizing", "explanation", "default"]
+ChainKind = Literal["sizing", "explanation", "rca", "default"]
 
 _DEFAULT_TEMPERATURE = 0.0
 _DEFAULT_TOP_P = 1.0

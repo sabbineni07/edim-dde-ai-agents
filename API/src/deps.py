@@ -3,6 +3,7 @@
 from typing import Any, Optional
 
 from AI.src.agents import dbx_cluster_tuning_agent  # noqa: F401 - register agents
+from AI.src.agents import spark_job_rca_agent  # noqa: F401 - register agents
 from AI.src.agents.dbx_cluster_tuning_agent import AGENT_ID
 from AI.src.core.platform import (
     get_cost_logger,
@@ -39,6 +40,13 @@ def get_recommendation_agent_dep():
     return get_recommendation_agent()
 
 
+def get_rca_agent(overrides: Optional[dict] = None):
+    """Spark job RCA agent."""
+    from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
+
+    return get_agent(SPARK_JOB_RCA_AGENT_ID, overrides=overrides)
+
+
 def reset_dependencies():
     """Reset cached singletons (tests)."""
     _agent_cache.clear()
@@ -54,6 +62,7 @@ __all__ = [
     "get_agent",
     "get_recommendation_agent",
     "get_recommendation_agent_dep",
+    "get_rca_agent",
     "get_registered_agent_ids",
     "reset_dependencies",
 ]

@@ -134,6 +134,68 @@ export interface JobRunSummary {
   dbr_version?: string;
 }
 
+export interface FailedSparkRunSummary {
+  job_id?: string;
+  job_run_id: string;
+  job_run_date?: string;
+  task_key?: string;
+  job_name?: string;
+  pipeline?: string;
+  workspace_id?: string;
+  workspace_name?: string;
+  last_event_ts?: string;
+  failure_reason?: string;
+  failure_event_count?: number;
+}
+
+export interface RcaRootCause {
+  category?: string;
+  summary?: string;
+  confidence?: number;
+  failure_signature?: string;
+}
+
+export interface RcaAnalysisResponse {
+  request_id: string;
+  job_id?: string;
+  job_run_id: string;
+  task_key?: string;
+  status?: string;
+  root_cause?: RcaRootCause;
+  timeline?: Array<{ ts?: string; event_type?: string; summary?: string }>;
+  evidence?: Array<{ source?: string; ref?: string; excerpt?: string }>;
+  contributing_factors?: string[];
+  recommended_actions?: string[];
+  raw_anchors?: Record<string, unknown>;
+  token_usage_analysis?: Record<string, unknown>;
+  cached?: boolean;
+}
+
+export interface RcaHistoryEntry {
+  request_id: string;
+  job_id?: string;
+  job_run_id: string;
+  task_key?: string;
+  category?: string;
+  confidence?: number;
+  summary?: string;
+  trigger_source?: string;
+  created_at?: string;
+  result?: RcaAnalysisResponse;
+}
+
+export interface AnalyzeRcaRequest {
+  job_run_id: string;
+  workspace_agent_id: string;
+  agent_id?: string;
+  job_id?: string;
+  job_run_date?: string;
+  task_key?: string;
+  workspace_id?: string;
+  trigger_source?: string;
+  force?: boolean;
+}
+
 export interface JobMetricsResponse {
   workspace_id: string;
   job_id: string;
@@ -1031,6 +1093,48 @@ export class ApiService {
       `${API_BASE}/recommendations/generate`,
       body
     );
+  }
+
+  getFailedSparkRuns(
+    workspaceId: string,
+    jobId: string,
+    workspaceAgentId: string,
+    start_date?: string,
+    end_date?: string
+  ): Observable<FailedSparkRunSummary[]> {
+    let params = new HttpParams().set('workspace_agent_id', workspaceAgentId);
+    if (start_date) params = params.set('start_date', start_date);
+    if (end_date) params = params.set('end_date', end_date);
+    return this.http
+      .get<FailedSparkRunSummary[]>(
+        `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/failed-runs`,
+        { params }
+      )
+      .pipe(
+        catchError((err) => {
+          console.error('getFailedSparkRuns error', err);
+          return of([]);
+        })
+      );
+  }
+
+  getJobRcaHistory(workspaceId: string, jobId: string): Observable<RcaHistoryEntry[]> {
+    return this.http
+      .get<RcaHistoryEntry[]>(`${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/rca`)
+      .pipe(
+        catchError((err) => {
+          console.error('getJobRcaHistory error', err);
+          return of([]);
+        })
+      );
+  }
+
+  analyzeRca(body: AnalyzeRcaRequest): Observable<RcaAnalysisResponse> {
+    return this.http.post<RcaAnalysisResponse>(`${API_BASE}/rca/analyze`, body);
+  }
+
+  getRca(requestId: string): Observable<RcaAnalysisResponse> {
+    return this.http.get<RcaAnalysisResponse>(`${API_BASE}/rca/${requestId}`);
   }
 
   getLifecycleMeta(): Observable<LifecycleMeta> {

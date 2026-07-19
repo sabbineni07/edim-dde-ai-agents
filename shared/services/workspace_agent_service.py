@@ -379,7 +379,7 @@ class WorkspaceAgentService:
             return _MEM_AGENTS.pop(workspace_agent_id, None) is not None
 
     def resolve_settings_for_agent(self, workspace_agent_id: UUID):
-        """Return (agent_id, flat_overrides, secrets) for recommend path."""
+        """Return (agent_id, flat_overrides, secrets) for recommend / RCA path."""
         from shared.config.workspace_settings_resolver import resolve_workspace_agent_settings
 
         rec = self.get_agent(workspace_agent_id)
@@ -390,14 +390,18 @@ class WorkspaceAgentService:
         roles_spec = manifest.get("roles", {})
         bindings = rec.bindings or {}
 
-        metrics_dataset: Optional[Dict[str, Any]] = None
+        datasets_by_role: Dict[str, Dict[str, Any]] = {}
         environment_id: Optional[str] = None
-        metrics_ds_id = bindings.get("metrics")
-        if metrics_ds_id and role_kind(roles_spec.get("metrics")) == "dataset":
-            ds_rec = get_environment_dataset(UUID(str(metrics_ds_id)))
+        for role, binding_id in bindings.items():
+            if not binding_id or role_kind(roles_spec.get(role)) != "dataset":
+                continue
+            ds_rec = get_environment_dataset(UUID(str(binding_id)))
             if ds_rec:
-                metrics_dataset = ds_rec.to_dict()
-                environment_id = ds_rec.environment_id
+                datasets_by_role[role] = ds_rec.to_dict()
+                if not environment_id:
+                    environment_id = ds_rec.environment_id
+
+        metrics_dataset = datasets_by_role.get("metrics")
 
         conn_ids = [
             UUID(str(v))
@@ -426,6 +430,7 @@ class WorkspaceAgentService:
             connections=connections,
             metrics_dataset=metrics_dataset,
             metrics_wh_config=metrics_wh_config,
+            datasets_by_role=datasets_by_role,
         )
         return rec.agent_id, flat, secrets
 
