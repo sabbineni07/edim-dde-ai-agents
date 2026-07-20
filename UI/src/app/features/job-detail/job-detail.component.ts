@@ -42,6 +42,11 @@ import { EmptyStateComponent } from '../../shared/empty-state/empty-state.compon
 import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 import { UiHints } from '../../services/api.service';
+import {
+  isFailedJobRunStatus,
+  jobRunStatusBadgeClass,
+  jobRunStatusLabel,
+} from '../../core/job-run-status.util';
 
 @Component({
   selector: 'app-job-detail',
@@ -156,6 +161,18 @@ export class JobDetailComponent implements OnInit {
   get rcaHistoryCount(): number {
     return this.rcaHistory.length;
   }
+
+  get rcaFailedRunCount(): number {
+    return this.failedRuns.length;
+  }
+
+  get usesInventoryRunStatus(): boolean {
+    return this.runs.some((run) => (run.status || '').trim().length > 0);
+  }
+
+  readonly jobRunStatusLabel = jobRunStatusLabel;
+  readonly jobRunStatusBadgeClass = jobRunStatusBadgeClass;
+  readonly isFailedJobRunStatus = isFailedJobRunStatus;
 
   get selectedFailedRun(): FailedSparkRunSummary | null {
     return this.failedRuns.find((r) => this.failedRunKey(r) === this.selectedFailedRunKey) || null;
@@ -370,6 +387,11 @@ export class JobDetailComponent implements OnInit {
       this.failedRuns = [];
       return;
     }
+    if (this.usesInventoryRunStatus) {
+      this.applyInventoryFailedRuns();
+      this.enrichFailedRunsFromSparkTelemetry();
+      return;
+    }
     this.loadingFailedRuns = true;
     this.api
       .getFailedSparkRuns(
@@ -383,15 +405,73 @@ export class JobDetailComponent implements OnInit {
         next: (rows) => {
           this.failedRuns = rows;
           this.loadingFailedRuns = false;
-          if (rows.length && !this.selectedFailedRunKey) {
-            this.selectedFailedRunKey = this.failedRunKey(rows[0]);
-          }
+          this.ensureFailedRunSelection();
         },
         error: () => {
           this.failedRuns = [];
           this.loadingFailedRuns = false;
         },
       });
+  }
+
+  private applyInventoryFailedRuns(): void {
+    this.loadingFailedRuns = false;
+    const jobId = this.jobId();
+    const workspaceId = this.workspaceId();
+    this.failedRuns = this.runs
+      .filter((run) => isFailedJobRunStatus(run.status))
+      .map((run) => ({
+        job_id: jobId,
+        job_run_id: run.job_run_id || run.cluster_id,
+        job_run_date: run.job_run_date,
+        workspace_id: workspaceId,
+      }));
+    this.ensureFailedRunSelection();
+  }
+
+  private enrichFailedRunsFromSparkTelemetry(): void {
+    const ws = this.workspaceId();
+    const j = this.jobId();
+    if (!this.selectedRcaWorkspaceAgentId || !this.failedRuns.length) {
+      return;
+    }
+    this.api
+      .getFailedSparkRuns(
+        ws,
+        j,
+        this.selectedRcaWorkspaceAgentId,
+        this.startDate || undefined,
+        this.endDate || undefined
+      )
+      .subscribe({
+        next: (sparkRows) => {
+          const byRunId = new Map(sparkRows.map((row) => [row.job_run_id, row]));
+          this.failedRuns = this.failedRuns.map((run) => {
+            const spark = byRunId.get(run.job_run_id);
+            if (!spark) return run;
+            return {
+              ...run,
+              task_key: spark.task_key,
+              failure_reason: spark.failure_reason,
+              failure_event_count: spark.failure_event_count,
+              last_event_ts: spark.last_event_ts,
+            };
+          });
+        },
+      });
+  }
+
+  private ensureFailedRunSelection(): void {
+    if (this.failedRuns.length && !this.selectedFailedRunKey) {
+      this.selectedFailedRunKey = this.failedRunKey(this.failedRuns[0]);
+      return;
+    }
+    if (
+      this.selectedFailedRunKey &&
+      !this.failedRuns.some((run) => this.failedRunKey(run) === this.selectedFailedRunKey)
+    ) {
+      this.selectedFailedRunKey = this.failedRuns[0] ? this.failedRunKey(this.failedRuns[0]) : '';
+    }
   }
 
   loadRcaHistory(): void {
@@ -565,6 +645,9 @@ export class JobDetailComponent implements OnInit {
           } else if (list.length && !list.some((r) => r.cluster_id === this.selectedClusterId)) {
             this.selectedClusterId = list[0].cluster_id;
           }
+          if (this.activeTab === 'rca') {
+            this.loadFailedRuns();
+          }
         },
         error: (err) => {
           this.loadingRuns = false;
@@ -661,6 +744,12 @@ export class JobDetailComponent implements OnInit {
 
   selectRun(clusterId: string): void {
     this.selectedClusterId = clusterId;
+    const run = this.runs.find((r) => r.cluster_id === clusterId);
+    if (run && isFailedJobRunStatus(run.status)) {
+      this.selectedFailedRunKey = this.failedRunKey({
+        job_run_id: run.job_run_id || run.cluster_id,
+      });
+    }
   }
 
   /** Aggregated metrics dict when loaded. */

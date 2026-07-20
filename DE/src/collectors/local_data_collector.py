@@ -502,10 +502,18 @@ class LocalDataCollector:
                 first = group.iloc[0]
                 last_date = group[date_col].max()
                 job_run_id_val = first.get("job_run_id")
+                status_val = first.get("status")
                 runs.append(
                     {
                         "cluster_id": str(cluster_id),
                         "job_run_id": str(job_run_id_val) if job_run_id_val is not None else None,
+                        "status": (
+                            str(status_val).strip()
+                            if status_val is not None
+                            and pd.notna(status_val)
+                            and str(status_val).strip()
+                            else None
+                        ),
                         "job_run_date": (
                             last_date.strftime("%Y-%m-%d") if pd.notna(last_date) else None
                         ),

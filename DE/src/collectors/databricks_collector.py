@@ -145,6 +145,15 @@ class DatabricksCollector:
             )
         return "CAST(NULL AS STRING) AS job_run_id"
 
+    def _has_status_column(self) -> bool:
+        return "status" in self._fetch_table_columns()
+
+    def _status_select(self, *, aggregate_max: bool = False) -> str:
+        if self._has_status_column():
+            source = "MAX(status)" if aggregate_max else "status"
+            return f"CAST({source} AS STRING) AS status"
+        return "CAST(NULL AS STRING) AS status"
+
     def _metrics_select(self) -> str:
         return "SELECT\n" + _METRICS_SELECT_BODY.format(job_run_id_select=self._job_run_id_select())
 
@@ -406,10 +415,12 @@ class DatabricksCollector:
 
         table = self._metrics_table
         job_run_id_select = self._job_run_id_select(aggregate_max=True)
+        status_select = self._status_select(aggregate_max=True)
         query = f"""
         SELECT
           CAST(cluster_id AS STRING) AS cluster_id,
           {job_run_id_select},
+          {status_select},
           CAST(MAX(job_run_date) AS STRING) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
           COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,

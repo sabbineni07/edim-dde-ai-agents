@@ -59,6 +59,20 @@ def resolve_fallback_path(fallback_path: Optional[str] = None) -> Path:
     return _project_root() / "data" / "sample_job_metrics.csv"
 
 
+def resolve_dataset_local_path(local_path: Optional[str]) -> Optional[Path]:
+    """Resolve a dataset ``local_path`` to an existing file (absolute or project-relative)."""
+    raw = (local_path or "").strip()
+    if not raw:
+        return None
+    candidate = Path(raw)
+    if candidate.is_file():
+        return candidate.resolve()
+    rooted = _project_root() / candidate
+    if rooted.is_file():
+        return rooted.resolve()
+    return None
+
+
 def get_active_file_path(
     user_id: str,
     *,

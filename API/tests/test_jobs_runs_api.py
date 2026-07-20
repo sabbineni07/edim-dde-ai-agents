@@ -62,6 +62,21 @@ async def test_list_job_runs():
         assert runs[0]["job_run_id"].startswith("jr-")
         assert runs[0]["job_run_id"] != runs[0]["cluster_id"]
         assert runs[0].get("dbr_version") == "15.4.x-scala2.12"
+        assert runs[0].get("status") == "SUCCEEDED"
+
+
+@pytest.mark.asyncio
+async def test_list_job_runs_includes_failed_and_canceled_status():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+        resp = await ac.get(
+            "/api/workspaces/1234567890123456/jobs/job-001/runs",
+            params={"start_date": "2026-06-01", "end_date": "2026-06-03"},
+        )
+        assert resp.status_code == 200, resp.text
+        by_run_id = {row["job_run_id"]: row for row in resp.json()}
+        assert by_run_id["jr-001-002"]["status"] == "FAILED"
+        assert by_run_id["jr-001-004"]["status"] == "CANCELED"
+        assert by_run_id["jr-001-001"]["status"] == "SUCCEEDED"
 
 
 @pytest.mark.asyncio

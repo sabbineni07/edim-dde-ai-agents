@@ -149,6 +149,10 @@ def test_list_job_runs():
     assert "job_run_date" in first
     assert first.get("dbr_version") == "15.4.x-scala2.12"
     assert "avg_worker_cpu_utilization_pct" in first
+    assert first.get("status") == "SUCCEEDED"
+    by_run_id = {r["job_run_id"]: r.get("status") for r in runs}
+    assert by_run_id.get("jr-001-002") == "FAILED"
+    assert by_run_id.get("jr-001-004") == "CANCELED"
 
 
 def test_get_job_metrics():

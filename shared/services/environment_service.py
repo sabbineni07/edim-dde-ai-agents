@@ -177,9 +177,9 @@ def environment_readiness(
     if env.source_type == "local_csv":
         ds = get_default_environment_dataset(env.id)
         if ds and ds.source_type == "local_csv" and ds.local_path:
-            from pathlib import Path
+            from shared.services.local_dataset_service import resolve_dataset_local_path
 
-            if Path(ds.local_path).is_file():
+            if resolve_dataset_local_path(ds.local_path):
                 return "ready"
         path = get_active_file_path(
             user_id or "anonymous",

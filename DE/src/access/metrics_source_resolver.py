@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict, Optional
 from uuid import UUID
 
@@ -15,7 +14,11 @@ from shared.services.environment_service import (
     resolve_metrics_dataset_id,
     resolve_metrics_table_fqn,
 )
-from shared.services.local_dataset_service import get_active_file_path, resolve_fallback_path
+from shared.services.local_dataset_service import (
+    get_active_file_path,
+    resolve_dataset_local_path,
+    resolve_fallback_path,
+)
 from shared.services.platform_environment_service import get_environment
 from shared.utils.logging import get_logger
 
@@ -117,9 +120,16 @@ def resolve_metrics_source(
 
         csv_path = None
         if ds_rec and ds_rec.source_type == "local_csv" and ds_rec.local_path:
-            candidate = Path(ds_rec.local_path)
-            if candidate.is_file():
-                csv_path = candidate
+            csv_path = resolve_dataset_local_path(ds_rec.local_path)
+            if csv_path is None:
+                candidate = resolve_fallback_path(ds_rec.local_path)
+                if candidate.is_file():
+                    csv_path = candidate
+                else:
+                    raise ValueError(
+                        f"Job inventory CSV not found at '{ds_rec.local_path}'. "
+                        "Update the dataset local path on the Datasets page."
+                    )
         if csv_path is None:
             fallback = str(resolve_fallback_path())
             csv_path = get_active_file_path(

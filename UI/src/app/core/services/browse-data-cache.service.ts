@@ -53,7 +53,7 @@ export class BrowseDataCacheService {
     startDate: string,
     endDate: string
   ): string {
-    return `runs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
+    return `runs:v2:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${jobId}:${startDate}:${endDate}`;
   }
 
   recommendationsKey(workspaceId: string, jobId: string, limit: number): string {
