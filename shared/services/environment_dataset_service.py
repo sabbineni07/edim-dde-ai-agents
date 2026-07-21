@@ -115,16 +115,26 @@ def seed_default_datasets_for_environment(
     if source_type == "local_csv":
         from shared.services.local_dataset_service import resolve_fallback_path
 
-        rec = svc.create_dataset(
+        sample_path = str(resolve_fallback_path())
+        inv = svc.create_dataset(
+            environment_id=environment_id,
+            name="Job inventory",
+            description="Browse inventory for local development (sample CSV)",
+            source_type="local_csv",
+            schema_profile="job_inventory",
+            local_path=sample_path,
+            set_default=True,
+        )
+        svc.create_dataset(
             environment_id=environment_id,
             name="Sample job metrics",
-            description="Bundled sample CSV for local development",
+            description="Cluster tuning evidence for local development",
             source_type="local_csv",
             schema_profile="job_cluster_metrics",
-            local_path=str(resolve_fallback_path()),
+            local_path=sample_path,
             set_default=False,
         )
-        return rec.id
+        return inv.id
 
     return None
 

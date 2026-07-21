@@ -163,6 +163,7 @@ class JobRunSummary(BaseModel):
 
     job_run_id: Optional[str] = None
     cluster_id: str
+    status: Optional[str] = None
     job_run_date: Optional[str] = None
     job_run_duration_seconds: Optional[float] = None
     azure_driver_vm_size: Optional[str] = None

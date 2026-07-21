@@ -109,12 +109,15 @@ export interface JobSummary {
   azure_worker_vm_size?: string;
   max_worker_nodes_provisioned?: number;
   last_job_run_date?: string;
+  last_job_run_status?: string;
+  failed_run_count?: number;
   dbr_version?: string;
 }
 
 export interface JobRunSummary {
   job_run_id?: string;
   cluster_id: string;
+  status?: string;
   job_run_date?: string;
   job_run_duration_seconds?: number;
   azure_driver_vm_size?: string;

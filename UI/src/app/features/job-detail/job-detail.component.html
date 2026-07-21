@@ -82,7 +82,7 @@
   </button>
   <button type="button" class="nav-link" [class.active]="activeTab === 'rca'" (click)="selectTab('rca')">
     Failures / RCA
-    <span class="badge bg-secondary ms-1" *ngIf="failedRuns.length">{{ failedRuns.length }}</span>
+    <span class="badge bg-secondary ms-1" *ngIf="rcaFailedRunCount">{{ rcaFailedRunCount }}</span>
   </button>
 </nav>
 
@@ -104,6 +104,11 @@
       <span class="ms-2">
         <code class="small">{{ selectedRun.job_run_id || selectedRun.cluster_id }}</code>
       </span>
+      <span class="ms-2" *ngIf="selectedRun.status">
+        <span class="badge" [ngClass]="jobRunStatusBadgeClass(selectedRun.status)">
+          {{ jobRunStatusLabel(selectedRun.status) }}
+        </span>
+      </span>
       <span *ngIf="selectedRun.dbr_version" class="ms-2 text-muted">
         · DBR {{ selectedRun.dbr_version }}
       </span>
@@ -117,6 +122,7 @@
           <tr>
             <th rowspan="2"></th>
             <th rowspan="2">Job run ID</th>
+            <th rowspan="2">Status</th>
             <th rowspan="2">Cluster ID</th>
             <th rowspan="2">Run date</th>
             <th rowspan="2">DBR version</th>
@@ -137,6 +143,7 @@
           <tr
             *ngFor="let run of paginatedRuns"
             [class.table-active]="run.cluster_id === selectedClusterId"
+            [class.job-run-failed]="isFailedJobRunStatus(run.status)"
             (click)="selectRun(run.cluster_id)"
             role="button">
             <td>
@@ -151,6 +158,16 @@
               <code class="small job-run-id-text" [title]="run.job_run_id || ''">
                 {{ run.job_run_id || '—' }}
               </code>
+            </td>
+            <td>
+              <span
+                *ngIf="run.status; else unknownRunStatus"
+                class="badge"
+                [ngClass]="jobRunStatusBadgeClass(run.status)"
+              >
+                {{ jobRunStatusLabel(run.status) }}
+              </span>
+              <ng-template #unknownRunStatus>–</ng-template>
             </td>
             <td>
               <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>
@@ -637,10 +654,18 @@
 
     <div class="row g-3">
       <div class="col-lg-5">
-        <h6 class="mb-2">Failed runs</h6>
+        <h6 class="mb-2">
+          Failed runs
+          <span class="small text-muted" *ngIf="usesInventoryRunStatus">(from job inventory)</span>
+        </h6>
         <app-loading-card *ngIf="loadingFailedRuns" variant="skeleton" [skeletonRows]="4"></app-loading-card>
         <div *ngIf="!loadingFailedRuns && failedRuns.length === 0" class="small text-muted">
-          No Spark failure events in this date range.
+          <ng-container *ngIf="usesInventoryRunStatus; else sparkOnlyFailedRunsEmpty">
+            No failed runs in this date range according to job inventory status.
+          </ng-container>
+          <ng-template #sparkOnlyFailedRunsEmpty>
+            No Spark failure events in this date range.
+          </ng-template>
         </div>
         <div class="list-group list-group-flush border rounded" *ngIf="!loadingFailedRuns && failedRuns.length > 0">
           <button
@@ -650,9 +675,9 @@
             [class.active]="failedRunKey(run) === selectedFailedRunKey"
             (click)="selectedFailedRunKey = failedRunKey(run)"
           >
-            <div class="d-flex justify-content-between gap-2">
+            <div class="d-flex justify-content-between gap-2 align-items-start">
               <code class="small">{{ run.job_run_id }}</code>
-              <span class="small text-muted">{{ run.job_run_date || '–' }}</span>
+              <span class="small text-muted text-nowrap">{{ run.job_run_date || '–' }}</span>
             </div>
             <div class="small text-truncate" *ngIf="run.task_key">task: {{ run.task_key }}</div>
             <div class="small text-truncate text-danger" *ngIf="run.failure_reason">{{ run.failure_reason }}</div>

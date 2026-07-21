@@ -145,6 +145,31 @@ class DatabricksCollector:
             )
         return "CAST(NULL AS STRING) AS job_run_id"
 
+    def _has_status_column(self) -> bool:
+        return "status" in self._fetch_table_columns()
+
+    def _status_select(self, *, aggregate_max: bool = False) -> str:
+        if self._has_status_column():
+            source = "MAX(status)" if aggregate_max else "status"
+            return f"CAST({source} AS STRING) AS status"
+        return "CAST(NULL AS STRING) AS status"
+
+    def _job_list_status_selects(self) -> tuple[str, str]:
+        """Return (last_job_run_status_expr, failed_run_count_expr) for job list GROUP BY."""
+        if self._has_status_column():
+            return (
+                "CAST(max_by(status, job_run_date) AS STRING) AS last_job_run_status",
+                (
+                    "CAST(SUM(CASE WHEN LOWER(TRIM(CAST(status AS STRING))) IN "
+                    "('failed', 'failure', 'error', 'timedout', 'timeout', 'timed_out') "
+                    "THEN 1 ELSE 0 END) AS BIGINT) AS failed_run_count"
+                ),
+            )
+        return (
+            "CAST(NULL AS STRING) AS last_job_run_status",
+            "CAST(0 AS BIGINT) AS failed_run_count",
+        )
+
     def _metrics_select(self) -> str:
         return "SELECT\n" + _METRICS_SELECT_BODY.format(job_run_id_select=self._job_run_id_select())
 
@@ -335,6 +360,7 @@ class DatabricksCollector:
             return []
 
         table = self._metrics_table
+        last_status_select, failed_count_select = self._job_list_status_selects()
         query = f"""
         SELECT
           CAST(job_id AS STRING) AS job_id,
@@ -356,6 +382,8 @@ class DatabricksCollector:
             ELSE 'multi_node'
           END AS cluster_type,
           CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
+          {last_status_select},
+          {failed_count_select},
           MAX(dbr_version) AS dbr_version
         FROM {table}
         WHERE workspace_id = ?
@@ -406,10 +434,12 @@ class DatabricksCollector:
 
         table = self._metrics_table
         job_run_id_select = self._job_run_id_select(aggregate_max=True)
+        status_select = self._status_select(aggregate_max=True)
         query = f"""
         SELECT
           CAST(cluster_id AS STRING) AS cluster_id,
           {job_run_id_select},
+          {status_select},
           CAST(MAX(job_run_date) AS STRING) AS job_run_date,
           COALESCE(MAX(job_run_duration_seconds), 0.0) AS job_run_duration_seconds,
           COALESCE(MAX(azure_driver_vm_size), MAX(azure_worker_vm_size)) AS azure_driver_vm_size,

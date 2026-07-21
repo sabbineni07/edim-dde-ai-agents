@@ -82,6 +82,8 @@ def test_list_jobs_for_workspace_preserves_missing_worker_vm(monkeypatch):
             ("max_worker_nodes_provisioned",),
             ("cluster_type",),
             ("last_job_run_date",),
+            ("last_job_run_status",),
+            ("failed_run_count",),
             ("dbr_version",),
         ],
         rows=[
@@ -100,6 +102,8 @@ def test_list_jobs_for_workspace_preserves_missing_worker_vm(monkeypatch):
                 1,
                 "single_node",
                 "2026-07-01",
+                "SUCCEEDED",
+                0,
                 "14.3.x-scala2.12",
             )
         ],
