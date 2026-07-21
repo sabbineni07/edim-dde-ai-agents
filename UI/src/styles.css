@@ -278,6 +278,31 @@ body {
   padding: var(--card-body-py) var(--card-body-px);
 }
 
+/* Compact accordion headers (history lists, etc.) */
+.accordion-slim {
+  --bs-accordion-btn-padding-y: 0.35rem;
+  --bs-accordion-btn-padding-x: 0.75rem;
+  --bs-accordion-btn-font-size: var(--text-sm);
+  --bs-accordion-body-padding-y: 0.75rem;
+  --bs-accordion-body-padding-x: 0.75rem;
+}
+
+.accordion-slim .accordion-button {
+  font-size: var(--text-sm);
+  gap: 0.25rem;
+  min-height: 0;
+}
+
+.accordion-slim .accordion-button .badge {
+  font-size: 0.7rem;
+  padding: 0.2em 0.55em;
+  font-weight: 500;
+}
+
+.accordion-slim .accordion-header {
+  margin-bottom: 0;
+}
+
 .card-footer {
   padding: var(--space-3) var(--card-body-px);
   background-color: var(--color-surface-card);

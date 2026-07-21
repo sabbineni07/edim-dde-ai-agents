@@ -44,6 +44,7 @@ import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.compon
 })
 export class WorkspacesComponent implements OnInit, OnDestroy {
   workspaces: Workspace[] = [];
+  filterText = '';
   loading = false;
   error = '';
   environmentName = '';
@@ -72,6 +73,20 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
     private browseCache: BrowseDataCacheService
   ) {}
 
+  get filteredWorkspaces(): Workspace[] {
+    const q = this.filterText.trim().toLowerCase();
+    if (!q) return this.workspaces;
+    return this.workspaces.filter((w) => {
+      const name = (w.workspace_name || '').toLowerCase();
+      const id = (w.workspace_id || '').toLowerCase();
+      return name.includes(q) || id.includes(q);
+    });
+  }
+
+  get hasActiveFilter(): boolean {
+    return this.filterText.trim().length > 0;
+  }
+
   ngOnInit(): void {
     this.subs.add(
       this.loadWorkspaces$.pipe(
@@ -88,6 +103,7 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
           this.loading = false;
           this.error = '';
           this.workspaces = [];
+          this.filterText = '';
           return;
         }
         const sel = this.environmentSelection.getSelected();
@@ -316,5 +332,9 @@ export class WorkspacesComponent implements OnInit, OnDestroy {
     this.router.navigate(['/app/workspaces', w.workspace_id], {
       queryParams: { tab: 'agents' },
     });
+  }
+
+  clearFilter(): void {
+    this.filterText = '';
   }
 }
