@@ -126,8 +126,13 @@ def test_list_jobs_for_workspace():
     assert "total_runs" in first
     assert "avg_job_run_duration_seconds" in first
     assert "last_job_run_date" in first
+    job001 = next(j for j in jobs if j["job_id"] == "job-001")
+    assert job001.get("last_job_run_status") == "SUCCEEDED"
+    assert job001.get("failed_run_count") == 1
     job003 = next(j for j in jobs if j["job_id"] == "job-003")
     assert job003.get("dbr_version") == "15.4.x-scala2.12"
+    assert job003.get("last_job_run_status") == "SUCCEEDED"
+    assert job003.get("failed_run_count") == 0
 
 
 def test_list_job_runs():

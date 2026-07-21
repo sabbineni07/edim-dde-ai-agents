@@ -154,6 +154,22 @@ class DatabricksCollector:
             return f"CAST({source} AS STRING) AS status"
         return "CAST(NULL AS STRING) AS status"
 
+    def _job_list_status_selects(self) -> tuple[str, str]:
+        """Return (last_job_run_status_expr, failed_run_count_expr) for job list GROUP BY."""
+        if self._has_status_column():
+            return (
+                "CAST(max_by(status, job_run_date) AS STRING) AS last_job_run_status",
+                (
+                    "CAST(SUM(CASE WHEN LOWER(TRIM(CAST(status AS STRING))) IN "
+                    "('failed', 'failure', 'error', 'timedout', 'timeout', 'timed_out') "
+                    "THEN 1 ELSE 0 END) AS BIGINT) AS failed_run_count"
+                ),
+            )
+        return (
+            "CAST(NULL AS STRING) AS last_job_run_status",
+            "CAST(0 AS BIGINT) AS failed_run_count",
+        )
+
     def _metrics_select(self) -> str:
         return "SELECT\n" + _METRICS_SELECT_BODY.format(job_run_id_select=self._job_run_id_select())
 
@@ -344,6 +360,7 @@ class DatabricksCollector:
             return []
 
         table = self._metrics_table
+        last_status_select, failed_count_select = self._job_list_status_selects()
         query = f"""
         SELECT
           CAST(job_id AS STRING) AS job_id,
@@ -365,6 +382,8 @@ class DatabricksCollector:
             ELSE 'multi_node'
           END AS cluster_type,
           CAST(MAX(job_run_date) AS STRING) AS last_job_run_date,
+          {last_status_select},
+          {failed_count_select},
           MAX(dbr_version) AS dbr_version
         FROM {table}
         WHERE workspace_id = ?

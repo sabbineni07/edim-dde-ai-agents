@@ -391,6 +391,35 @@ class LocalDataCollector:
             if "avg_driver_memory_utilization_pct" not in df_filtered.columns:
                 df_filtered["avg_driver_memory_utilization_pct"] = None
 
+            has_status = "status" in df_filtered.columns
+            last_status_by_job: Dict[str, Optional[str]] = {}
+            failed_count_by_job: Dict[str, int] = {}
+            if has_status:
+                _failed_labels = {
+                    "failed",
+                    "failure",
+                    "error",
+                    "timedout",
+                    "timeout",
+                    "timed_out",
+                }
+                sorted_for_status = df_filtered.sort_values(by=date_col, ascending=True)
+                for job_key, group in sorted_for_status.groupby("job_id", dropna=False):
+                    last_val = group["status"].iloc[-1]
+                    last_status_by_job[str(job_key)] = (
+                        str(last_val).strip()
+                        if last_val is not None and pd.notna(last_val) and str(last_val).strip()
+                        else None
+                    )
+                    failed_count_by_job[str(job_key)] = int(
+                        group["status"]
+                        .astype(str)
+                        .str.strip()
+                        .str.lower()
+                        .isin(_failed_labels)
+                        .sum()
+                    )
+
             grouped = (
                 df_filtered.groupby("job_id", dropna=False)
                 .agg(
@@ -422,9 +451,10 @@ class LocalDataCollector:
                 driver_vm_value = (
                     str(driver_vm) if pd.notna(driver_vm) and str(driver_vm).strip() else None
                 )
+                job_id_str = str(row["job_id"])
                 job = {
                     "workspace_id": str(workspace_id),
-                    "job_id": str(row["job_id"]),
+                    "job_id": job_id_str,
                     "job_name": row["job_name"],
                     "job_type": row["workload_type"],
                     "avg_worker_cpu_utilization_pct": float(row["avg_cpu_utilization_pct"]),
@@ -445,6 +475,8 @@ class LocalDataCollector:
                     "azure_driver_vm_size": driver_vm_value,
                     "max_worker_nodes_provisioned": int(row["current_max_workers"]),
                     "last_job_run_date": row["last_run_date"].strftime("%Y-%m-%d"),
+                    "last_job_run_status": last_status_by_job.get(job_id_str),
+                    "failed_run_count": failed_count_by_job.get(job_id_str, 0),
                     "dbr_version": (
                         str(row["dbr_version"]) if pd.notna(row.get("dbr_version")) else None
                     ),

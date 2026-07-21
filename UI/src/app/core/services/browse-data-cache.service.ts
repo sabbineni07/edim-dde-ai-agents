@@ -29,7 +29,7 @@ export class BrowseDataCacheService {
     startDate: string,
     endDate: string
   ): string {
-    return `jobs:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${startDate}:${endDate}`;
+    return `jobs:v2:${environmentId || '_'}:${connectionId?.trim() || '_'}:${this.datasetToken(datasetId)}:${workspaceId}:${startDate}:${endDate}`;
   }
 
   jobMetricsKey(

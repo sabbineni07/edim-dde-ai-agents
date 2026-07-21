@@ -48,8 +48,16 @@
 }
 
 .jobs-filter-field--search {
-  flex: 1 1 100%;
+  flex: 1 1 16rem;
   max-width: 28rem;
+}
+
+.jobs-filter-field--status {
+  flex: 0 0 11rem;
+}
+
+.jobs-filter-field--status .form-select {
+  width: 100%;
 }
 
 .jobs-filter-actions {

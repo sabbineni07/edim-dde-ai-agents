@@ -27,11 +27,21 @@ def test_status_select_when_column_present():
     assert collector._status_select(aggregate_max=True) == "CAST(MAX(status) AS STRING) AS status"
 
 
-def test_status_select_when_column_missing():
+def test_job_list_status_selects_when_column_present():
+    collector = DatabricksCollector()
+    collector._table_columns = {"job_id", "status", "job_run_date"}
+    last_status, failed_count = collector._job_list_status_selects()
+    assert "max_by(status, job_run_date)" in last_status
+    assert "failed_run_count" in failed_count
+    assert "failed" in failed_count
+
+
+def test_job_list_status_selects_when_column_missing():
     collector = DatabricksCollector()
     collector._table_columns = {"job_id", "cluster_id"}
-    assert collector._status_select() == "CAST(NULL AS STRING) AS status"
-    assert collector._status_select(aggregate_max=True) == "CAST(NULL AS STRING) AS status"
+    last_status, failed_count = collector._job_list_status_selects()
+    assert last_status == "CAST(NULL AS STRING) AS last_job_run_status"
+    assert failed_count == "CAST(0 AS BIGINT) AS failed_run_count"
 
 
 def test_metrics_select_includes_null_job_run_id_when_column_missing():
