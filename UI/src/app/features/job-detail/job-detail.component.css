@@ -33,6 +33,12 @@
   min-width: 11rem;
 }
 
+/* Long labels like "Platform default (Cluster Tuning)" need a wider control. */
+.job-detail-agent-select {
+  min-width: 18rem;
+  max-width: min(28rem, 100%);
+}
+
 .job-detail-toolbar-actions {
   display: flex;
   align-items: center;

@@ -38,8 +38,10 @@ def resolve_rag_settings_for_history(rec: Any) -> Optional[Settings]:
     from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
     from shared.services.workspace_agent_service import WorkspaceAgentService
 
-    workspace_agent_id: Optional[str] = None
-    if DATABASE_AVAILABLE and rec.request_log_request_id:
+    workspace_agent_id: Optional[str] = getattr(rec, "workspace_agent_id", None)
+    agent_id_hint = getattr(rec, "agent_id", None) or DBX_CLUSTER_TUNING_AGENT_ID
+
+    if not workspace_agent_id and DATABASE_AVAILABLE and rec.request_log_request_id:
         session = get_database_session()
         try:
             req = (
@@ -67,7 +69,7 @@ def resolve_rag_settings_for_history(rec: Any) -> Optional[Settings]:
     if rec.workspace_id:
         agents = svc.list_agents(
             workspace_id=rec.workspace_id,
-            agent_id=DBX_CLUSTER_TUNING_AGENT_ID,
+            agent_id=agent_id_hint,
         )
         for agent in agents:
             if (agent.bindings or {}).get("rag"):

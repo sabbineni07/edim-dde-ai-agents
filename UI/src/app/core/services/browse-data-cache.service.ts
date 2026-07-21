@@ -57,7 +57,7 @@ export class BrowseDataCacheService {
   }
 
   recommendationsKey(workspaceId: string, jobId: string, limit: number): string {
-    return `recs:${workspaceId}:${jobId}:${limit}`;
+    return `recs:v2:${workspaceId}:${jobId}:${limit}`;
   }
 
   peek<T>(key: string): T | undefined {

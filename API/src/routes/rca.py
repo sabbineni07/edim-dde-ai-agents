@@ -175,6 +175,7 @@ async def analyze_rca(
         agent_id=agent_id,
         workspace_agent_id=request.workspace_agent_id,
         force=request.force,
+        request_log_request_id=request_id,
     )
     duration_ms = int((time.perf_counter() - start_time) * 1000)
     try:

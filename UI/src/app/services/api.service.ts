@@ -222,6 +222,10 @@ export interface RecommendationHistoryEntry {
   job_id: string;
   job_run_id?: string;
   workspace_id?: string;
+  agent_id?: string;
+  workspace_agent_id?: string;
+  task_key?: string;
+  kind?: string;
   timestamp: string;
   lifecycle_status?: string;
   lifecycle_status_label?: string;
@@ -834,12 +838,17 @@ export class ApiService {
   getRecommendations(
     workspaceId: string,
     jobId: string,
-    limit = 5
+    limit = 20,
+    agentId?: string | null
   ): Observable<RecommendationHistoryEntry[]> {
+    let params = new HttpParams().set('limit', limit.toString());
+    if (agentId?.trim()) {
+      params = params.set('agent_id', agentId.trim());
+    }
     return this.http
       .get<RecommendationHistoryEntry[]>(
         `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/recommendations`,
-        { params: { limit: limit.toString() } }
+        { params }
       )
       .pipe(
         catchError((err) => {

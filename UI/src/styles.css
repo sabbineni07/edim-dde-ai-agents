@@ -207,11 +207,25 @@ body {
 .form-control,
 .form-select {
   font-size: var(--text-sm);
-  padding: 0.25rem 0.5rem;
   border-radius: var(--radius-sm);
   background-color: var(--color-surface-card);
   color: var(--color-text);
   border-color: var(--color-border);
+}
+
+.form-control {
+  padding: 0.25rem 0.5rem;
+}
+
+/* Keep extra end padding so the chevron does not overlap selected text. */
+.form-select {
+  padding: 0.25rem 2.25rem 0.25rem 0.5rem;
+  background-position: right 0.5rem center;
+}
+
+.form-select[multiple],
+.form-select[size]:not([size='1']) {
+  padding-right: 0.5rem;
 }
 
 .form-control:focus,
@@ -220,10 +234,17 @@ body {
   box-shadow: 0 0 0 0.15rem rgba(0, 102, 204, 0.2);
 }
 
-.form-control-sm,
-.form-select-sm {
+.form-control-sm {
   font-size: var(--text-xs);
   padding: 0.15rem 0.4rem;
+}
+
+.form-select-sm {
+  font-size: var(--text-xs);
+  padding-top: 0.15rem;
+  padding-bottom: 0.15rem;
+  padding-left: 0.4rem;
+  /* padding-right stays 2.25rem from .form-select for the indicator */
 }
 
 .form-label {

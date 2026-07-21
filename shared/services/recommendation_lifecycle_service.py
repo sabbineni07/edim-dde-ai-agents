@@ -214,6 +214,7 @@ class RecommendationLifecycleService:
         job_id: str,
         job_run_id: str,
         except_request_id: UUID,
+        agent_id: Optional[str] = None,
     ) -> int:
         """Mark non-terminal prior recommendations for the same run as SUPERSEDED."""
         if not self._ensure_database():
@@ -221,15 +222,14 @@ class RecommendationLifecycleService:
         session = get_database_session()
         count = 0
         try:
-            rows = (
-                session.query(RecommendationHistory)
-                .filter(
-                    RecommendationHistory.job_id == job_id,
-                    RecommendationHistory.job_run_id == job_run_id,
-                    RecommendationHistory.request_id != except_request_id,
-                )
-                .all()
+            q = session.query(RecommendationHistory).filter(
+                RecommendationHistory.job_id == job_id,
+                RecommendationHistory.job_run_id == job_run_id,
+                RecommendationHistory.request_id != except_request_id,
             )
+            if agent_id:
+                q = q.filter(RecommendationHistory.agent_id == agent_id)
+            rows = q.all()
             now = utc_now()
             for rec in rows:
                 cur = normalize_lifecycle_status(rec.lifecycle_status)

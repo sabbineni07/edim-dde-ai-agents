@@ -88,6 +88,34 @@ def build_approved_retrieval_text(
 ) -> str:
     """Structured text for embedding similarity (not the full JSON blob)."""
     recommendation = rec.recommendation or {}
+    kind = recommendation.get("kind") if isinstance(recommendation, dict) else None
+    agent_id = getattr(rec, "agent_id", None) or ""
+
+    if kind == "spark_rca" or agent_id == "spark_job_rca_agent":
+        root = recommendation.get("root_cause") or {}
+        actions = recommendation.get("recommended_actions") or []
+        lines = [
+            f"agent_id: {agent_id or 'spark_job_rca_agent'}",
+            f"kind: spark_rca",
+            f"job_id: {rec.job_id}",
+            f"job_run_id: {rec.job_run_id or ''}",
+            f"workspace_id: {rec.workspace_id or ''}",
+            f"task_key: {getattr(rec, 'task_key', None) or recommendation.get('payload', {}).get('task_key') or ''}",
+            f"category: {recommendation.get('category') or root.get('category') or ''}",
+            f"summary: {recommendation.get('summary') or root.get('summary') or rec.explanation or ''}",
+        ]
+        if root.get("failure_signature"):
+            lines.append(f"failure_signature: {root.get('failure_signature')}")
+        for action in actions[:8]:
+            lines.append(f"recommended_action: {action}")
+        factors = recommendation.get("contributing_factors") or []
+        for factor in factors[:6]:
+            lines.append(f"contributing_factor: {factor}")
+        adoption_notes = format_lifecycle_adoption_notes(lifecycle_events)
+        if adoption_notes:
+            lines.append(f"adoption_notes:\n{adoption_notes}")
+        return "\n".join(line for line in lines if line and str(line).strip()).strip()
+
     ingest = extract_job_run_ingest(rec)
     workload = (
         ingest.get("job_type")
@@ -97,6 +125,8 @@ def build_approved_retrieval_text(
     )
 
     lines = [
+        f"agent_id: {agent_id or 'dbx_cluster_tuning_agent'}",
+        f"kind: cluster_tuning",
         f"job_id: {rec.job_id}",
         f"job_run_id: {rec.job_run_id or ''}",
         f"workspace_id: {rec.workspace_id or ''}",
@@ -136,9 +166,30 @@ def build_approved_index_payload(rec: Any) -> Dict[str, Any]:
     """Full recommendation document for Search/FAISS metadata."""
     recommendation = dict(rec.recommendation or {})
     recommendation.pop("job_run_ingest", None)
+    kind = recommendation.get("kind")
+    agent_id = getattr(rec, "agent_id", None) or ""
+    if kind == "spark_rca" or agent_id == "spark_job_rca_agent":
+        root = recommendation.get("root_cause") or {}
+        return {
+            "recommendation_id": str(rec.request_id),
+            "agent_id": agent_id or "spark_job_rca_agent",
+            "kind": "spark_rca",
+            "job_id": rec.job_id,
+            "job_run_id": rec.job_run_id or "",
+            "workspace_id": rec.workspace_id or "",
+            "task_key": getattr(rec, "task_key", None) or "",
+            "category": recommendation.get("category") or root.get("category") or "",
+            "summary": recommendation.get("summary") or root.get("summary") or "",
+            "recommended_actions": recommendation.get("recommended_actions") or [],
+            "config_quality": "approved",
+            **{k: v for k, v in recommendation.items() if k != "payload"},
+        }
+
     ingest = extract_job_run_ingest(rec)
     return {
         "recommendation_id": str(rec.request_id),
+        "agent_id": agent_id or "dbx_cluster_tuning_agent",
+        "kind": "cluster_tuning",
         "job_id": rec.job_id,
         "job_run_id": rec.job_run_id or "",
         "workspace_id": rec.workspace_id or "",
@@ -160,6 +211,8 @@ def build_faiss_metadata(rec: Any, payload: Dict[str, Any], retrieval_text: str)
         "document_type": "recommendation",
         "is_recommendation": True,
         "config_quality": "approved",
+        "agent_id": payload.get("agent_id") or getattr(rec, "agent_id", None) or "",
+        "kind": payload.get("kind") or "",
         "request_id": str(rec.request_id),
         "job_id": rec.job_id,
         "job_run_id": rec.job_run_id or "",

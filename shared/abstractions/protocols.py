@@ -107,6 +107,9 @@ class CostLogger(Protocol):
         workspace_id: Optional[str] = None,
         job_run_id: Optional[str] = None,
         request_log_request_id: Optional[UUID] = None,
+        agent_id: Optional[str] = None,
+        workspace_agent_id: Optional[str] = None,
+        task_key: Optional[str] = None,
     ) -> bool:
         """Log recommendation to history."""
         ...
