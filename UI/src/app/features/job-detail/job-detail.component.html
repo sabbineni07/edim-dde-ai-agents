@@ -39,6 +39,20 @@
         <label class="form-check-label small" for="includeExplanation">Include explanation</label>
       </div>
     </div>
+    <div class="job-detail-toolbar-group" *ngIf="isRcaAgentSelected">
+      <div class="form-check mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="forceRcaReRun"
+          [(ngModel)]="forceRcaReRun"
+          [disabled]="runningRecommendation"
+        />
+        <label class="form-check-label small" for="forceRcaReRun" title="Re-run even if an open RCA already exists for this job run">
+          Force re-run
+        </label>
+      </div>
+    </div>
     <div class="job-detail-toolbar-actions">
       <button
         class="btn btn-refresh btn-sm"

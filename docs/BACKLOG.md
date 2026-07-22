@@ -90,6 +90,32 @@ Captured 2026-07-21 from post-run review (schema-mismatch failure: rich `summary
 
 **Suggested next pickup:** validation backfill → last-success / UI.
 
+### Revisit — diagnostic skills / reasoning upgrades (captured 2026-07-21)
+
+From an external Spark RCA “diagnostic agent” brief (classification, log/metrics/plan skills, causal chains, pattern packs, recommendation/confidence engines). **We already have** specialist system prompt, STEPs 1–4, taxonomy + rule skills (OOM, skew, small files, plan ops, Delta concurrency, thin evidence), sectioned evidence pack, confidence labels, and structured recommendations. Do **not** rebuild as 10 separate agents; enrich the existing prompt + skills store.
+
+**Priority (skills / schema — revisit when picking up RCA quality):**
+- [ ] **Causal-chain / symptom ≠ root cause skill** — Teach that generic failures (`ExecutorLostFailure`, exit 137, container killed) are often symptoms; drill logs → spill → shuffle → skew → hot partition → OOM → stage retry → job fail. Prefer true root cause (e.g. skew) over the top-level exception.
+- [ ] **Pattern-matching skill (compact IF/THEN packs)** — Codify recurring combos, e.g. ExecutorLost + spill + peak mem → executor OOM; heartbeat timeout + high GC/CPU → busy executor; job gap + huge logical plan → driver planning bottleneck; many tiny tasks → metadata/small-files. Keep as seeded skill text (not a separate multi-agent).
+- [ ] **Multi-hypothesis scoring** — Emit 2–3 candidate root causes with supporting vs contradicting evidence; pick primary after scoring. Aligns with UI “hypotheses vs findings.” Optional schema: `hypotheses[]`, keep single `category` for primary.
+- [ ] **`missing_information[]` in RCA output** — When evidence is thin, list concrete telemetry still needed instead of guessing (extends thin-evidence skill; cheap schema + UI win).
+- [ ] **Recommendation quality fields** — Per action: observed quantified signal → recommendation → confidence → risk → expected impact/improvement (avoid generic “increase memory”).
+- [ ] **Logical-plan / driver-planning skill** — When `logical_plan` present: huge operator trees, chained `withColumn`/projections, nested CTEs, missing filter pushdown, redundant Exchange — Databricks notes large logical plans inflate driver planning time before execution.
+- [ ] **Primary + secondary category** — Optional secondary category without exploding the taxonomy enum.
+- [ ] **Preventative actions** — Separate from fix-now `recommended_actions` (layout, monitoring, guardrails).
+
+**Selective taxonomy / rule skills (add only for failures we actually see):**
+- [ ] Broadcast / AQE / serialization / UDF / GC pressure / streaming / Unity Catalog–permissions — as individual RULE skills when pack signals exist; do not dump the full external category laundry list into `category`.
+
+**Defer until telemetry exists:**
+- [ ] **Cluster / infra event skill** — Spot loss, autoscaling, worker loss, heartbeat, container exit from cluster events (needs collector enrichment beyond current logs/metrics/plans).
+
+**Defer — architecture (not skills work):**
+- [ ] **200–500 rule knowledge base + RAG for RCA** — Long-term; short-term grow seeded skills / pattern packs.
+- [ ] **Full multi-stage deterministic pipeline** — Evidence extraction → ID/timestamp correlation → hypothesis generation → scoring → recommendation synthesis. Directionally right; next incremental step is hypothesis scoring inside the current chain, not ripping out the LLM.
+
+**Suggested revisit order:** causal-chain + pattern packs → hypotheses / `missing_information` → recommendation impact fields → logical-plan skill → cluster events when available.
+
 ---
 
-*Last updated: 2026-07-21 — RCA collector sections + pack SQL/plan enrichment done; schema A−B deferred.*
+*Last updated: 2026-07-21 — RCA collector sections done; diagnostic skills/reasoning revisit backlog captured; schema A−B deferred.*

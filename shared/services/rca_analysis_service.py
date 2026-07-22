@@ -9,7 +9,13 @@ from uuid import UUID, uuid4
 
 from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
 from shared.config.settings import settings
-from shared.recommendation_lifecycle import LIFECYCLE_RECOMMENDED, utc_now
+from shared.recommendation_lifecycle import (
+    LIFECYCLE_RECOMMENDED,
+    LIFECYCLE_SUPERSEDED,
+    TERMINAL_LIFECYCLE_STATUSES,
+    normalize_lifecycle_status,
+    utc_now,
+)
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -92,6 +98,14 @@ class RcaAnalysisRecord:
         }
 
 
+def _is_open_lifecycle(status: Optional[str]) -> bool:
+    try:
+        return normalize_lifecycle_status(status) not in TERMINAL_LIFECYCLE_STATUSES
+    except ValueError:
+        # Unknown/legacy status — treat as open so we do not silently re-run.
+        return True
+
+
 class RcaAnalysisService:
     """RCA persistence backed by recommendations_history (agent_id = spark_job_rca_agent)."""
 
@@ -144,6 +158,44 @@ class RcaAnalysisService:
                 )
             row = q.order_by(RecommendationHistory.created_at.desc()).first()
             return self._row_to_record(row) if row else None
+        finally:
+            session.close()
+
+    def get_open_by_run(
+        self, job_run_id: str, task_key: Optional[str] = None
+    ) -> Optional[RcaAnalysisRecord]:
+        """Most recent RCA for this run that is still in a non-terminal lifecycle."""
+        key = _idempotency_key(job_run_id, task_key)
+        tk = _task_key_norm(task_key)
+        if not _db_enabled():
+            row = _MEM_RCA.get(key)
+            if not row:
+                return None
+            rec = self._mem_to_record(row)
+            return rec if _is_open_lifecycle(rec.lifecycle_status) else None
+
+        from shared.database.connection import get_database_session
+        from shared.database.models import RecommendationHistory
+
+        session = get_database_session()
+        try:
+            q = session.query(RecommendationHistory).filter(
+                RecommendationHistory.agent_id == SPARK_JOB_RCA_AGENT_ID,
+                RecommendationHistory.job_run_id == job_run_id,
+            )
+            if tk:
+                q = q.filter(RecommendationHistory.task_key == tk)
+            else:
+                q = q.filter(
+                    (RecommendationHistory.task_key.is_(None))
+                    | (RecommendationHistory.task_key == "")
+                )
+            rows = q.order_by(RecommendationHistory.created_at.desc()).limit(20).all()
+            for row in rows:
+                rec = self._row_to_record(row)
+                if _is_open_lifecycle(rec.lifecycle_status):
+                    return rec
+            return None
         finally:
             session.close()
 
@@ -223,12 +275,16 @@ class RcaAnalysisService:
         }
 
         key = _idempotency_key(job_run_id, task_key)
+        # Only short-circuit on an *open* prior RCA; terminal ones allow a new analysis.
         if not force:
-            existing = self.get_by_run(job_run_id, task_key)
+            existing = self.get_open_by_run(job_run_id, task_key)
             if existing:
                 return existing
 
         if not _db_enabled():
+            prior = _MEM_RCA.get(key)
+            if prior and _is_open_lifecycle(prior.get("lifecycle_status")):
+                prior["lifecycle_status"] = LIFECYCLE_SUPERSEDED
             _MEM_RCA[key] = payload
             return self._mem_to_record(payload)
 
@@ -266,7 +322,7 @@ class RcaAnalysisService:
             session.commit()
             session.refresh(row)
             _MEM_RCA[key] = payload
-            return self._row_to_record(row)
+            record = self._row_to_record(row)
         except Exception as e:
             session.rollback()
             logger.warning("rca_analysis_save_failed", error=str(e))
@@ -274,6 +330,17 @@ class RcaAnalysisService:
             return self._mem_to_record(payload)
         finally:
             session.close()
+
+        try:
+            RecommendationLifecycleService().supersede_prior_recommendations(
+                job_id=str(payload["job_id"] or job_run_id),
+                job_run_id=job_run_id,
+                except_request_id=request_id,
+                agent_id=payload["agent_id"],
+            )
+        except Exception as e:
+            logger.warning("rca_supersede_prior_failed", error=str(e))
+        return record
 
     def _result_from_recommendation(
         self, recommendation: Optional[Dict[str, Any]]
