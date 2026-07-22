@@ -50,3 +50,18 @@ def test_get_prompt_text_uses_updated_store():
     )
     assert get_prompt_text(DBX_CLUSTER_TUNING_AGENT_ID, "guardrail_retry", "system") == updated
     assert get_guardrail_retry_instruction() == updated
+
+
+def test_rca_chain_messages_include_skills():
+    from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
+
+    messages = build_chain_messages(SPARK_JOB_RCA_AGENT_ID, "rca")
+    assert len(messages) == 2
+    system_text = messages[0][1]
+    assert "## Domain skills" in system_text
+    assert "RCA diagnostic workflow" in system_text
+    assert "contributing_factors" in system_text
+    assert "recommended_actions" in system_text
+    human_text = messages[1][1]
+    assert "{evidence_pack}" in human_text
+    assert "Never return empty contributing_factors" in human_text

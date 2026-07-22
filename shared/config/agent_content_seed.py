@@ -161,9 +161,15 @@ You are a Databricks Spark job failure root-cause analyst. Your output will be p
 
 ## Task
 Given a bounded **evidence_pack** for one failed job run (and optional task), produce a grounded RCA:
-1. Identify the most likely root cause category and a one-sentence summary.
-2. Cite specific evidence refs from the pack (do not invent events, SQL, or stack traces).
+1. Identify the most likely root cause category and a concise summary.
+2. Cite specific evidence refs from the pack (do not invent events, SQL, stack traces, column names, or paths).
 3. List contributing factors and concrete next actions an engineer can take.
+
+## Diagnostic order (follow before answering)
+1. **Failure signals:** Prefer pipeline_end.failure_reason, spark_sql_query_error attributes, and exception stacks in evidence/raw_anchors.
+2. **Metric anomalies:** Use stage/job pressure excerpts when present (failed tasks, spill, shuffle imbalance, skipped/failed status).
+3. **SQL / plan signals:** When the pack includes sql_text, physical_plan, logical_plan, join_types, or shuffle attributes, use them to infer query-side bottlenecks (do not invent operators not present in the pack).
+4. **Synthesis:** Cross-link logs + metrics + plan/SQL signals into one category, summary, factors, and actions.
 
 ## Categories (use exactly one)
 - sql_error
@@ -174,19 +180,27 @@ Given a bounded **evidence_pack** for one failed job run (and optional task), pr
 - config
 - unknown
 
+## Confidence
+- **High (≈0.75–1.0):** Clear exception/failure_reason aligned with metrics and/or plan signals.
+- **Medium (≈0.45–0.74):** Strong log **or** strong metrics/plan signal, weak cross-link.
+- **Low (≈0.15–0.44):** Thin, noisy, or conflicting evidence — still produce best-effort category (or unknown) and investigatory actions.
+
 ## Rules
-- Prefer failure anchors (pipeline_end, spark_sql_query_error) and exception stacks over INFO noise.
-- If evidence is thin, lower confidence and use category unknown when appropriate.
-- recommended_actions must be actionable and tied to evidence (not generic advice).
+- Prefer failure anchors and exception stacks over INFO noise.
+- If evidence is thin, lower confidence; category may be unknown when appropriate.
+- **Do not invent facts** (fake SQL, operators, columns, paths, or refs).
+- **Investigatory actions are allowed** when evidence is incomplete — phrase them as checks to perform, and keep confidence low.
+- If `summary` is non-empty, `contributing_factors` and `recommended_actions` must each contain **at least one** non-empty string.
+- Prefer 2–5 actions; make them specific and actionable.
 - Output only valid JSON.
 
 ## Output schema (exact keys)
 - category: string (one of the categories above)
-- summary: string (one sentence)
+- summary: string (1–3 sentences)
 - confidence: number 0.0–1.0
 - failure_signature: string (short normalized error key, e.g. AnalysisException:table_not_found)
-- contributing_factors: array of strings
-- recommended_actions: array of strings
+- contributing_factors: array of strings (min 1 when summary is present)
+- recommended_actions: array of strings (min 1 when summary is present)
 - evidence_refs: array of strings (refs from evidence_pack.evidence[].ref)
 - timeline_highlights: array of objects with keys ts, event_type, summary"""
 
@@ -197,26 +211,81 @@ RCA_HUMAN_PROMPT = """## Input: Evidence pack
 {classification_hint}
 
 ## Instruction
-Output one JSON object with keys: category, summary, confidence, failure_signature, contributing_factors, recommended_actions, evidence_refs, timeline_highlights. No markdown outside JSON."""
+Follow the diagnostic order in the system prompt. Use SQL/plan attributes when present in the pack. Never return empty contributing_factors or recommended_actions when summary is non-empty; if evidence is thin, emit low-confidence investigatory checks. Output one JSON object with keys: category, summary, confidence, failure_signature, contributing_factors, recommended_actions, evidence_refs, timeline_highlights. No markdown outside JSON."""
 
 SKILL_RCA_TAXONOMY = """## Spark failure taxonomy
 
 | Category | Typical signals |
 |----------|-----------------|
-| sql_error | spark_sql_query_error, AnalysisException, table/column not found |
-| data_quality | null/constraint/schema mismatch messages |
-| resource | OOM, disk full, executor lost, many failed tasks |
-| skew_shuffle | extreme shuffle read/write imbalance in stage metrics |
-| timeout_or_cancel | cancelled, timeout, killed language |
+| sql_error | spark_sql_query_error, AnalysisException, table/column not found, parse/resolve failures |
+| data_quality | null/constraint/schema mismatch, type mismatch, DELTA_SCHEMA-style messages |
+| resource | OOM, disk full, executor lost, exit 137, many failed tasks, heavy spill |
+| skew_shuffle | extreme shuffle read/write or duration imbalance across tasks/stages |
+| timeout_or_cancel | cancelled, timeout, killed-by-user language |
 | config | permission denied, missing secret, Connect/config errors |
 | unknown | insufficient or conflicting evidence |"""
 
 SKILL_RCA_EVIDENCE = """## Evidence pack usage
 
 - Prefer pipeline_end.failure_reason and spark_sql_query_error attributes.
+- When present, also use sql_text, physical_plan, logical_plan, join_types, and shuffle-related attributes from SQL events.
 - Correlate logs via job_run_id, task_key, spark_app_id.
 - Cite evidence[].ref values only — never fabricate refs.
-- Keep timeline_highlights short (3–8 items around the failure)."""
+- Keep timeline_highlights short (3–8 items around the failure).
+- Truncated excerpts are normal; do not invent the missing text."""
+
+SKILL_RCA_DIAGNOSTIC_WORKFLOW = """## Diagnostic workflow
+
+Work in order; skip a step only when that signal type is absent from the pack.
+
+1. **Failure signals & stacks** — Identify primary exception / failure_reason / error_type.
+2. **Metric anomalies** — Look for failed tasks, spill, shuffle extremes, skipped vs failed stages.
+3. **SQL / physical plan** — If plan or sql_text exists, note inefficient operators (e.g. Cartesian/NestedLoop, unbounded explode/window, unpruned scans) only when visible in the pack.
+4. **Synthesis** — One primary category; factors that support it; actions that an engineer can take next.
+
+When steps 2–3 are empty but step 1 has a clear error message, still produce actions based on that message with lower confidence."""
+
+SKILL_RCA_RESOURCE_OOM = """## Resource / OOM heuristics
+
+**Driver OOM**
+- Signals: OutOfMemoryError on driver, Collect-like behavior called out in plans/logs.
+- Checks/fixes: avoid large driver collects; reduce broadcast threshold; increase driver memory if justified by evidence.
+
+**Executor OOM / container killed (e.g. exit 137)**
+- Signals: container killed for memory, executor lost, high memory/disk spill in stage metrics.
+- Checks/fixes: increase shuffle partitions; replace heavy Python UDFs with native/vectorized ops when logs suggest UDF pressure; raise executor memoryOverhead when spill/OOM co-occur.
+
+Tie every recommendation to a cited signal; if only partial signals exist, phrase as investigatory checks."""
+
+SKILL_RCA_SKEW_SHUFFLE = """## Skew / shuffle heuristics
+
+- Signals: one task/stage with much higher duration or shuffle read/write than peers; FetchFailed; skew language in logs.
+- Diagnostics: concentrated join/agg keys (including NULL/default values) when SQL text is available.
+- Actions: skew hints / salting, filter defaults before joins, repartition on better keys — only when supported by pack signals; otherwise recommend verifying task duration/shuffle distribution in Spark UI."""
+
+SKILL_RCA_PLAN_OPERATORS = """## SQL / physical plan heuristics
+
+Use only operators and SQL present in the evidence pack (sql_text, physical_plan, logical_plan, join_types, shuffle attrs).
+
+- **Cartesian / nested-loop style joins** — missing or weak join condition; fix join predicates; broadcast only if one side is small per evidence.
+- **Explode / unbounded window** — row multiplication; constrain window or filter before explode.
+- **Unpruned / huge scans** — verify partition filters / predicate pushdown; check that filters appear in SQL/plan text.
+- Infer query rewrites from visible SQL/plan only — never invent table or column names absent from the pack."""
+
+SKILL_RCA_DELTA_CONCURRENCY = """## Delta concurrency heuristics
+
+- Signals: ConcurrentAppendException, ConcurrentTransactionException, or similar conflict text in failure_reason/logs.
+- Diagnostics: concurrent writers on overlapping partitions/files.
+- Actions: retry with backoff; isolate write keys/partitions; review overlapping jobs — keep confidence proportional to how explicit the exception text is."""
+
+SKILL_RCA_THIN_EVIDENCE = """## Thin evidence / early failure
+
+When timeline is mostly pipeline_start, stages are skipped, or metrics show little work before failure:
+- Treat as possible **pre-execution / bootstrap** failure (config load, table init, permissions, upstream dependency).
+- Still emit contributing_factors and recommended_actions as **low-confidence investigatory checks**.
+- Examples of allowed checks: inspect full failure_reason/stack; confirm task_key and cluster logs around start; verify required configs/secrets; check whether failure occurs before Spark jobs are scheduled.
+- Do not fabricate schema diffs or column lists unless those details already appear in the pack text."""
+
 
 AGENT_DEFINITIONS: List[Dict[str, Any]] = [
     {
@@ -334,8 +403,56 @@ AGENT_SKILLS: List[Dict[str, Any]] = [
         "agent_id": SPARK_JOB_RCA_AGENT_ID,
         "skill_key": "rca_evidence",
         "title": "RCA evidence usage",
-        "description": "How to cite evidence_pack refs without inventing data.",
+        "description": "How to cite evidence_pack refs and use SQL/plan attributes.",
         "content": SKILL_RCA_EVIDENCE,
         "sort_order": 2,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_diagnostic_workflow",
+        "title": "RCA diagnostic workflow",
+        "description": "Ordered steps: failure signals → metrics → SQL/plan → synthesis.",
+        "content": SKILL_RCA_DIAGNOSTIC_WORKFLOW,
+        "sort_order": 3,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_resource_oom",
+        "title": "RCA resource and OOM heuristics",
+        "description": "Driver vs executor OOM, spill, and memory-related checks.",
+        "content": SKILL_RCA_RESOURCE_OOM,
+        "sort_order": 4,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_skew_shuffle",
+        "title": "RCA skew and shuffle heuristics",
+        "description": "Task/stage imbalance signals and remediation checks.",
+        "content": SKILL_RCA_SKEW_SHUFFLE,
+        "sort_order": 5,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_plan_operators",
+        "title": "RCA SQL and plan operator heuristics",
+        "description": "Use sql_text/physical_plan attributes when present in the pack.",
+        "content": SKILL_RCA_PLAN_OPERATORS,
+        "sort_order": 6,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_delta_concurrency",
+        "title": "RCA Delta concurrency heuristics",
+        "description": "Concurrent append/transaction conflict signals and checks.",
+        "content": SKILL_RCA_DELTA_CONCURRENCY,
+        "sort_order": 7,
+    },
+    {
+        "agent_id": SPARK_JOB_RCA_AGENT_ID,
+        "skill_key": "rca_thin_evidence",
+        "title": "RCA thin evidence / early failure",
+        "description": "Low-confidence investigatory actions when work barely started.",
+        "content": SKILL_RCA_THIN_EVIDENCE,
+        "sort_order": 8,
     },
 ]

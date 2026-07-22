@@ -63,4 +63,29 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: 2026-06-30 — Option A UI modernization complete; library evaluation defers Material/PrimeNG.*
+## Spark Job Failure RCA — quality improvements (revisit)
+
+Captured 2026-07-21 from post-run review (schema-mismatch failure: rich `summary`, empty `recommended_actions` / `contributing_factors`, category `unknown`, low confidence).
+
+**Context:** Agent receives a bounded evidence pack (filtered Delta `spark_logs` / `spark_metrics` by event type / severity), not full logs. `spark_metrics` can include SQL/plan attributes (`sql_text`, `physical_plan`, etc.). Prompt bias was “cite evidence, don’t invent,” which left action/factor lists empty when uncertain.
+
+### Done (2026-07-21) — prompts + skills refine
+- [x] **Prompts** — Diagnostic order; confidence bands; mandatory non-empty `contributing_factors` / `recommended_actions` when summary present; investigatory checks allowed at low confidence (`shared/config/agent_content_seed.py`).
+- [x] **Skills** — Added workflow, resource/OOM, skew/shuffle, plan operators, Delta concurrency, thin-evidence (no dedicated schema A−B skill).
+- [x] **Runtime** — RCA chain now appends active skills to the system message (`AI/src/core/prompts/loader.py`).
+- [x] **Reset** — `reset_to_seed` inserts missing seed skills so new skill keys appear on existing DBs.
+
+**Apply locally:** reset Spark RCA agent content to seed (Agents UI → Reset, or API `POST /api/agents/spark_job_rca_agent/content/reset`), then restart API so the chain reloads prompts.
+
+### Still pending
+- [ ] **Validation backfill** — If LLM still returns empty actions/factors, derive fallbacks in `validate_rca_llm_output`.
+- [ ] **Evidence pack enrichment** — Surface truncated `sql_text` / `physical_plan` (and related attrs) for SQL error events so plan skills can fire; preserve fuller failure_reason/exception.
+- [ ] **Last-success comparison** — Attach last successful run evidence (or compact success-vs-fail diff) for drift/regression cases.
+- [ ] **UI** — Always show Recommended actions / Contributing factors (even if empty/low-confidence); distinguish hypotheses vs findings.
+- [ ] **Schema A−B (optional / deferred)** — Explicit expected-vs-actual column set-diff skill; not required for current refine.
+
+**Suggested next pickup:** evidence pack SQL/plan surfacing → validation backfill → last-success / UI.
+
+---
+
+*Last updated: 2026-07-21 — RCA prompts/skills refine applied; schema A−B deferred; pack enrichment still pending.*

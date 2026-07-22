@@ -368,6 +368,90 @@ class AgentContentService:
         finally:
             session.close()
 
+    def get_active_skill_contents(self, agent_id: str) -> List[Dict[str, Any]]:
+        """Return active skills for runtime injection (sorted)."""
+        bundle = self.get_content(agent_id)
+        if not bundle:
+            return []
+        skills = list(bundle.skills or [])
+        skills.sort(key=lambda s: (int(s.get("sort_order") or 0), s.get("skill_key") or ""))
+        return skills
+
+    def ensure_skill_from_seed(
+        self,
+        agent_id: str,
+        skill_key: str,
+        *,
+        updated_by: str,
+    ) -> bool:
+        """Insert a seed skill when missing. Returns True if inserted."""
+        seed = seed_skill_item(agent_id, skill_key)
+        if not seed:
+            return False
+        now = _utcnow()
+
+        if not _db_enabled():
+            _init_mem_from_seed()
+            skills = _MEM_SKILLS.setdefault(agent_id, [])
+            for s in skills:
+                if s.get("skill_key") == skill_key and s.get("is_active", True):
+                    return False
+            skills.append(
+                {
+                    "agent_id": agent_id,
+                    "skill_key": skill_key,
+                    "title": seed.get("title"),
+                    "description": seed.get("description"),
+                    "content": seed["content"],
+                    "version": 1,
+                    "is_active": True,
+                    "sort_order": int(seed.get("sort_order") or 0),
+                    "updated_by": updated_by,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }
+            )
+            return True
+
+        from shared.database.connection import get_database_session
+        from shared.database.models import AgentSkillRow
+
+        session = get_database_session()
+        try:
+            existing = (
+                session.query(AgentSkillRow)
+                .filter(
+                    AgentSkillRow.agent_id == agent_id,
+                    AgentSkillRow.skill_key == skill_key,
+                    AgentSkillRow.is_active.is_(True),
+                )
+                .first()
+            )
+            if existing:
+                return False
+            session.add(
+                AgentSkillRow(
+                    agent_id=agent_id,
+                    skill_key=skill_key,
+                    title=seed.get("title"),
+                    description=seed.get("description"),
+                    content=seed["content"],
+                    version=1,
+                    is_active=True,
+                    sort_order=int(seed.get("sort_order") or 0),
+                    updated_by=updated_by,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
+        finally:
+            session.close()
+
     def update_prompt(
         self,
         agent_id: str,
@@ -802,6 +886,9 @@ class AgentContentService:
             seed = seed_skill_item(agent_id, skill_key)
             if not seed:
                 continue
+            if self.ensure_skill_from_seed(agent_id, skill_key, updated_by=updated_by):
+                skills_reset += 1
+                continue
             current = None
             if not _db_enabled():
                 _init_mem_from_seed()
@@ -864,6 +951,10 @@ def get_agent_content(agent_id: str) -> Optional[AgentContentBundle]:
 
 def get_prompt_content(agent_id: str, chain_name: str, role: str) -> Optional[str]:
     return _svc.get_prompt_content(agent_id, chain_name, role)
+
+
+def get_active_skill_contents(agent_id: str) -> List[Dict[str, Any]]:
+    return _svc.get_active_skill_contents(agent_id)
 
 
 def update_agent_prompt(
