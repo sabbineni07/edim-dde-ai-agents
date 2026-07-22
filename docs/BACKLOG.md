@@ -6,6 +6,8 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 **AI Foundry / LangChain upgrade:** see [BACKLOG_AI_FOUNDRY_UPGRADE.md](./BACKLOG_AI_FOUNDRY_UPGRADE.md) for phased design, diagrams, and progress (Phases 0–7 not started).
 
+**YAML-driven agent definitions (metadata → LangGraph):** see [BACKLOG_YAML_DRIVEN_AGENTS.md](./BACKLOG_YAML_DRIVEN_AGENTS.md) — hybrid design (YAML composes; Python node catalog); not started.
+
 ---
 
 ## AI platform & data (Postgres-first)
@@ -53,6 +55,7 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 - [ ] **Secrets hygiene** — Rotate any credentials that appeared in local `.env` or logs; keep `.env` out of images and VCS.
 - [ ] **Docker `env_file`** — After Compose changes, recreate `api` so host `.env` (incl. Search) is loaded; verify `POSTGRES_HOST` override for `postgres` service.
 - [ ] **500 troubleshooting** — Use `logger.exception` on recommendation errors and check response `detail`; confirm Azure OpenAI deployment names match the resource.
+- [ ] **Remove temporary SQL executor** — Admin-only ad-hoc Postgres console added for debugging. Delete: `API/src/routes/temp_sql_executor.py`, its import/`include_router` in `API/src/main.py`, UI folder `UI/src/app/features/temp-sql-executor/`, route `temp/sql` in `app.routes.ts`, and the shell account-menu link (`openTempSqlExecutor` + CONTEXT_BAR hide).
 
 ---
 
@@ -63,4 +66,58 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 
 ---
 
-*Last updated: 2026-06-30 — Option A UI modernization complete; library evaluation defers Material/PrimeNG.*
+## Spark Job Failure RCA — quality improvements (revisit)
+
+Captured 2026-07-21 from post-run review (schema-mismatch failure: rich `summary`, empty `recommended_actions` / `contributing_factors`, category `unknown`, low confidence).
+
+**Context:** Agent receives a bounded evidence pack (filtered Delta `spark_logs` / `spark_metrics` by event type / severity), not full logs. `spark_metrics` can include SQL/plan attributes (`sql_text`, `physical_plan`, etc.). Prompt bias was “cite evidence, don’t invent,” which left action/factor lists empty when uncertain.
+
+### Done (2026-07-21) — prompts + skills refine
+- [x] **Prompts** — Diagnostic order; confidence bands; mandatory non-empty `contributing_factors` / `recommended_actions` when summary present; investigatory checks allowed at low confidence (`shared/config/agent_content_seed.py`).
+- [x] **Skills** — Added workflow, resource/OOM, skew/shuffle, plan operators, Delta concurrency, thin-evidence (no dedicated schema A−B skill).
+- [x] **Runtime** — RCA chain now appends active skills to the system message (`AI/src/core/prompts/loader.py`).
+- [x] **Reset** — `reset_to_seed` inserts missing seed skills so new skill keys appear on existing DBs.
+
+**Apply locally:** reset Spark RCA agent content to seed (Agents UI → Reset, or API `POST /api/agents/spark_job_rca_agent/content/reset`), then restart API so the chain reloads prompts.
+
+### Done (2026-07-21) — collector section fetches + pack enrichment
+- [x] **Three section fetches** — `fetch_logs` / `fetch_stage_metrics` / `fetch_sql_plans` on Databricks + local collectors; `build_evidence_pack_for_run` assembles one pack.
+- [x] **Evidence pack enrichment** — First-class `sections` (`logs` / `stage_metrics` / `sql_plans`); preserve truncated `sql_text` / `physical_plan` / related attrs; spill fields on stage excerpts; human prompt prefers `pack.sections`.
+
+### Still pending
+- [ ] **Validation backfill** — If LLM still returns empty actions/factors, derive fallbacks in `validate_rca_llm_output`.
+- [ ] **Last-success comparison** — Attach last successful run evidence (or compact success-vs-fail diff) for drift/regression cases.
+- [ ] **UI** — Always show Recommended actions / Contributing factors (even if empty/low-confidence); distinguish hypotheses vs findings.
+- [ ] **Schema A−B (optional / deferred)** — Explicit expected-vs-actual column set-diff skill; not required for current refine.
+
+**Suggested next pickup:** validation backfill → last-success / UI.
+
+### Revisit — diagnostic skills / reasoning upgrades (captured 2026-07-21)
+
+From an external Spark RCA “diagnostic agent” brief (classification, log/metrics/plan skills, causal chains, pattern packs, recommendation/confidence engines). **We already have** specialist system prompt, STEPs 1–4, taxonomy + rule skills (OOM, skew, small files, plan ops, Delta concurrency, thin evidence), sectioned evidence pack, confidence labels, and structured recommendations. Do **not** rebuild as 10 separate agents; enrich the existing prompt + skills store.
+
+**Priority (skills / schema — revisit when picking up RCA quality):**
+- [ ] **Causal-chain / symptom ≠ root cause skill** — Teach that generic failures (`ExecutorLostFailure`, exit 137, container killed) are often symptoms; drill logs → spill → shuffle → skew → hot partition → OOM → stage retry → job fail. Prefer true root cause (e.g. skew) over the top-level exception.
+- [ ] **Pattern-matching skill (compact IF/THEN packs)** — Codify recurring combos, e.g. ExecutorLost + spill + peak mem → executor OOM; heartbeat timeout + high GC/CPU → busy executor; job gap + huge logical plan → driver planning bottleneck; many tiny tasks → metadata/small-files. Keep as seeded skill text (not a separate multi-agent).
+- [ ] **Multi-hypothesis scoring** — Emit 2–3 candidate root causes with supporting vs contradicting evidence; pick primary after scoring. Aligns with UI “hypotheses vs findings.” Optional schema: `hypotheses[]`, keep single `category` for primary.
+- [ ] **`missing_information[]` in RCA output** — When evidence is thin, list concrete telemetry still needed instead of guessing (extends thin-evidence skill; cheap schema + UI win).
+- [ ] **Recommendation quality fields** — Per action: observed quantified signal → recommendation → confidence → risk → expected impact/improvement (avoid generic “increase memory”).
+- [ ] **Logical-plan / driver-planning skill** — When `logical_plan` present: huge operator trees, chained `withColumn`/projections, nested CTEs, missing filter pushdown, redundant Exchange — Databricks notes large logical plans inflate driver planning time before execution.
+- [ ] **Primary + secondary category** — Optional secondary category without exploding the taxonomy enum.
+- [ ] **Preventative actions** — Separate from fix-now `recommended_actions` (layout, monitoring, guardrails).
+
+**Selective taxonomy / rule skills (add only for failures we actually see):**
+- [ ] Broadcast / AQE / serialization / UDF / GC pressure / streaming / Unity Catalog–permissions — as individual RULE skills when pack signals exist; do not dump the full external category laundry list into `category`.
+
+**Defer until telemetry exists:**
+- [ ] **Cluster / infra event skill** — Spot loss, autoscaling, worker loss, heartbeat, container exit from cluster events (needs collector enrichment beyond current logs/metrics/plans).
+
+**Defer — architecture (not skills work):**
+- [ ] **200–500 rule knowledge base + RAG for RCA** — Long-term; short-term grow seeded skills / pattern packs.
+- [ ] **Full multi-stage deterministic pipeline** — Evidence extraction → ID/timestamp correlation → hypothesis generation → scoring → recommendation synthesis. Directionally right; next incremental step is hypothesis scoring inside the current chain, not ripping out the LLM.
+
+**Suggested revisit order:** causal-chain + pattern packs → hypotheses / `missing_information` → recommendation impact fields → logical-plan skill → cluster events when available.
+
+---
+
+*Last updated: 2026-07-21 — RCA collector sections done; diagnostic skills/reasoning revisit backlog captured; schema A−B deferred.*

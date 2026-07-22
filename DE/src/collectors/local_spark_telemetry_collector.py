@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
-from shared.rca.evidence_pack import build_evidence_pack
+from shared.rca.evidence_pack import assemble_evidence_pack_for_run
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,30 +74,44 @@ class LocalSparkTelemetryCollector:
         job_run_date: Optional[str] = None,
         task_key: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """Failed pipeline_end anchors (SQL events come from get_sql_plans)."""
         rows = _match_run(
             self._metrics, job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
         )
         out = []
         for r in rows:
             et = (r.get("event_type") or "").strip()
-            if et not in ("pipeline_end", "spark_sql_query_error"):
+            if et != "pipeline_end":
                 continue
             successful = r.get("successful")
             status = str(r.get("status") or "").lower()
             if (
                 successful is False
                 or successful == "false"
-                or status
-                in (
-                    "failure",
-                    "failed",
-                    "error",
-                )
+                or status in ("failure", "failed", "error")
             ):
                 out.append(r)
-            elif et == "spark_sql_query_error":
-                out.append(r)
         return out
+
+    def get_sql_plans(
+        self,
+        *,
+        job_run_id: str,
+        job_run_date: Optional[str] = None,
+        task_key: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        rows = _match_run(
+            self._metrics, job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
+        )
+        types = {"spark_sql_query_error", "spark_sql_query_observed"}
+        matched = [r for r in rows if (r.get("event_type") or "") in types]
+        matched.sort(
+            key=lambda r: (
+                0 if (r.get("event_type") or "") == "spark_sql_query_error" else 1,
+                str(r.get("event_ts") or ""),
+            )
+        )
+        return matched[:40]
 
     def get_stage_pressure(
         self,
@@ -217,27 +231,11 @@ class LocalSparkTelemetryCollector:
         task_key: Optional[str] = None,
         workspace_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        anchors = self.get_failure_anchors(
-            job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-        )
-        if not job_run_date and anchors:
-            job_run_date = anchors[0].get("job_run_date")
-        if not job_id and anchors:
-            job_id = anchors[0].get("job_id")
-        return build_evidence_pack(
+        return assemble_evidence_pack_for_run(
+            self,
             job_run_id=job_run_id,
             job_id=job_id,
             job_run_date=job_run_date,
             task_key=task_key,
             workspace_id=workspace_id,
-            failure_anchors=anchors,
-            stage_pressure=self.get_stage_pressure(
-                job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-            ),
-            error_logs=self.get_error_logs(
-                job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-            ),
-            timeline=self.get_timeline(
-                job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-            ),
         )

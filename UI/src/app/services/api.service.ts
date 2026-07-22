@@ -156,7 +156,20 @@ export interface RcaRootCause {
   category?: string;
   summary?: string;
   confidence?: number;
+  confidence_label?: string;
   failure_signature?: string;
+}
+
+export interface RcaEvidenceAnalysis {
+  log_signals?: string;
+  metric_anomalies?: string;
+  physical_plan_bottlenecks?: string;
+}
+
+export interface RcaRecommendationsDetail {
+  code_query_rewrites?: string[];
+  spark_delta_configs?: string[];
+  infrastructure?: string[];
 }
 
 export interface RcaAnalysisResponse {
@@ -165,7 +178,10 @@ export interface RcaAnalysisResponse {
   job_run_id: string;
   task_key?: string;
   status?: string;
+  job_status?: string;
   root_cause?: RcaRootCause;
+  evidence_analysis?: RcaEvidenceAnalysis;
+  recommendations?: RcaRecommendationsDetail;
   timeline?: Array<{ ts?: string; event_type?: string; summary?: string }>;
   evidence?: Array<{ source?: string; ref?: string; excerpt?: string }>;
   contributing_factors?: string[];
@@ -222,6 +238,10 @@ export interface RecommendationHistoryEntry {
   job_id: string;
   job_run_id?: string;
   workspace_id?: string;
+  agent_id?: string;
+  workspace_agent_id?: string;
+  task_key?: string;
+  kind?: string;
   timestamp: string;
   lifecycle_status?: string;
   lifecycle_status_label?: string;
@@ -834,12 +854,17 @@ export class ApiService {
   getRecommendations(
     workspaceId: string,
     jobId: string,
-    limit = 5
+    limit = 20,
+    agentId?: string | null
   ): Observable<RecommendationHistoryEntry[]> {
+    let params = new HttpParams().set('limit', limit.toString());
+    if (agentId?.trim()) {
+      params = params.set('agent_id', agentId.trim());
+    }
     return this.http
       .get<RecommendationHistoryEntry[]>(
         `${API_BASE}/workspaces/${workspaceId}/jobs/${jobId}/recommendations`,
-        { params: { limit: limit.toString() } }
+        { params }
       )
       .pipe(
         catchError((err) => {

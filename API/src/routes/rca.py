@@ -38,7 +38,10 @@ class AnalyzeRcaRequest(BaseModel):
     trigger_source: Optional[str] = Field(default="ui", description="pipeline | ui")
     force: bool = Field(
         default=False,
-        description="If true, re-run even when an analysis already exists for this run/task.",
+        description=(
+            "If true, always re-run and insert a new history row (superseding any open RCA). "
+            "If false, return the most recent open (non-terminal) RCA for this run/task when one exists."
+        ),
     )
     evidence_pack: Optional[Dict[str, Any]] = Field(
         default=None,
@@ -80,10 +83,12 @@ async def analyze_rca(
 
     svc = RcaAnalysisService()
     if not request.force:
-        existing = svc.get_by_run(request.job_run_id, request.task_key)
+        # Reuse only while the latest matching RCA is still an open lifecycle.
+        existing = svc.get_open_by_run(request.job_run_id, request.task_key)
         if existing:
             result = dict(existing.result or {})
             result["cached"] = True
+            result["request_id"] = str(existing.request_id)
             return RcaResponse(**{**result, "cached": True})
 
     request_id = uuid4()
@@ -175,6 +180,7 @@ async def analyze_rca(
         agent_id=agent_id,
         workspace_agent_id=request.workspace_agent_id,
         force=request.force,
+        request_log_request_id=request_id,
     )
     duration_ms = int((time.perf_counter() - start_time) * 1000)
     try:

@@ -332,6 +332,10 @@ class RecommendationHistoryResponse(BaseModel):
     job_id: str
     job_run_id: Optional[str] = None
     workspace_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    workspace_agent_id: Optional[str] = None
+    task_key: Optional[str] = None
+    kind: Optional[str] = None
     timestamp: str
     lifecycle_status: str = "RECOMMENDED"
     lifecycle_status_label: str = "Recommended"
@@ -362,17 +366,17 @@ def list_job_recommendations(
     workspace_id: str,
     job_id: str,
     limit: int = Query(
-        5,
+        20,
         ge=1,
         le=50,
         description="Maximum number of recommendation runs to return (most recent first).",
     ),
+    agent_id: Optional[str] = Query(
+        default=None,
+        description="Filter by agent_id (e.g. dbx_cluster_tuning_agent, spark_job_rca_agent).",
+    ),
 ) -> List[RecommendationHistoryResponse]:
-    """Return recent recommendations for a job, joined with request logs and cost usage.
-
-    This powers the UI comparison view: current vs recommended configuration,
-    explanation, pattern analysis, and token/cost breakdown.
-    """
+    """Return recent recommendations for a job (tuning and/or RCA), with lifecycle."""
     try:
         session = get_database_session()
     except Exception as e:
@@ -390,6 +394,8 @@ def list_job_recommendations(
         )
         if workspace_id:
             query = query.filter(RecommendationHistory.workspace_id == workspace_id)
+        if agent_id and agent_id.strip():
+            query = query.filter(RecommendationHistory.agent_id == agent_id.strip())
 
         rows = query.order_by(RecommendationHistory.timestamp.desc()).limit(limit).all()
 
@@ -466,12 +472,29 @@ def list_job_recommendations(
                 for e in lifecycle_events_raw
             ]
 
+            rec_payload = rec.recommendation if isinstance(rec.recommendation, dict) else {}
+            kind = rec_payload.get("kind") if isinstance(rec_payload, dict) else None
+            if not kind and getattr(rec, "agent_id", None):
+                from shared.config.agent_ids import (
+                    DBX_CLUSTER_TUNING_AGENT_ID,
+                    SPARK_JOB_RCA_AGENT_ID,
+                )
+
+                if rec.agent_id == SPARK_JOB_RCA_AGENT_ID:
+                    kind = "spark_rca"
+                elif rec.agent_id == DBX_CLUSTER_TUNING_AGENT_ID:
+                    kind = "cluster_tuning"
+
             responses.append(
                 RecommendationHistoryResponse(
                     request_id=str(rec.request_id),
                     job_id=rec.job_id,
                     job_run_id=_job_run_id_from_history(rec, req_log),
                     workspace_id=rec.workspace_id,
+                    agent_id=getattr(rec, "agent_id", None),
+                    workspace_agent_id=getattr(rec, "workspace_agent_id", None),
+                    task_key=getattr(rec, "task_key", None),
+                    kind=kind,
                     timestamp=rec.timestamp.isoformat() if rec.timestamp else "",
                     lifecycle_status=lifecycle_status,
                     lifecycle_status_label=lifecycle_display_label(lifecycle_status),
@@ -484,7 +507,7 @@ def list_job_recommendations(
                     api_request_status=req_log.status if req_log else None,
                     comparison=rec.comparison if isinstance(rec.comparison, dict) else None,
                     reason_codes=list(rec.reason_codes or []),
-                    recommendation=rec.recommendation or {},
+                    recommendation=rec_payload or {},
                     explanation=rec.explanation,
                     pattern_analysis=rec.pattern_analysis,
                     risk_assessment=rec.risk_assessment,

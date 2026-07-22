@@ -13,7 +13,6 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base
@@ -86,6 +85,14 @@ class RecommendationHistory(Base):
     )
     job_id = Column(String(255), nullable=False, index=True)
     job_run_id = Column(String(255), nullable=True, index=True)
+    agent_id = Column(
+        String(255),
+        nullable=False,
+        default="dbx_cluster_tuning_agent",
+        index=True,
+    )
+    workspace_agent_id = Column(String(255), nullable=True, index=True)
+    task_key = Column(String(255), nullable=True, index=True)
     user_id = Column(String(255), nullable=True)
     workspace_id = Column(String(255), nullable=True)
     timestamp = Column(DateTime(timezone=True), default=func.now(), index=True)
@@ -120,35 +127,6 @@ class RecommendationLifecycleEvent(Base):
     changed_at = Column(DateTime(timezone=True), default=func.now(), index=True)
     notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=func.now())
-
-
-class RcaAnalysis(Base):
-    """Stored Spark job failure RCA result (idempotent per job_run_id + task_key)."""
-
-    __tablename__ = "rca_analyses"
-    __table_args__ = (
-        UniqueConstraint(
-            "job_run_id",
-            "task_key_norm",
-            name="uq_rca_analyses_job_run_task",
-        ),
-    )
-
-    id = Column(Integer, primary_key=True, index=True)
-    request_id = Column(UUID(as_uuid=True), unique=True, index=True, default=uuid.uuid4)
-    job_id = Column(String(255), nullable=True, index=True)
-    job_run_id = Column(String(255), nullable=False, index=True)
-    task_key = Column(String(255), nullable=True)
-    task_key_norm = Column(String(255), nullable=False, default="", index=True)
-    workspace_id = Column(String(255), nullable=True, index=True)
-    trigger_source = Column(String(32), nullable=True)
-    agent_id = Column(String(255), nullable=False, default="spark_job_rca_agent")
-    workspace_agent_id = Column(String(255), nullable=True)
-    category = Column(String(64), nullable=True, index=True)
-    confidence = Column(Float, nullable=True)
-    summary = Column(Text, nullable=True)
-    result = Column(JSONB, nullable=False)
-    created_at = Column(DateTime(timezone=True), default=func.now(), index=True)
 
 
 class WorkspaceConnection(Base):

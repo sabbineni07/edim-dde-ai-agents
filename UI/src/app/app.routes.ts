@@ -12,6 +12,8 @@ export const routes: Routes = [
       { path: '', redirectTo: 'connections', pathMatch: 'full' },
       { path: 'environments', loadComponent: () => import('./features/environments/environments.component').then(m => m.EnvironmentsComponent) },
       { path: 'admin/environments', loadComponent: () => import('./features/manage-environments/manage-environments.component').then(m => m.ManageEnvironmentsComponent) },
+      // TEMPORARY — remove with features/temp-sql-executor + API temp_sql_executor
+      { path: 'temp/sql', loadComponent: () => import('./features/temp-sql-executor/temp-sql-executor.component').then(m => m.TempSqlExecutorComponent) },
       { path: 'connections', loadComponent: () => import('./features/connections/connections.component').then(m => m.ConnectionsComponent) },
       { path: 'datasets', loadComponent: () => import('./features/datasets/datasets.component').then(m => m.DatasetsComponent) },
       { path: 'workspaces', loadComponent: () => import('./features/workspaces/workspaces.component').then(m => m.WorkspacesComponent) },
