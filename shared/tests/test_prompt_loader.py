@@ -68,6 +68,9 @@ def test_rca_chain_messages_include_skills():
         or "Small file / high metadata" in system_text
     )
     assert "Exit code 137" in system_text or "exit code 137" in system_text
+    # JSON examples must be escaped for ChatPromptTemplate (literal braces).
+    assert '"job_status"' in system_text
+    assert "{{" in system_text and "}}" in system_text
     human_text = messages[1][1]
     assert "{evidence_pack}" in human_text
     assert "{cluster_logs_section}" in human_text
@@ -75,3 +78,38 @@ def test_rca_chain_messages_include_skills():
     assert "{query_plans_section}" in human_text
     assert "{workspace_id}" in human_text
     assert "one JSON object" in human_text
+
+
+def test_rca_chat_prompt_template_invokes_with_json_payload():
+    """System JSON examples must not become LangChain template variables."""
+    from langchain_core.prompts import ChatPromptTemplate
+
+    from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
+    from shared.rca.prompt_payload import format_rca_human_payload
+
+    messages = build_chain_messages(SPARK_JOB_RCA_AGENT_ID, "rca")
+    prompt = ChatPromptTemplate.from_messages(messages)
+    assert "job_status" not in prompt.input_variables
+    assert "evidence_pack" in prompt.input_variables
+
+    payload = format_rca_human_payload(
+        {
+            "job_run_id": "jr-1",
+            "job_id": "j-1",
+            "workspace_id": "ws-1",
+            "job_run_date": "2026-07-18",
+            "task_key": "main",
+            "sections": {
+                "logs": {"top_exceptions": []},
+                "stage_metrics": {},
+                "sql_plans": {"sql_errors": []},
+            },
+            "evidence": [],
+            "timeline": [],
+        },
+        classification_hint="category=unknown",
+    )
+    rendered = prompt.invoke(payload)
+    text = "\n".join(m.content for m in rendered.to_messages())
+    assert '"job_status"' in text
+    assert "jr-1" in text
