@@ -6,10 +6,12 @@ import { FormsModule } from '@angular/forms';
 import { combineLatest } from 'rxjs';
 import {
   ApiService,
+  AnalyzeRcaRequest,
   GenerateRecommendationRequest,
   GenerateRecommendationResponse,
   JobMetricsResponse,
   JobRunSummary,
+  RcaAnalysisResponse,
   RecommendationHistoryEntry,
   WorkspaceAgent,
 } from '../../services/api.service';
@@ -38,6 +40,11 @@ import { EmptyStateComponent } from '../../shared/empty-state/empty-state.compon
 import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
 import { UiHints } from '../../services/api.service';
+import {
+  isFailedJobRunStatus,
+  jobRunStatusBadgeClass,
+  jobRunStatusLabel,
+} from '../../core/job-run-status.util';
 
 @Component({
   selector: 'app-job-detail',
@@ -61,6 +68,7 @@ export class JobDetailComponent implements OnInit {
 
   workspaceAgents: WorkspaceAgent[] = [];
   selectedWorkspaceAgentId = '';
+  lastRcaResult: RcaAnalysisResponse | null = null;
 
   loadingMetrics = true;
   loadingRuns = true;
@@ -70,6 +78,14 @@ export class JobDetailComponent implements OnInit {
   startDate = '';
   endDate = '';
   includeExplanation = true;
+  /** When true, RCA analyze sends force=true (re-run even if an open lifecycle RCA exists). */
+  forceRcaReRun = false;
+  historyKindFilter: '' | 'cluster_tuning' | 'spark_rca' = '';
+  readonly historyKindFilterOptions: Array<{ value: '' | 'cluster_tuning' | 'spark_rca'; label: string }> = [
+    { value: '', label: 'All types' },
+    { value: 'cluster_tuning', label: 'Cluster tuning' },
+    { value: 'spark_rca', label: 'Failure RCA' },
+  ];
 
   lifecycleLabels: Record<string, string> = {};
   lifecycleNotes: Record<string, string> = {};
@@ -137,7 +153,41 @@ export class JobDetailComponent implements OnInit {
   }
 
   get historyCount(): number {
-    return this.recommendations.length;
+    return this.filteredHistory.length;
+  }
+
+  get usesInventoryRunStatus(): boolean {
+    return this.runs.some((run) => (run.status || '').trim().length > 0);
+  }
+
+  readonly jobRunStatusLabel = jobRunStatusLabel;
+  readonly jobRunStatusBadgeClass = jobRunStatusBadgeClass;
+  readonly isFailedJobRunStatus = isFailedJobRunStatus;
+
+  get selectedAgent(): WorkspaceAgent | null {
+    if (!this.selectedWorkspaceAgentId) return null;
+    return this.workspaceAgents.find((a) => a.id === this.selectedWorkspaceAgentId) || null;
+  }
+
+  get isRcaAgentSelected(): boolean {
+    return this.resolveAgentId() === 'spark_job_rca_agent';
+  }
+
+  get canRunSelectedAgent(): boolean {
+    if (!this.selectedClusterId) return false;
+    if (this.isRcaAgentSelected) {
+      return !!this.selectedWorkspaceAgentId && isFailedJobRunStatus(this.selectedRun?.status);
+    }
+    return true;
+  }
+
+  get runButtonLabel(): string {
+    return this.isRcaAgentSelected ? 'Run RCA' : 'Run recommendation';
+  }
+
+  get filteredHistory(): RecommendationHistoryEntry[] {
+    if (!this.historyKindFilter) return this.recommendations;
+    return this.recommendations.filter((rec) => this.historyKind(rec) === this.historyKindFilter);
   }
 
   selectTab(tab: 'runs' | 'metrics' | 'recommendations' | 'history'): void {
@@ -310,21 +360,98 @@ export class JobDetailComponent implements OnInit {
     const ws = this.workspaceId();
     this.api.getWorkspaceAgents(ws).subscribe({
       next: (list) => {
-        this.workspaceAgents = list;
-        if (list.length && !this.selectedWorkspaceAgentId) {
-          this.selectedWorkspaceAgentId = list[0].id;
+        this.workspaceAgents = list.filter(
+          (a) =>
+            !a.agent_id ||
+            a.agent_id === 'dbx_cluster_tuning_agent' ||
+            a.agent_id === 'spark_job_rca_agent'
+        );
+        if (this.workspaceAgents.length && !this.selectedWorkspaceAgentId) {
+          this.selectedWorkspaceAgentId = this.workspaceAgents[0].id;
         } else if (
           this.selectedWorkspaceAgentId &&
-          !list.some((a) => a.id === this.selectedWorkspaceAgentId)
+          !this.workspaceAgents.some((a) => a.id === this.selectedWorkspaceAgentId)
         ) {
-          this.selectedWorkspaceAgentId = list[0]?.id || '';
+          this.selectedWorkspaceAgentId = this.workspaceAgents[0]?.id || '';
         }
       },
     });
   }
 
-  /** Agent type for the recommend API — from workspace agent install, or platform default. */
-  private resolveAgentId(): string {
+  agentOptionLabel(wa: WorkspaceAgent): string {
+    const kind =
+      wa.agent_id === 'spark_job_rca_agent'
+        ? 'Failure RCA'
+        : wa.agent_id === 'dbx_cluster_tuning_agent'
+          ? 'Cluster Tuning'
+          : wa.agent_id || 'Agent';
+    return `${wa.name} (${kind})`;
+  }
+
+  onSelectedAgentChange(): void {
+    if (this.isRcaAgentSelected) {
+      this.lastResult = null;
+    } else {
+      this.lastRcaResult = null;
+    }
+  }
+
+  onHistoryFilterChange(): void {
+    // client-side filter only
+  }
+
+  historyKind(rec: RecommendationHistoryEntry): 'cluster_tuning' | 'spark_rca' | 'unknown' {
+    if (rec.kind === 'spark_rca' || rec.agent_id === 'spark_job_rca_agent') return 'spark_rca';
+    if (rec.kind === 'cluster_tuning' || rec.agent_id === 'dbx_cluster_tuning_agent' || !rec.agent_id) {
+      return 'cluster_tuning';
+    }
+    return 'unknown';
+  }
+
+  historyKindLabel(rec: RecommendationHistoryEntry): string {
+    const kind = this.historyKind(rec);
+    if (kind === 'spark_rca') return 'Failure RCA';
+    if (kind === 'cluster_tuning') return 'Cluster tuning';
+    return rec.agent_id || 'Unknown';
+  }
+
+  historyKindBadgeClass(rec: RecommendationHistoryEntry): string {
+    return this.historyKind(rec) === 'spark_rca' ? 'bg-danger' : 'bg-secondary';
+  }
+
+  isRcaHistoryEntry(rec: RecommendationHistoryEntry): boolean {
+    return this.historyKind(rec) === 'spark_rca';
+  }
+
+  rcaCategory(rec: RecommendationHistoryEntry): string | null {
+    const r = rec.recommendation || {};
+    const root = (r['root_cause'] as Record<string, unknown> | undefined) || {};
+    const cat = r['category'] ?? root['category'];
+    return typeof cat === 'string' ? cat : null;
+  }
+
+  rcaConfidence(rec: RecommendationHistoryEntry): number | null {
+    const r = rec.recommendation || {};
+    const root = (r['root_cause'] as Record<string, unknown> | undefined) || {};
+    const conf = r['confidence'] ?? root['confidence'];
+    return typeof conf === 'number' ? conf : null;
+  }
+
+  rcaSummary(rec: RecommendationHistoryEntry): string | null {
+    const r = rec.recommendation || {};
+    const root = (r['root_cause'] as Record<string, unknown> | undefined) || {};
+    const summary = r['summary'] ?? root['summary'] ?? rec.explanation;
+    return typeof summary === 'string' ? summary : null;
+  }
+
+  rcaActions(rec: RecommendationHistoryEntry): string[] {
+    const r = rec.recommendation || {};
+    const actions = r['recommended_actions'];
+    return Array.isArray(actions) ? actions.map((a) => String(a)) : [];
+  }
+
+  /** Agent type for the recommend/RCA API — from workspace agent install, or platform default. */
+  resolveAgentId(): string {
     if (this.selectedWorkspaceAgentId) {
       const wa = this.workspaceAgents.find((a) => a.id === this.selectedWorkspaceAgentId);
       if (wa?.agent_id) return wa.agent_id;
@@ -438,7 +565,7 @@ export class JobDetailComponent implements OnInit {
   loadRecommendations(force = false): void {
     const ws = this.workspaceId();
     const j = this.jobId();
-    const limit = 5;
+    const limit = 20;
     const cacheKey = this.browseCache.recommendationsKey(ws, j, limit);
     const cached = !force && this.browseCache.peek<RecommendationHistoryEntry[]>(cacheKey);
     this.loadingRecs = !cached;
@@ -652,17 +779,65 @@ export class JobDetailComponent implements OnInit {
 
   runRecommendation(): void {
     if (!this.selectedClusterId) {
-      this.error = 'Select a cluster run first.';
+      this.error = 'Select a run first.';
       return;
     }
-    const j = this.jobId();
+    const selectedRun = this.runs.find((r) => r.cluster_id === this.selectedClusterId);
+    const agentId = this.resolveAgentId();
+
+    if (agentId === 'spark_job_rca_agent') {
+      if (!this.selectedWorkspaceAgentId) {
+        this.error = 'Select a Spark Failure RCA workspace agent install.';
+        return;
+      }
+      if (!isFailedJobRunStatus(selectedRun?.status)) {
+        this.error = 'RCA requires a failed run. Select a run with Failed status on the Runs tab.';
+        return;
+      }
+      const jobRunId = selectedRun?.job_run_id || selectedRun?.cluster_id;
+      if (!jobRunId) {
+        this.error = 'Selected run is missing job_run_id.';
+        return;
+      }
+      const body: AnalyzeRcaRequest = {
+        job_run_id: jobRunId,
+        workspace_agent_id: this.selectedWorkspaceAgentId,
+        agent_id: 'spark_job_rca_agent',
+        job_id: this.jobId(),
+        job_run_date: selectedRun?.job_run_date,
+        workspace_id: this.workspaceId(),
+        trigger_source: 'ui',
+        force: this.forceRcaReRun,
+      };
+      this.runningRecommendation = true;
+      this.error = '';
+      this.lastResult = null;
+      this.lastRcaResult = null;
+      this.api.analyzeRca(body).subscribe({
+        next: (result) => {
+          this.runningRecommendation = false;
+          this.lastRcaResult = result;
+          this.activeTab = 'recommendations';
+          this.loadRecommendations(true);
+          this.toast.success(
+            result.cached ? 'Loaded existing open RCA' : 'RCA completed'
+          );
+        },
+        error: (err) => {
+          this.runningRecommendation = false;
+          this.error = parseApiError(err, 'RCA analysis failed');
+        },
+      });
+      return;
+    }
+
     this.runningRecommendation = true;
     this.error = '';
     this.lastResult = null;
-    const selectedRun = this.runs.find((r) => r.cluster_id === this.selectedClusterId);
+    this.lastRcaResult = null;
     const body: GenerateRecommendationRequest = {
-      agent_id: this.resolveAgentId(),
-      job_id: j,
+      agent_id: agentId,
+      job_id: this.jobId(),
       cluster_id: this.selectedClusterId,
       include_explanation: this.includeExplanation,
       environment_id: this.environmentSelection.getSelectedId() || undefined,
@@ -675,19 +850,18 @@ export class JobDetailComponent implements OnInit {
     if (this.selectedWorkspaceAgentId) {
       body.workspace_agent_id = this.selectedWorkspaceAgentId;
     }
-    this.api.generateRecommendation(body)
-      .subscribe({
-        next: (res) => {
-          this.runningRecommendation = false;
-          this.lastResult = res;
-          this.activeTab = 'recommendations';
-          this.loadRecommendations(true);
-        },
-        error: (err) => {
-          this.runningRecommendation = false;
-          this.error = parseApiError(err, 'Recommendation failed');
-        },
-      });
+    this.api.generateRecommendation(body).subscribe({
+      next: (res) => {
+        this.runningRecommendation = false;
+        this.lastResult = res;
+        this.activeTab = 'recommendations';
+        this.loadRecommendations(true);
+      },
+      error: (err) => {
+        this.runningRecommendation = false;
+        this.error = parseApiError(err, 'Recommendation failed');
+      },
+    });
   }
 
   historyComparisonCurrent(rec: RecommendationHistoryEntry): Record<string, unknown> | null {

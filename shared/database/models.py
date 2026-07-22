@@ -2,7 +2,18 @@
 
 import uuid
 
-from sqlalchemy import Boolean, Column, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    Text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.sql import func
@@ -74,6 +85,14 @@ class RecommendationHistory(Base):
     )
     job_id = Column(String(255), nullable=False, index=True)
     job_run_id = Column(String(255), nullable=True, index=True)
+    agent_id = Column(
+        String(255),
+        nullable=False,
+        default="dbx_cluster_tuning_agent",
+        index=True,
+    )
+    workspace_agent_id = Column(String(255), nullable=True, index=True)
+    task_key = Column(String(255), nullable=True, index=True)
     user_id = Column(String(255), nullable=True)
     workspace_id = Column(String(255), nullable=True)
     timestamp = Column(DateTime(timezone=True), default=func.now(), index=True)

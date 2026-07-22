@@ -31,6 +31,11 @@ AGENT_DISPLAY: Dict[str, Dict[str, str]] = {
         "description": "Per-run utilization right-sizing (Databricks cluster config).",
         "get_started_route": "/app/environments",
     },
+    "spark_job_rca_agent": {
+        "name": "Spark Job Failure RCA Agent",
+        "description": "Root-cause analysis for Spark job failures from logs and metrics.",
+        "get_started_route": "/app/environments",
+    },
 }
 
 

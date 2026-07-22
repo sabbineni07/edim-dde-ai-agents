@@ -295,6 +295,7 @@ async def generate_recommendation(
                 (x_user_id or x_user_name or "anonymous").strip() or "anonymous",
                 connection_id=request.connection_id,
                 dataset_id=effective_dataset_id,
+                for_browse=False,
             )
             collector_token = set_metrics_collector(collector)
 

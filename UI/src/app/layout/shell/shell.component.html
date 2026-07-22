@@ -68,6 +68,11 @@
                 <i class="bi bi-sliders me-2"></i>Manage environments
               </button>
             </li>
+            <li *ngIf="isAdmin">
+              <button class="dropdown-item" type="button" (click)="openTempSqlExecutor()">
+                <i class="bi bi-terminal me-2"></i>SQL executor (temp)
+              </button>
+            </li>
             <li><hr class="dropdown-divider"></li>
             <li>
               <button class="dropdown-item" type="button" (click)="logout()">

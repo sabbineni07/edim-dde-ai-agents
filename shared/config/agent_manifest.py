@@ -8,8 +8,19 @@ RoleSpec = Union[List[str], Dict[str, Any]]
 
 ROLE_UI: Dict[str, Dict[str, str]] = {
     "metrics": {
-        "label": "Job metrics dataset",
-        "help": "Required. Dataset (Delta table or local CSV) with job run metrics for this agent.",
+        "label": "Job cluster metrics dataset",
+        "help": (
+            "Required. Utilization metrics (job_cluster_metrics profile) for cluster sizing. "
+            "Not the environment browse inventory."
+        ),
+    },
+    "spark_logs": {
+        "label": "Spark logs dataset",
+        "help": "Required. Delta table (or local CSV/JSON) with spark application logs (RCA evidence).",
+    },
+    "spark_metrics": {
+        "label": "Spark metrics dataset",
+        "help": "Required. Delta table (or local CSV/JSON) with spark job/SQL/stage telemetry (RCA evidence).",
     },
     "llm": {
         "label": "Language model",
@@ -30,6 +41,15 @@ AGENT_MANIFESTS: Dict[str, Dict[str, Any]] = {
         },
         "required_roles": ["metrics", "llm"],
         "optional_roles": ["rag"],
+    },
+    "spark_job_rca_agent": {
+        "roles": {
+            "spark_logs": {"kind": "dataset", "schema_profile": "spark_logs"},
+            "spark_metrics": {"kind": "dataset", "schema_profile": "spark_metrics"},
+            "llm": {"kind": "connection", "connection_types": ["ai_foundry"]},
+        },
+        "required_roles": ["spark_logs", "spark_metrics", "llm"],
+        "optional_roles": [],
     },
 }
 

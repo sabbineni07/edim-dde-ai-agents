@@ -1,0 +1,86 @@
+<div class="temp-sql-page">
+  <app-page-header
+    title="SQL executor"
+    icon="terminal"
+    subtitle="TEMPORARY admin tool — runs SQL against app Postgres via API. Remove when no longer needed."
+  ></app-page-header>
+
+  <div class="alert alert-warning py-2 small" role="status">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    Admin-only. Single statements only. Results capped at {{ maxRows }} rows.
+    Mutations commit immediately.
+  </div>
+
+  <app-error-alert *ngIf="error" [message]="error" (dismiss)="error = ''"></app-error-alert>
+
+  <div class="card shadow-sm">
+    <div class="card-body">
+      <label class="form-label small fw-semibold" for="tempSqlInput">SQL</label>
+      <textarea
+        id="tempSqlInput"
+        class="form-control font-monospace sql-input"
+        rows="10"
+        [(ngModel)]="sql"
+        (keydown)="onKeydown($event)"
+        spellcheck="false"
+        [disabled]="running"
+      ></textarea>
+      <div class="d-flex flex-wrap align-items-center gap-3 mt-3">
+        <button
+          type="button"
+          class="btn btn-primary btn-sm"
+          (click)="run()"
+          [disabled]="!canRun"
+        >
+          <span *ngIf="running" class="spinner-border spinner-border-sm me-1" role="status"></span>
+          {{ running ? 'Running…' : 'Run' }}
+        </button>
+        <label class="small mb-0 d-flex align-items-center gap-2">
+          Max rows
+          <input
+            type="number"
+            class="form-control form-control-sm max-rows-input"
+            [(ngModel)]="maxRows"
+            min="1"
+            max="500"
+            [disabled]="running"
+          />
+        </label>
+        <span class="text-muted small">Ctrl/Cmd+Enter to run</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm mt-3" *ngIf="result">
+    <div class="card-header py-2 d-flex flex-wrap justify-content-between gap-2">
+      <span class="small mb-0">{{ result.message }}</span>
+      <span class="text-muted small">{{ result.elapsed_ms }} ms</span>
+    </div>
+    <div class="card-body p-0" *ngIf="result.returns_rows; else mutateOnly">
+      <div class="table-responsive result-table-wrap" *ngIf="result.columns.length; else emptyRows">
+        <table class="table table-sm table-striped table-hover mb-0 font-monospace small">
+          <thead>
+            <tr>
+              <th *ngFor="let col of result.columns">{{ col }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let row of result.rows">
+              <td *ngFor="let cell of row" [class.text-muted]="cell === null">
+                {{ cellDisplay(cell) }}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <ng-template #emptyRows>
+        <p class="text-muted small mb-0 p-3">Query returned no rows.</p>
+      </ng-template>
+    </div>
+    <ng-template #mutateOnly>
+      <div class="card-body py-3">
+        <p class="small mb-0 text-muted">No result set (statement did not return rows).</p>
+      </div>
+    </ng-template>
+  </div>
+</div>

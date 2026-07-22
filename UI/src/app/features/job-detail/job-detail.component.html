@@ -13,9 +13,16 @@
   <div class="card-body job-detail-toolbar-body">
     <div class="job-detail-toolbar-group">
       <label class="form-label mb-0" for="workspaceAgentSelect">Agent</label>
-      <select id="workspaceAgentSelect" class="form-select form-select-sm" [(ngModel)]="selectedWorkspaceAgentId">
-        <option value="">Platform default</option>
-        <option *ngFor="let wa of workspaceAgents" [value]="wa.id">{{ wa.name }}</option>
+      <select
+        id="workspaceAgentSelect"
+        class="form-select form-select-sm job-detail-agent-select"
+        [(ngModel)]="selectedWorkspaceAgentId"
+        (ngModelChange)="onSelectedAgentChange()"
+      >
+        <option value="">Platform default (Cluster Tuning)</option>
+        <option *ngFor="let wa of workspaceAgents" [value]="wa.id">
+          {{ agentOptionLabel(wa) }}
+        </option>
       </select>
       <a
         *ngIf="workspaceAgents.length === 0"
@@ -26,10 +33,24 @@
         Add agent
       </a>
     </div>
-    <div class="job-detail-toolbar-group">
+    <div class="job-detail-toolbar-group" *ngIf="!isRcaAgentSelected">
       <div class="form-check mb-0">
         <input class="form-check-input" type="checkbox" id="includeExplanation" [(ngModel)]="includeExplanation" />
         <label class="form-check-label small" for="includeExplanation">Include explanation</label>
+      </div>
+    </div>
+    <div class="job-detail-toolbar-group" *ngIf="isRcaAgentSelected">
+      <div class="form-check mb-0">
+        <input
+          class="form-check-input"
+          type="checkbox"
+          id="forceRcaReRun"
+          [(ngModel)]="forceRcaReRun"
+          [disabled]="runningRecommendation"
+        />
+        <label class="form-check-label small" for="forceRcaReRun" title="Re-run even if an open RCA already exists for this job run">
+          Force re-run
+        </label>
       </div>
     </div>
     <div class="job-detail-toolbar-actions">
@@ -47,9 +68,9 @@
         class="btn btn-primary btn-sm"
         type="button"
         (click)="runRecommendation()"
-        [disabled]="runningRecommendation || !selectedClusterId"
+        [disabled]="runningRecommendation || !canRunSelectedAgent"
       >
-        <span *ngIf="!runningRecommendation"><i class="bi bi-play-fill me-1"></i>Run recommendation</span>
+        <span *ngIf="!runningRecommendation"><i class="bi bi-play-fill me-1"></i>{{ runButtonLabel }}</span>
         <span *ngIf="runningRecommendation"><span class="spinner-border spinner-border-sm me-1"></span>Running…</span>
       </button>
     </div>
@@ -74,7 +95,7 @@
   </button>
   <button type="button" class="nav-link" [class.active]="activeTab === 'recommendations'" (click)="selectTab('recommendations')">
     Recommendations
-    <span class="badge bg-secondary ms-1" *ngIf="lastResult">1</span>
+    <span class="badge bg-secondary ms-1" *ngIf="lastResult || lastRcaResult">1</span>
   </button>
   <button type="button" class="nav-link" [class.active]="activeTab === 'history'" (click)="selectTab('history')">
     History
@@ -100,6 +121,11 @@
       <span class="ms-2">
         <code class="small">{{ selectedRun.job_run_id || selectedRun.cluster_id }}</code>
       </span>
+      <span class="ms-2" *ngIf="selectedRun.status">
+        <span class="badge" [ngClass]="jobRunStatusBadgeClass(selectedRun.status)">
+          {{ jobRunStatusLabel(selectedRun.status) }}
+        </span>
+      </span>
       <span *ngIf="selectedRun.dbr_version" class="ms-2 text-muted">
         · DBR {{ selectedRun.dbr_version }}
       </span>
@@ -113,6 +139,7 @@
           <tr>
             <th rowspan="2"></th>
             <th rowspan="2">Job run ID</th>
+            <th rowspan="2">Status</th>
             <th rowspan="2">Cluster ID</th>
             <th rowspan="2">Run date</th>
             <th rowspan="2">DBR version</th>
@@ -133,6 +160,7 @@
           <tr
             *ngFor="let run of paginatedRuns"
             [class.table-active]="run.cluster_id === selectedClusterId"
+            [class.job-run-failed]="isFailedJobRunStatus(run.status)"
             (click)="selectRun(run.cluster_id)"
             role="button">
             <td>
@@ -147,6 +175,16 @@
               <code class="small job-run-id-text" [title]="run.job_run_id || ''">
                 {{ run.job_run_id || '—' }}
               </code>
+            </td>
+            <td>
+              <span
+                *ngIf="run.status; else unknownRunStatus"
+                class="badge"
+                [ngClass]="jobRunStatusBadgeClass(run.status)"
+              >
+                {{ jobRunStatusLabel(run.status) }}
+              </span>
+              <ng-template #unknownRunStatus>–</ng-template>
             </td>
             <td>
               <code class="small job-run-id-text" [title]="run.cluster_id">{{ run.cluster_id }}</code>
@@ -419,36 +457,136 @@
   </div>
 </div>
 
-<div class="card mb-2" *ngIf="activeTab === 'recommendations' && !lastResult && !runningRecommendation">
+<div class="card mb-2" *ngIf="activeTab === 'recommendations' && !lastResult && !lastRcaResult && !runningRecommendation">
   <div class="card-body">
     <app-empty-state
       icon="lightning"
       title="No recommendation yet"
-      description="Select a run on the Runs tab, then click Run recommendation."
+      description="Select a run on the Runs tab (failed run for RCA), choose an agent, then click Run."
       [compact]="true"
     ></app-empty-state>
   </div>
 </div>
 
+<!-- Latest RCA recommendation -->
+<div class="card mb-2" *ngIf="activeTab === 'recommendations' && lastRcaResult as rca">
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <strong>Latest failure RCA</strong>
+    <div class="d-flex align-items-center flex-wrap gap-2">
+      <span class="badge bg-danger">{{ rca.root_cause?.category || 'unknown' }}</span>
+      <span class="badge bg-light text-dark border" *ngIf="rca.cached">cached</span>
+      <code class="small" *ngIf="rca.request_id">{{ rca.request_id }}</code>
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+      <code class="small">{{ rca.job_run_id }}</code>
+      <span class="small text-muted" *ngIf="rca.root_cause?.confidence != null">
+        confidence {{ rca.root_cause?.confidence | number:'1.0-2' }}
+      </span>
+    </div>
+    <p class="mb-3">{{ rca.root_cause?.summary }}</p>
+    <div class="mb-3" *ngIf="rca.evidence_analysis as ea">
+      <strong class="d-block mb-1">Telemetry evidence</strong>
+      <div class="small mb-1" *ngIf="ea.log_signals"><span class="text-muted">Log signals:</span> {{ ea.log_signals }}</div>
+      <div class="small mb-1" *ngIf="ea.metric_anomalies"><span class="text-muted">Metric anomalies:</span> {{ ea.metric_anomalies }}</div>
+      <div class="small mb-1" *ngIf="ea.physical_plan_bottlenecks"><span class="text-muted">Plan bottlenecks:</span> {{ ea.physical_plan_bottlenecks }}</div>
+    </div>
+    <div class="mb-3" *ngIf="rca.recommended_actions?.length">
+      <strong class="d-block mb-1">Recommended actions</strong>
+      <ul class="mb-0">
+        <li *ngFor="let a of rca.recommended_actions">{{ a }}</li>
+      </ul>
+    </div>
+    <div class="mb-3" *ngIf="rca.recommendations as recDetail">
+      <div class="mb-2" *ngIf="recDetail.code_query_rewrites?.length">
+        <strong class="d-block mb-1">Code / query rewrites</strong>
+        <ul class="mb-0 small">
+          <li *ngFor="let a of recDetail.code_query_rewrites">{{ a }}</li>
+        </ul>
+      </div>
+      <div class="mb-2" *ngIf="recDetail.spark_delta_configs?.length">
+        <strong class="d-block mb-1">Spark / Delta configs</strong>
+        <pre class="small bg-light p-2 rounded mb-0" style="white-space: pre-wrap">{{ recDetail.spark_delta_configs?.join('\n') }}</pre>
+      </div>
+      <div class="mb-2" *ngIf="recDetail.infrastructure?.length">
+        <strong class="d-block mb-1">Infrastructure</strong>
+        <ul class="mb-0 small">
+          <li *ngFor="let a of recDetail.infrastructure">{{ a }}</li>
+        </ul>
+      </div>
+    </div>
+    <div class="mb-3" *ngIf="rca.contributing_factors?.length">
+      <strong class="d-block mb-1">Contributing factors</strong>
+      <ul class="mb-0">
+        <li *ngFor="let f of rca.contributing_factors">{{ f }}</li>
+      </ul>
+    </div>
+    <div class="mb-3" *ngIf="rca.timeline?.length">
+      <strong class="d-block mb-1">Timeline</strong>
+      <div class="table-responsive">
+        <table class="table table-sm mb-0">
+          <thead>
+            <tr>
+              <th>Time</th>
+              <th>Event</th>
+              <th>Summary</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let t of rca.timeline">
+              <td class="small text-nowrap">{{ t.ts || '–' }}</td>
+              <td class="small">{{ t.event_type || '–' }}</td>
+              <td class="small">{{ t.summary || '–' }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div *ngIf="rca.evidence?.length">
+      <strong class="d-block mb-1">Evidence</strong>
+      <div class="border rounded p-2 bg-light small mb-2" *ngFor="let e of rca.evidence">
+        <div class="text-muted">{{ e.source }} · <code>{{ e.ref }}</code></div>
+        <pre class="mb-0 mt-1" style="white-space: pre-wrap">{{ e.excerpt }}</pre>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- History tab -->
 <div class="card mb-2" *ngIf="activeTab === 'history'">
-  <div class="card-header"><strong>Recommendation history</strong></div>
+  <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <strong>Recommendation history</strong>
+    <div class="d-flex align-items-center gap-2">
+      <label class="small mb-0" for="historyKindFilter">Type</label>
+      <select
+        id="historyKindFilter"
+        class="form-select form-select-sm"
+        style="min-width: 11rem"
+        [(ngModel)]="historyKindFilter"
+        (ngModelChange)="onHistoryFilterChange()"
+      >
+        <option *ngFor="let opt of historyKindFilterOptions" [ngValue]="opt.value">{{ opt.label }}</option>
+      </select>
+    </div>
+  </div>
   <div class="card-body">
     <app-loading-card *ngIf="loadingRecs" variant="skeleton" [skeletonRows]="4"></app-loading-card>
-    <div *ngIf="!loadingRecs && recommendations.length === 0" class="p-2">
+    <div *ngIf="!loadingRecs && filteredHistory.length === 0" class="p-2">
       <app-empty-state
         icon="clock-history"
         title="No recommendation history"
-        description="Run a recommendation to build history for this job."
+        description="Run a recommendation to build history for this job, or clear the type filter."
         [compact]="true"
       ></app-empty-state>
     </div>
-    <div *ngIf="!loadingRecs && recommendations.length > 0">
-      <div class="accordion" id="recAccordion">
-        <div class="accordion-item" *ngFor="let rec of recommendations; let i = index">
+    <div *ngIf="!loadingRecs && filteredHistory.length > 0">
+      <div class="accordion accordion-slim" id="recAccordion">
+        <div class="accordion-item" *ngFor="let rec of filteredHistory; let i = index">
           <h2 class="accordion-header">
             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" [attr.data-bs-target]="'#rec' + i" [attr.aria-controls]="'rec' + i">
-              <span class="me-2">{{ rec.timestamp | date:'short' }}</span>
+              <span class="me-2 text-nowrap">{{ rec.timestamp | date:'short' }}</span>
+              <span class="badge rounded-pill me-1" [ngClass]="historyKindBadgeClass(rec)">{{ historyKindLabel(rec) }}</span>
               <code class="small me-2" *ngIf="rec.job_run_id">{{ rec.job_run_id }}</code>
               <span class="badge rounded-pill bg-primary me-1">
                 {{ rec.lifecycle_status_label || lifecycleLabel(rec.lifecycle_status) }}
@@ -556,6 +694,22 @@
                 <strong>Reason codes:</strong>
                 <span class="badge bg-info text-dark me-1" *ngFor="let code of rec.reason_codes">{{ code }}</span>
               </div>
+              <ng-container *ngIf="isRcaHistoryEntry(rec); else tuningHistoryBody">
+                <div class="mb-2">
+                  <span class="badge bg-danger me-1">{{ rcaCategory(rec) || 'unknown' }}</span>
+                  <span class="small text-muted" *ngIf="rcaConfidence(rec) != null">
+                    confidence {{ rcaConfidence(rec)! | number:'1.0-2' }}
+                  </span>
+                </div>
+                <p class="mb-2" *ngIf="rcaSummary(rec)">{{ rcaSummary(rec) }}</p>
+                <div class="mb-2" *ngIf="rcaActions(rec).length">
+                  <strong>Recommended actions:</strong>
+                  <ul class="mb-0 mt-1">
+                    <li *ngFor="let a of rcaActions(rec)">{{ a }}</li>
+                  </ul>
+                </div>
+              </ng-container>
+              <ng-template #tuningHistoryBody>
               <div class="row g-2 mb-2" *ngIf="historyComparisonCurrent(rec) || historyComparisonRecommended(rec)">
                 <div class="col-md-6" *ngIf="historyComparisonCurrent(rec)">
                   <strong class="small">Current</strong>
@@ -566,10 +720,11 @@
                   <pre class="small bg-light p-2 rounded mb-0">{{ historyComparisonRecommended(rec) | json }}</pre>
                 </div>
               </div>
+              </ng-template>
               <div class="mb-2" *ngIf="rec.cost_usage_summary">
                 <strong>LLM cost:</strong> {{ formatCost(rec.cost_usage_summary) }}
               </div>
-              <div class="mb-2" *ngIf="rec.recommendation">
+              <div class="mb-2" *ngIf="rec.recommendation && !isRcaHistoryEntry(rec)">
                 <strong>Applied recommendation:</strong>
                 <pre class="bg-light p-2 rounded mt-1 mb-0 small">{{ rec.recommendation | json }}</pre>
               </div>

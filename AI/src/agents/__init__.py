@@ -1,6 +1,7 @@
 """AI agents — import packages to trigger registration."""
 
 from AI.src.agents import dbx_cluster_tuning_agent  # noqa: F401
+from AI.src.agents import spark_job_rca_agent  # noqa: F401
 from AI.src.core.registry import (
     AGENT_DEPS_FACTORIES,
     AGENT_REGISTRY,
@@ -18,4 +19,5 @@ __all__ = [
     "create_agent",
     "register_agent",
     "dbx_cluster_tuning_agent",
+    "spark_job_rca_agent",
 ]

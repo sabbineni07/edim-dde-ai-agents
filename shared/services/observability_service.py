@@ -112,6 +112,9 @@ class ObservabilityService:
         comparison: Optional[Dict] = None,
         reason_codes: Optional[List] = None,
         job_run_ingest: Optional[Dict] = None,
+        agent_id: Optional[str] = None,
+        workspace_agent_id: Optional[str] = None,
+        task_key: Optional[str] = None,
     ) -> bool:
         if not self._ensure_database():
             return True
@@ -122,10 +125,16 @@ class ObservabilityService:
                 stored_recommendation = dict(recommendation)
                 if job_run_ingest:
                     stored_recommendation["job_run_ingest"] = job_run_ingest
+                from shared.config.agent_ids import DBX_CLUSTER_TUNING_AGENT_ID
+
                 rec_history = RecommendationHistory(
                     request_id=request_id,
                     job_id=job_id,
                     job_run_id=job_run_id,
+                    agent_id=(agent_id or DBX_CLUSTER_TUNING_AGENT_ID).strip()
+                    or DBX_CLUSTER_TUNING_AGENT_ID,
+                    workspace_agent_id=workspace_agent_id,
+                    task_key=(task_key or "").strip() or None,
                     user_id=user_id,
                     workspace_id=workspace_id,
                     request_log_request_id=request_log_request_id,

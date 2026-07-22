@@ -479,6 +479,7 @@ class DbxClusterTuningAgent:
                     comparison=comparison_payload,
                     reason_codes=reason_codes,
                     job_run_ingest=metrics,
+                    agent_id=AGENT_ID,
                 )
                 try:
                     from shared.services.recommendation_lifecycle_service import (
@@ -493,6 +494,7 @@ class DbxClusterTuningAgent:
                             job_id=job_id,
                             job_run_id=str(lifecycle_run_id),
                             except_request_id=request_id,
+                            agent_id=AGENT_ID,
                         )
                 except Exception as e:
                     logger.warning("supersede_prior_recommendations_failed", error=str(e))

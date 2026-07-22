@@ -15,6 +15,12 @@ import { LoadingCardComponent } from '../../shared/loading-card/loading-card.com
 import { EmptyStateComponent } from '../../shared/empty-state/empty-state.component';
 import { ErrorAlertComponent } from '../../shared/error-alert/error-alert.component';
 import { BreadcrumbItem } from '../../shared/breadcrumb/breadcrumb.component';
+import {
+  JobRunOutcome,
+  jobRunStatusBadgeClass,
+  jobRunStatusLabel,
+  normalizeJobRunStatus,
+} from '../../core/job-run-status.util';
 
 @Component({
   selector: 'app-jobs-list',
@@ -34,11 +40,23 @@ export class JobsListComponent implements OnInit {
   error = '';
   dateRangeWarning = '';
   filterText = '';
+  statusFilter: '' | JobRunOutcome | 'has_failed' = '';
   uiHints: UiHints | null = null;
   readonly pageSizeOptions = [10, 25, 50, 100];
   pageSize = 25;
   currentPage = 1;
   private forceNextLoad = false;
+
+  readonly jobRunStatusLabel = jobRunStatusLabel;
+  readonly jobRunStatusBadgeClass = jobRunStatusBadgeClass;
+  readonly statusFilterOptions: Array<{ value: '' | JobRunOutcome | 'has_failed'; label: string }> = [
+    { value: '', label: 'All statuses' },
+    { value: 'passed', label: 'Passed' },
+    { value: 'failed', label: 'Failed' },
+    { value: 'canceled', label: 'Canceled' },
+    { value: 'running', label: 'Running' },
+    { value: 'has_failed', label: 'Has failed runs' },
+  ];
 
   constructor(
     private api: ApiService,
@@ -342,13 +360,21 @@ export class JobsListComponent implements OnInit {
 
   get filteredJobs(): JobSummary[] {
     const q = (this.filterText || '').toLowerCase().trim();
-    if (!q) return this.jobs;
-    return this.jobs.filter(
-      (j) =>
-        (j.job_id || '').toLowerCase().includes(q) ||
-        (j.job_name || '').toLowerCase().includes(q) ||
-        (j.job_type || '').toLowerCase().includes(q)
-    );
+    const status = this.statusFilter;
+    return this.jobs.filter((j) => {
+      if (q) {
+        const matchesText =
+          (j.job_id || '').toLowerCase().includes(q) ||
+          (j.job_name || '').toLowerCase().includes(q) ||
+          (j.job_type || '').toLowerCase().includes(q);
+        if (!matchesText) return false;
+      }
+      if (!status) return true;
+      if (status === 'has_failed') {
+        return (j.failed_run_count ?? 0) > 0;
+      }
+      return normalizeJobRunStatus(j.last_job_run_status) === status;
+    });
   }
 
   get totalFilteredJobs(): number {

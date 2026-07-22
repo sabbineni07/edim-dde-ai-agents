@@ -57,6 +57,9 @@ CREATE TABLE IF NOT EXISTS recommendations_history (
     request_log_request_id UUID REFERENCES request_logs(request_id),
     job_id VARCHAR(255) NOT NULL,
     job_run_id VARCHAR(255),
+    agent_id VARCHAR(255) NOT NULL DEFAULT 'dbx_cluster_tuning_agent',
+    workspace_agent_id VARCHAR(255),
+    task_key VARCHAR(255),
     user_id VARCHAR(255),
     workspace_id VARCHAR(255),
     timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -211,6 +214,9 @@ CREATE INDEX IF NOT EXISTS idx_cost_logs_chain ON cost_usage_logs(chain_name);
 
 CREATE INDEX IF NOT EXISTS idx_recommendations_job_id ON recommendations_history(job_id);
 CREATE INDEX IF NOT EXISTS idx_recommendations_job_run_id ON recommendations_history(job_run_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_agent_id ON recommendations_history(agent_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_workspace_agent_id ON recommendations_history(workspace_agent_id);
+CREATE INDEX IF NOT EXISTS idx_recommendations_task_key ON recommendations_history(task_key);
 CREATE INDEX IF NOT EXISTS idx_recommendations_lifecycle_status ON recommendations_history(lifecycle_status);
 CREATE INDEX IF NOT EXISTS idx_recommendations_timestamp ON recommendations_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_recommendations_request_id ON recommendations_history(request_id);

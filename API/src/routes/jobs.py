@@ -163,6 +163,7 @@ class JobRunSummary(BaseModel):
 
     job_run_id: Optional[str] = None
     cluster_id: str
+    status: Optional[str] = None
     job_run_date: Optional[str] = None
     job_run_duration_seconds: Optional[float] = None
     azure_driver_vm_size: Optional[str] = None
@@ -331,6 +332,10 @@ class RecommendationHistoryResponse(BaseModel):
     job_id: str
     job_run_id: Optional[str] = None
     workspace_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    workspace_agent_id: Optional[str] = None
+    task_key: Optional[str] = None
+    kind: Optional[str] = None
     timestamp: str
     lifecycle_status: str = "RECOMMENDED"
     lifecycle_status_label: str = "Recommended"
@@ -361,17 +366,17 @@ def list_job_recommendations(
     workspace_id: str,
     job_id: str,
     limit: int = Query(
-        5,
+        20,
         ge=1,
         le=50,
         description="Maximum number of recommendation runs to return (most recent first).",
     ),
+    agent_id: Optional[str] = Query(
+        default=None,
+        description="Filter by agent_id (e.g. dbx_cluster_tuning_agent, spark_job_rca_agent).",
+    ),
 ) -> List[RecommendationHistoryResponse]:
-    """Return recent recommendations for a job, joined with request logs and cost usage.
-
-    This powers the UI comparison view: current vs recommended configuration,
-    explanation, pattern analysis, and token/cost breakdown.
-    """
+    """Return recent recommendations for a job (tuning and/or RCA), with lifecycle."""
     try:
         session = get_database_session()
     except Exception as e:
@@ -389,6 +394,8 @@ def list_job_recommendations(
         )
         if workspace_id:
             query = query.filter(RecommendationHistory.workspace_id == workspace_id)
+        if agent_id and agent_id.strip():
+            query = query.filter(RecommendationHistory.agent_id == agent_id.strip())
 
         rows = query.order_by(RecommendationHistory.timestamp.desc()).limit(limit).all()
 
@@ -465,12 +472,29 @@ def list_job_recommendations(
                 for e in lifecycle_events_raw
             ]
 
+            rec_payload = rec.recommendation if isinstance(rec.recommendation, dict) else {}
+            kind = rec_payload.get("kind") if isinstance(rec_payload, dict) else None
+            if not kind and getattr(rec, "agent_id", None):
+                from shared.config.agent_ids import (
+                    DBX_CLUSTER_TUNING_AGENT_ID,
+                    SPARK_JOB_RCA_AGENT_ID,
+                )
+
+                if rec.agent_id == SPARK_JOB_RCA_AGENT_ID:
+                    kind = "spark_rca"
+                elif rec.agent_id == DBX_CLUSTER_TUNING_AGENT_ID:
+                    kind = "cluster_tuning"
+
             responses.append(
                 RecommendationHistoryResponse(
                     request_id=str(rec.request_id),
                     job_id=rec.job_id,
                     job_run_id=_job_run_id_from_history(rec, req_log),
                     workspace_id=rec.workspace_id,
+                    agent_id=getattr(rec, "agent_id", None),
+                    workspace_agent_id=getattr(rec, "workspace_agent_id", None),
+                    task_key=getattr(rec, "task_key", None),
+                    kind=kind,
                     timestamp=rec.timestamp.isoformat() if rec.timestamp else "",
                     lifecycle_status=lifecycle_status,
                     lifecycle_status_label=lifecycle_display_label(lifecycle_status),
@@ -483,7 +507,7 @@ def list_job_recommendations(
                     api_request_status=req_log.status if req_log else None,
                     comparison=rec.comparison if isinstance(rec.comparison, dict) else None,
                     reason_codes=list(rec.reason_codes or []),
-                    recommendation=rec.recommendation or {},
+                    recommendation=rec_payload or {},
                     explanation=rec.explanation,
                     pattern_analysis=rec.pattern_analysis,
                     risk_assessment=rec.risk_assessment,
@@ -512,3 +536,137 @@ def list_job_recommendations(
             session.close()
         except Exception:
             pass
+
+
+class FailedRunSummary(BaseModel):
+    job_id: Optional[str] = None
+    job_run_id: str
+    job_run_date: Optional[str] = None
+    task_key: Optional[str] = None
+    job_name: Optional[str] = None
+    pipeline: Optional[str] = None
+    workspace_id: Optional[str] = None
+    workspace_name: Optional[str] = None
+    last_event_ts: Optional[str] = None
+    failure_reason: Optional[str] = None
+    failure_event_count: Optional[int] = None
+
+
+class RcaHistoryEntry(BaseModel):
+    request_id: str
+    job_id: Optional[str] = None
+    job_run_id: str
+    task_key: Optional[str] = None
+    category: Optional[str] = None
+    confidence: Optional[float] = None
+    summary: Optional[str] = None
+    trigger_source: Optional[str] = None
+    created_at: Optional[str] = None
+    result: Dict[str, Any] = Field(default_factory=dict)
+
+
+def _resolve_spark_telemetry_collector(
+    workspace_agent_id: Optional[str],
+):
+    """Resolve spark telemetry collector from a workspace RCA agent install."""
+    from uuid import UUID
+
+    if not workspace_agent_id:
+        raise HTTPException(
+            status_code=400,
+            detail="workspace_agent_id is required to resolve spark_metrics dataset bindings",
+        )
+    from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
+    from shared.config.loader import get_agent_settings
+    from shared.factories.spark_telemetry_factory import get_spark_telemetry_collector
+    from shared.services.workspace_agent_service import WorkspaceAgentService
+
+    try:
+        wa_uuid = UUID(workspace_agent_id)
+        agent_id, flat, secrets = WorkspaceAgentService().resolve_settings_for_agent(wa_uuid)
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Workspace agent not found") from None
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    if agent_id != SPARK_JOB_RCA_AGENT_ID:
+        raise HTTPException(
+            status_code=400,
+            detail=f"workspace_agent_id must be a {SPARK_JOB_RCA_AGENT_ID} install",
+        )
+    effective = get_agent_settings(agent_id, overrides=flat, secrets=secrets)
+    return get_spark_telemetry_collector(effective)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/jobs/{job_id}/failed-runs",
+    response_model=List[FailedRunSummary],
+)
+def list_failed_spark_runs(
+    workspace_id: str,
+    job_id: str,
+    workspace_agent_id: str = Query(
+        ...,
+        description="spark_job_rca_agent install id used to resolve spark_metrics table.",
+    ),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    limit: int = Query(50, ge=1, le=200),
+) -> List[FailedRunSummary]:
+    """List Spark runs with failure anchors for the RCA UI."""
+    dr = _default_date_range(start_date, end_date)
+    collector = _resolve_spark_telemetry_collector(workspace_agent_id)
+    try:
+        rows = collector.list_failed_runs(
+            job_id=job_id,
+            start_date=dr["start_date"],
+            end_date=dr["end_date"],
+            limit=limit,
+        )
+        # Prefer rows matching workspace when present
+        filtered = [
+            r
+            for r in rows
+            if not r.get("workspace_id") or str(r.get("workspace_id")) == str(workspace_id)
+        ]
+        return [FailedRunSummary(**r) for r in (filtered or rows)]
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(
+            "list_failed_spark_runs_error",
+            error=str(e),
+            workspace_id=workspace_id,
+            job_id=job_id,
+        )
+        raise HTTPException(status_code=500, detail="Failed to load failed Spark runs") from e
+
+
+@router.get(
+    "/workspaces/{workspace_id}/jobs/{job_id}/rca",
+    response_model=List[RcaHistoryEntry],
+)
+def list_job_rca_history(
+    workspace_id: str,
+    job_id: str,
+    limit: int = Query(50, ge=1, le=200),
+) -> List[RcaHistoryEntry]:
+    """List stored RCA analyses for a job."""
+    from shared.services.rca_analysis_service import RcaAnalysisService
+
+    rows = RcaAnalysisService().list_for_job(job_id, workspace_id=workspace_id, limit=limit)
+    return [
+        RcaHistoryEntry(
+            request_id=str(r.request_id),
+            job_id=r.job_id,
+            job_run_id=r.job_run_id,
+            task_key=r.task_key,
+            category=r.category,
+            confidence=r.confidence,
+            summary=r.summary,
+            trigger_source=r.trigger_source,
+            created_at=r.created_at.isoformat() if r.created_at else None,
+            result=r.result or {},
+        )
+        for r in rows
+    ]

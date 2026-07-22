@@ -153,7 +153,7 @@ def _chain_usage_for_prompts(prompts: List[Dict[str, Any]]) -> Dict[str, Dict[st
 
 class AgentContentService:
     def seed_if_empty(self) -> int:
-        """Insert seed rows when agent_definitions is empty."""
+        """Insert seed rows when empty; also add any missing seeded agents."""
         global _SEED_CHECKED
         if not _db_enabled():
             _init_mem_from_seed()
@@ -167,15 +167,16 @@ class AgentContentService:
 
         session = get_database_session()
         try:
-            count = session.query(AgentDefinitionRow).count()
-            if count > 0:
-                _SEED_CHECKED = True
-                return 0
+            existing_ids = {r.agent_id for r in session.query(AgentDefinitionRow.agent_id).all()}
             now = _utcnow()
+            inserted = 0
             for item in AGENT_DEFINITIONS:
+                agent_id = item["agent_id"]
+                if agent_id in existing_ids:
+                    continue
                 session.add(
                     AgentDefinitionRow(
-                        agent_id=item["agent_id"],
+                        agent_id=agent_id,
                         display_name=item["display_name"],
                         description=item.get("description"),
                         version=item.get("version", 1),
@@ -185,41 +186,47 @@ class AgentContentService:
                         updated_at=now,
                     )
                 )
-            for item in AGENT_PROMPTS:
-                session.add(
-                    AgentPromptRow(
-                        agent_id=item["agent_id"],
-                        chain_name=item["chain_name"],
-                        role=item["role"],
-                        content=item["content"],
-                        version=1,
-                        is_active=True,
-                        sort_order=int(item.get("sort_order", 0)),
-                        updated_by=None,
-                        created_at=now,
-                        updated_at=now,
+                for p in AGENT_PROMPTS:
+                    if p["agent_id"] != agent_id:
+                        continue
+                    session.add(
+                        AgentPromptRow(
+                            agent_id=agent_id,
+                            chain_name=p["chain_name"],
+                            role=p["role"],
+                            content=p["content"],
+                            version=1,
+                            is_active=True,
+                            sort_order=int(p.get("sort_order", 0)),
+                            updated_by=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
                     )
-                )
-            for item in AGENT_SKILLS:
-                session.add(
-                    AgentSkillRow(
-                        agent_id=item["agent_id"],
-                        skill_key=item["skill_key"],
-                        title=item["title"],
-                        description=item.get("description"),
-                        content=item["content"],
-                        version=1,
-                        is_active=True,
-                        sort_order=int(item.get("sort_order", 0)),
-                        updated_by=None,
-                        created_at=now,
-                        updated_at=now,
+                for s in AGENT_SKILLS:
+                    if s["agent_id"] != agent_id:
+                        continue
+                    session.add(
+                        AgentSkillRow(
+                            agent_id=agent_id,
+                            skill_key=s["skill_key"],
+                            title=s["title"],
+                            description=s.get("description"),
+                            content=s["content"],
+                            version=1,
+                            is_active=True,
+                            sort_order=int(s.get("sort_order", 0)),
+                            updated_by=None,
+                            created_at=now,
+                            updated_at=now,
+                        )
                     )
-                )
-            session.commit()
+                inserted += 1
+            if inserted:
+                session.commit()
+                logger.info("agent_content_seeded", agents=inserted)
             _SEED_CHECKED = True
-            logger.info("agent_content_seeded", agents=len(AGENT_DEFINITIONS))
-            return len(AGENT_DEFINITIONS)
+            return inserted
         except Exception:
             session.rollback()
             raise
@@ -358,6 +365,90 @@ class AgentContentService:
                 .first()
             )
             return row.content if row else None
+        finally:
+            session.close()
+
+    def get_active_skill_contents(self, agent_id: str) -> List[Dict[str, Any]]:
+        """Return active skills for runtime injection (sorted)."""
+        bundle = self.get_content(agent_id)
+        if not bundle:
+            return []
+        skills = list(bundle.skills or [])
+        skills.sort(key=lambda s: (int(s.get("sort_order") or 0), s.get("skill_key") or ""))
+        return skills
+
+    def ensure_skill_from_seed(
+        self,
+        agent_id: str,
+        skill_key: str,
+        *,
+        updated_by: str,
+    ) -> bool:
+        """Insert a seed skill when missing. Returns True if inserted."""
+        seed = seed_skill_item(agent_id, skill_key)
+        if not seed:
+            return False
+        now = _utcnow()
+
+        if not _db_enabled():
+            _init_mem_from_seed()
+            skills = _MEM_SKILLS.setdefault(agent_id, [])
+            for s in skills:
+                if s.get("skill_key") == skill_key and s.get("is_active", True):
+                    return False
+            skills.append(
+                {
+                    "agent_id": agent_id,
+                    "skill_key": skill_key,
+                    "title": seed.get("title"),
+                    "description": seed.get("description"),
+                    "content": seed["content"],
+                    "version": 1,
+                    "is_active": True,
+                    "sort_order": int(seed.get("sort_order") or 0),
+                    "updated_by": updated_by,
+                    "created_at": now.isoformat(),
+                    "updated_at": now.isoformat(),
+                }
+            )
+            return True
+
+        from shared.database.connection import get_database_session
+        from shared.database.models import AgentSkillRow
+
+        session = get_database_session()
+        try:
+            existing = (
+                session.query(AgentSkillRow)
+                .filter(
+                    AgentSkillRow.agent_id == agent_id,
+                    AgentSkillRow.skill_key == skill_key,
+                    AgentSkillRow.is_active.is_(True),
+                )
+                .first()
+            )
+            if existing:
+                return False
+            session.add(
+                AgentSkillRow(
+                    agent_id=agent_id,
+                    skill_key=skill_key,
+                    title=seed.get("title"),
+                    description=seed.get("description"),
+                    content=seed["content"],
+                    version=1,
+                    is_active=True,
+                    sort_order=int(seed.get("sort_order") or 0),
+                    updated_by=updated_by,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+            session.commit()
+            return True
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 
@@ -583,6 +674,7 @@ class AgentContentService:
         updated_by: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
+        sort_order: Optional[int] = None,
     ) -> Dict[str, Any]:
         text = (content or "").strip()
         if not text:
@@ -617,6 +709,8 @@ class AgentContentService:
                 new_row["title"] = title
             if description is not None:
                 new_row["description"] = description
+            if sort_order is not None:
+                new_row["sort_order"] = int(sort_order)
             skills.append(new_row)
             return dict(new_row)
 
@@ -645,7 +739,7 @@ class AgentContentService:
                 content=text,
                 version=int(row.version or 1) + 1,
                 is_active=True,
-                sort_order=row.sort_order,
+                sort_order=int(sort_order) if sort_order is not None else row.sort_order,
                 updated_by=updated_by,
                 created_at=now,
                 updated_at=now,
@@ -795,6 +889,9 @@ class AgentContentService:
             seed = seed_skill_item(agent_id, skill_key)
             if not seed:
                 continue
+            if self.ensure_skill_from_seed(agent_id, skill_key, updated_by=updated_by):
+                skills_reset += 1
+                continue
             current = None
             if not _db_enabled():
                 _init_mem_from_seed()
@@ -822,7 +919,44 @@ class AgentContentService:
                     session.close()
 
             if current == seed["content"]:
-                continue
+                # Still refresh metadata (title/description/sort_order) when content matches.
+                meta_changed = False
+                if not _db_enabled():
+                    _init_mem_from_seed()
+                    for s in _MEM_SKILLS.get(agent_id, []):
+                        if s.get("skill_key") == skill_key and s.get("is_active", True):
+                            if (
+                                s.get("title") != seed.get("title")
+                                or s.get("description") != seed.get("description")
+                                or int(s.get("sort_order") or 0) != int(seed.get("sort_order") or 0)
+                            ):
+                                meta_changed = True
+                            break
+                else:
+                    from shared.database.connection import get_database_session
+                    from shared.database.models import AgentSkillRow
+
+                    session = get_database_session()
+                    try:
+                        row = (
+                            session.query(AgentSkillRow)
+                            .filter(
+                                AgentSkillRow.agent_id == agent_id,
+                                AgentSkillRow.skill_key == skill_key,
+                                AgentSkillRow.is_active.is_(True),
+                            )
+                            .first()
+                        )
+                        if row and (
+                            row.title != seed.get("title")
+                            or (row.description or None) != (seed.get("description") or None)
+                            or int(row.sort_order or 0) != int(seed.get("sort_order") or 0)
+                        ):
+                            meta_changed = True
+                    finally:
+                        session.close()
+                if not meta_changed:
+                    continue
             self.update_skill(
                 agent_id,
                 skill_key,
@@ -830,6 +964,7 @@ class AgentContentService:
                 updated_by=updated_by,
                 title=seed.get("title"),
                 description=seed.get("description"),
+                sort_order=int(seed.get("sort_order") or 0),
             )
             skills_reset += 1
 
@@ -859,6 +994,10 @@ def get_prompt_content(agent_id: str, chain_name: str, role: str) -> Optional[st
     return _svc.get_prompt_content(agent_id, chain_name, role)
 
 
+def get_active_skill_contents(agent_id: str) -> List[Dict[str, Any]]:
+    return _svc.get_active_skill_contents(agent_id)
+
+
 def update_agent_prompt(
     agent_id: str,
     chain_name: str,
@@ -878,6 +1017,7 @@ def update_agent_skill(
     updated_by: str,
     title: Optional[str] = None,
     description: Optional[str] = None,
+    sort_order: Optional[int] = None,
 ) -> Dict[str, Any]:
     return _svc.update_skill(
         agent_id,
@@ -886,6 +1026,7 @@ def update_agent_skill(
         updated_by=updated_by,
         title=title,
         description=description,
+        sort_order=sort_order,
     )
 
 

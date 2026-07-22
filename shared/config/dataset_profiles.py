@@ -6,13 +6,56 @@ from typing import Any, Dict, List, Optional
 
 DATASET_SOURCE_TYPES = ("databricks_delta", "local_csv")
 
+# Environment browse default (Workspaces / Jobs / Runs). Not for agent evidence.
+BROWSE_SCHEMA_PROFILE = "job_inventory"
+
 SCHEMA_PROFILES: Dict[str, Dict[str, Any]] = {
+    "job_inventory": {
+        "label": "Job inventory",
+        "description": (
+            "Browse inventory for Workspaces, Jobs, and Runs (environment default). "
+            "Typically a UC view over job_cluster_metrics; may grow independently."
+        ),
+        "source_types": ["databricks_delta", "local_csv"],
+    },
     "job_cluster_metrics": {
         "label": "Job cluster metrics",
-        "description": "Per-run Databricks cluster utilization (DDE metrics pipeline).",
+        "description": (
+            "Per-run Databricks cluster utilization for the Cluster Tuning agent. "
+            "Not used as the environment browse default."
+        ),
+        "source_types": ["databricks_delta", "local_csv"],
+    },
+    "spark_logs": {
+        "label": "Spark logs",
+        "description": "Append-only operational Spark/application logs for pipeline runs (RCA evidence).",
+        "source_types": ["databricks_delta", "local_csv"],
+    },
+    "spark_metrics": {
+        "label": "Spark metrics",
+        "description": (
+            "Append-only Spark Connect telemetry — SQL, jobs, stages, pipeline lifecycle (RCA evidence)."
+        ),
         "source_types": ["databricks_delta", "local_csv"],
     },
 }
+
+
+def is_browse_schema_profile(schema_profile: str) -> bool:
+    return (schema_profile or "").strip() == BROWSE_SCHEMA_PROFILE
+
+
+def require_browse_schema_profile(schema_profile: str) -> str:
+    """Raise ValueError unless profile is the browse inventory profile."""
+    key = (schema_profile or "").strip()
+    if key != BROWSE_SCHEMA_PROFILE:
+        raise ValueError(
+            f"Environment browse default must use schema_profile "
+            f"'{BROWSE_SCHEMA_PROFILE}' (got '{schema_profile or ''}'). "
+            "Agent evidence datasets (job_cluster_metrics, spark_logs, spark_metrics) "
+            "are bound on workspace agent installs, not as the browse default."
+        )
+    return key
 
 
 def list_schema_profiles() -> List[Dict[str, Any]]:
@@ -24,6 +67,7 @@ def list_schema_profiles() -> List[Dict[str, Any]]:
                 "label": meta.get("label", profile_id),
                 "description": meta.get("description", ""),
                 "source_types": list(meta.get("source_types", [])),
+                "is_browse_default": profile_id == BROWSE_SCHEMA_PROFILE,
             }
         )
     return out

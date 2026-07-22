@@ -27,8 +27,17 @@ def _databricks_wh_ready(config: dict) -> bool:
 def resolve_metrics_dataset_id(
     environment_id: str,
     dataset_id: Optional[str] = None,
+    *,
+    for_browse: bool = False,
 ) -> Optional[UUID]:
-    """Resolve explicit or default metrics dataset for browse/recommend APIs."""
+    """Resolve explicit or default dataset for browse or agent evidence APIs.
+
+    When ``for_browse`` is True, the resolved dataset must use schema_profile
+    ``job_inventory`` (environment browse inventory). Agent evidence datasets
+    (e.g. job_cluster_metrics) are resolved with ``for_browse=False``.
+    """
+    from shared.config.dataset_profiles import require_browse_schema_profile
+
     eid = (environment_id or "").strip()
     if not eid:
         return None
@@ -42,16 +51,35 @@ def resolve_metrics_dataset_id(
             raise ValueError(f"Dataset not found: {dataset_id}")
         if ds.environment_id != eid:
             raise ValueError(f"Dataset {dataset_id} does not belong to environment {eid}")
+        if for_browse:
+            require_browse_schema_profile(ds.schema_profile)
         return did
 
     env = get_environment(eid)
     if env and env.default_dataset_id:
         try:
-            return UUID(env.default_dataset_id)
+            did = UUID(env.default_dataset_id)
         except ValueError:
-            pass
+            did = None
+        else:
+            ds = get_environment_dataset(did)
+            if ds and ds.environment_id == eid:
+                if for_browse:
+                    require_browse_schema_profile(ds.schema_profile)
+                return did
+
     ds = get_default_environment_dataset(eid)
-    return ds.id if ds else None
+    if not ds:
+        if for_browse:
+            raise ValueError(
+                "No job inventory browse dataset is configured. "
+                "Add a dataset with schema profile 'job_inventory' and set it as the "
+                "environment default on the Datasets page."
+            )
+        return None
+    if for_browse:
+        require_browse_schema_profile(ds.schema_profile)
+    return ds.id
 
 
 def resolve_metrics_table_fqn(
@@ -59,19 +87,25 @@ def resolve_metrics_table_fqn(
     connection_config: Optional[dict] = None,
     *,
     dataset_id: Optional[str] = None,
+    for_browse: bool = False,
 ) -> str:
-    """Resolve the metrics Delta table for an environment.
+    """Resolve the Delta table/view FQN for an environment dataset.
 
     Priority: explicit dataset_id → default environment dataset → legacy table on
     connection config (deprecated). Environment ``table_fqn`` columns are not used
     at runtime; configure a dataset instead.
     """
     eid = (environment_id or "").strip()
-    resolved_id = resolve_metrics_dataset_id(eid, dataset_id) if eid else None
+    resolved_id = (
+        resolve_metrics_dataset_id(eid, dataset_id, for_browse=for_browse) if eid else None
+    )
     if resolved_id:
         ds = get_environment_dataset(resolved_id)
         if ds and ds.source_type == "databricks_delta":
             return (ds.table_fqn or "").strip()
+
+    if for_browse:
+        return ""
 
     ds = get_default_environment_dataset(eid) if eid else None
     if ds and ds.source_type == "databricks_delta":
@@ -143,9 +177,9 @@ def environment_readiness(
     if env.source_type == "local_csv":
         ds = get_default_environment_dataset(env.id)
         if ds and ds.source_type == "local_csv" and ds.local_path:
-            from pathlib import Path
+            from shared.services.local_dataset_service import resolve_dataset_local_path
 
-            if Path(ds.local_path).is_file():
+            if resolve_dataset_local_path(ds.local_path):
                 return "ready"
         path = get_active_file_path(
             user_id or "anonymous",

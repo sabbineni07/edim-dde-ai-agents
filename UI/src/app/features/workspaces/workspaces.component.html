@@ -4,13 +4,13 @@
   [subtitle]="environmentName ? 'Browse Databricks workspaces in ' + environmentName : 'Select an environment from the header to browse workspaces.'"
 >
   <div subtitle-extra *ngIf="environmentName && metricsDatasetName" class="page-subtitle">
-    Dataset: <strong>{{ metricsDatasetName }}</strong>
+    Browse inventory: <strong>{{ metricsDatasetName }}</strong>
     <span *ngIf="metricsDatasetRef"> (<code>{{ metricsDatasetRef }}</code>)</span>
     <a routerLink="/app/datasets" class="ms-1">Manage</a>
   </div>
   <div actions class="page-actions">
     <div *ngIf="showDatasetPicker" class="d-flex align-items-center gap-2">
-      <label class="form-label small mb-0">Dataset</label>
+      <label class="form-label small mb-0">Inventory</label>
       <select
         class="form-select form-select-sm"
         style="min-width: 10rem;"
@@ -79,15 +79,64 @@
     <app-empty-state
       icon="building"
       title="No workspaces found"
-      description="Configure a Databricks connection and metrics dataset, then refresh."
+      description="Configure a Databricks connection and a job inventory dataset (schema profile job_inventory), then refresh."
       actionLabel="Go to Connections"
       actionLink="/app/connections"
     ></app-empty-state>
   </div>
 </div>
 
-<div class="workspace-grid" *ngIf="!loading && workspaces.length > 0">
-  <div class="workspace-card card" *ngFor="let w of workspaces">
+<div class="workspaces-toolbar card mb-3" *ngIf="!loading && workspaces.length > 0">
+  <div class="card-body workspaces-toolbar-body">
+    <div class="workspaces-filter-field">
+      <label class="form-label mb-0" for="workspaceFilter">Filter</label>
+      <div class="input-group input-group-sm">
+        <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+        <input
+          id="workspaceFilter"
+          type="search"
+          class="form-control"
+          placeholder="Filter by name or workspace id…"
+          [(ngModel)]="filterText"
+          autocomplete="off"
+        />
+        <button
+          *ngIf="hasActiveFilter"
+          type="button"
+          class="btn btn-outline-secondary"
+          (click)="clearFilter()"
+          title="Clear filter"
+          aria-label="Clear filter"
+        >
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+    <div class="workspaces-filter-count text-muted small">
+      {{ filteredWorkspaces.length }}
+      <span *ngIf="hasActiveFilter"> of {{ workspaces.length }}</span>
+      {{ filteredWorkspaces.length === 1 ? 'workspace' : 'workspaces' }}
+    </div>
+  </div>
+</div>
+
+<div class="card" *ngIf="!loading && workspaces.length > 0 && filteredWorkspaces.length === 0">
+  <div class="card-body">
+    <app-empty-state
+      icon="search"
+      title="No matching workspaces"
+      description="Try a different name or workspace id, or clear the filter."
+    ></app-empty-state>
+    <div class="text-center mt-2">
+      <button type="button" class="btn btn-outline-secondary btn-sm" (click)="clearFilter()">
+        Clear filter
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="workspace-grid" *ngIf="!loading && filteredWorkspaces.length > 0">
+  <div class="workspace-card card" *ngFor="let w of filteredWorkspaces">
     <div class="card-body d-flex flex-column">
       <div class="workspace-card-header">
         <div class="workspace-icon" aria-hidden="true">

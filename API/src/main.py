@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 
 from AI.src.core.llm.foundry_llm_service import FoundryLLMNotConfiguredError
 from API.src.middleware.databricks_auth import DatabricksUserTokenMiddleware
+from API.src.routes import temp_sql_executor  # TEMPORARY — remove with temp-sql-executor UI
 from API.src.routes import (
     agents,
     chat,
@@ -24,6 +25,7 @@ from API.src.routes import (
     health,
     jobs,
     platform,
+    rca,
     recommendations,
     workspace_agents,
     workspace_connections,
@@ -120,6 +122,7 @@ app.add_middleware(
 # Include routers
 app.include_router(agents.router, prefix="/api/agents", tags=["agents"])
 app.include_router(recommendations.router, prefix="/api/recommendations", tags=["recommendations"])
+app.include_router(rca.router, prefix="/api/rca", tags=["rca"])
 app.include_router(health.router, prefix="/api/health", tags=["health"])
 app.include_router(cost_analytics.router, prefix="/api/cost", tags=["cost-analytics"])
 app.include_router(jobs.router, prefix="/api", tags=["jobs"])
@@ -136,6 +139,8 @@ app.include_router(
 app.include_router(workspace_agents.router, prefix="/api/workspaces", tags=["workspace-agents"])
 app.include_router(platform.router, prefix="/api/platform", tags=["platform"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+# TEMPORARY — remove this router + UI feature `temp-sql-executor` when no longer needed
+app.include_router(temp_sql_executor.router, prefix="/api/temp/sql", tags=["temp-sql-executor"])
 
 
 if __name__ == "__main__":

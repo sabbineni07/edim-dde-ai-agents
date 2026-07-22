@@ -31,6 +31,7 @@ def _resolve_collector(
             (user_id or "anonymous").strip() or "anonymous",
             connection_id=connection_id,
             dataset_id=dataset_id,
+            for_browse=False,
         )
     return get_data_collector()
 

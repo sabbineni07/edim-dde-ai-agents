@@ -5,10 +5,17 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from uuid import UUID
 
-from shared.config.agent_manifest import role_kind, validate_bindings
+from shared.config.agent_manifest import get_agent_manifest, role_kind, validate_bindings
 from shared.config.connection_credentials import resolve_connection_secrets
 from shared.config.profile_field_meta import PROFILE_ALLOWED_FIELDS
 from shared.config.profile_overrides import flatten_overrides, validate_profile_overrides
+
+# Dataset role -> settings keys for Delta table FQN and local path.
+_DATASET_SETTINGS_KEYS: Dict[str, Tuple[str, str]] = {
+    "metrics": ("databricks_job_cluster_metrics_table", "local_data_path"),
+    "spark_logs": ("databricks_spark_logs_table", "local_spark_logs_path"),
+    "spark_metrics": ("databricks_spark_metrics_table", "local_spark_metrics_path"),
+}
 
 
 def _connection_to_settings_flat(
@@ -39,23 +46,35 @@ def _connection_to_settings_flat(
     return flat
 
 
+def _dataset_to_settings_flat(role: str, dataset: Dict[str, Any]) -> Dict[str, Any]:
+    """Map a bound dataset to flat settings keys for the given role."""
+    keys = _DATASET_SETTINGS_KEYS.get(role)
+    if not keys:
+        return {}
+    table_key, path_key = keys
+    flat: Dict[str, Any] = {}
+    source_type = (dataset.get("source_type") or "").strip()
+    if source_type == "databricks_delta":
+        if role == "metrics":
+            flat["use_local_data"] = False
+        table = (dataset.get("table_fqn") or "").strip()
+        if table:
+            flat[table_key] = table
+    elif source_type == "local_csv":
+        if role == "metrics":
+            flat["use_local_data"] = True
+        path = (dataset.get("local_path") or "").strip()
+        if path:
+            flat[path_key] = path
+    return flat
+
+
 def _metrics_dataset_to_settings_flat(
     metrics_dataset: Dict[str, Any],
     metrics_wh_config: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    flat: Dict[str, Any] = {}
-    source_type = (metrics_dataset.get("source_type") or "").strip()
-    if source_type == "databricks_delta":
-        flat["use_local_data"] = False
-        table = (metrics_dataset.get("table_fqn") or "").strip()
-        if table:
-            flat["databricks_job_cluster_metrics_table"] = table
-    elif source_type == "local_csv":
-        flat["use_local_data"] = True
-        path = (metrics_dataset.get("local_path") or "").strip()
-        if path:
-            flat["local_data_path"] = path
-    return flat
+    """Backward-compatible wrapper for the metrics role."""
+    return _dataset_to_settings_flat("metrics", metrics_dataset)
 
 
 def _apply_databricks_wh_config(
@@ -77,25 +96,46 @@ def resolve_workspace_agent_settings(
     connections: List[Dict[str, Any]],
     metrics_dataset: Optional[Dict[str, Any]] = None,
     metrics_wh_config: Optional[Dict[str, Any]] = None,
+    datasets_by_role: Optional[Dict[str, Dict[str, Any]]] = None,
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """Return (flat_overrides, secrets) for get_agent_settings merge."""
+    """Return (flat_overrides, secrets) for get_agent_settings merge.
+
+    ``datasets_by_role`` maps binding role name -> dataset record dict.
+    ``metrics_dataset`` is kept for backward compatibility and merges into
+    ``datasets_by_role["metrics"]`` when provided.
+    """
     types_by_id = {str(c["id"]): c["connection_type"] for c in connections}
-    ds_profiles: Dict[str, str] = {}
+    role_datasets: Dict[str, Dict[str, Any]] = dict(datasets_by_role or {})
     if metrics_dataset and metrics_dataset.get("id"):
-        ds_profiles[str(metrics_dataset["id"])] = str(metrics_dataset.get("schema_profile") or "")
+        role_datasets.setdefault("metrics", metrics_dataset)
+
+    ds_profiles: Dict[str, str] = {}
+    for ds in role_datasets.values():
+        if ds and ds.get("id"):
+            ds_profiles[str(ds["id"])] = str(ds.get("schema_profile") or "")
+
     normalized_bindings = validate_bindings(agent_id, bindings, types_by_id, ds_profiles)
 
     flat: Dict[str, Any] = {}
     secrets: Dict[str, Any] = {}
 
-    metrics_binding_id = normalized_bindings.get("metrics")
-    if metrics_binding_id and metrics_dataset:
-        flat.update(_metrics_dataset_to_settings_flat(metrics_dataset))
+    manifest = get_agent_manifest(agent_id) or {}
+    roles_spec = manifest.get("roles", {})
+
+    for role, binding_id in normalized_bindings.items():
+        spec = roles_spec.get(role)
+        if role_kind(spec) != "dataset":
+            continue
+        ds = role_datasets.get(role)
+        if ds:
+            flat.update(_dataset_to_settings_flat(role, ds))
+
     if metrics_wh_config:
         _apply_databricks_wh_config(flat, metrics_wh_config)
 
     for role, cid in normalized_bindings.items():
-        if role == "metrics":
+        spec = roles_spec.get(role)
+        if role_kind(spec) == "dataset":
             continue
         conn = next((c for c in connections if str(c["id"]) == cid), None)
         if not conn:

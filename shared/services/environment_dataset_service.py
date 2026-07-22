@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
-from shared.config.dataset_profiles import validate_dataset_fields
+from shared.config.dataset_profiles import require_browse_schema_profile, validate_dataset_fields
 from shared.config.loader import get_platform_settings
 from shared.utils.logging import get_logger
 
@@ -89,7 +89,7 @@ def seed_default_datasets_for_environment(
     source_type: str,
     seed_item: Optional[Dict[str, Any]] = None,
 ) -> Optional[UUID]:
-    """Create default metrics dataset when missing."""
+    """Create a job_cluster_metrics evidence dataset when none exist (not browse default)."""
     svc = EnvironmentDatasetService()
     existing = svc.list_datasets(environment_id=environment_id)
     if existing:
@@ -104,27 +104,37 @@ def seed_default_datasets_for_environment(
         rec = svc.create_dataset(
             environment_id=environment_id,
             name="Job cluster metrics",
-            description=f"Default {display_name} metrics table",
+            description=f"Cluster tuning evidence for {display_name}",
             source_type="databricks_delta",
             schema_profile="job_cluster_metrics",
             table_fqn=table_fqn,
-            set_default=True,
+            set_default=False,
         )
         return rec.id
 
     if source_type == "local_csv":
         from shared.services.local_dataset_service import resolve_fallback_path
 
-        rec = svc.create_dataset(
+        sample_path = str(resolve_fallback_path())
+        inv = svc.create_dataset(
             environment_id=environment_id,
-            name="Sample job metrics",
-            description="Bundled sample CSV for local development",
+            name="Job inventory",
+            description="Browse inventory for local development (sample CSV)",
             source_type="local_csv",
-            schema_profile="job_cluster_metrics",
-            local_path=str(resolve_fallback_path()),
+            schema_profile="job_inventory",
+            local_path=sample_path,
             set_default=True,
         )
-        return rec.id
+        svc.create_dataset(
+            environment_id=environment_id,
+            name="Sample job metrics",
+            description="Cluster tuning evidence for local development",
+            source_type="local_csv",
+            schema_profile="job_cluster_metrics",
+            local_path=sample_path,
+            set_default=False,
+        )
+        return inv.id
 
     return None
 
@@ -202,8 +212,19 @@ class EnvironmentDatasetService:
             session.close()
 
     def get_default_dataset(self, environment_id: str) -> Optional[EnvironmentDatasetRecord]:
+        """Return the browse default dataset (job_inventory), if configured."""
+        from shared.config.dataset_profiles import BROWSE_SCHEMA_PROFILE
+
         rows = self.list_datasets(environment_id=environment_id)
-        return next((r for r in rows if r.is_default), rows[0] if rows else None)
+        default = next((r for r in rows if r.is_default), None)
+        if default and default.schema_profile == BROWSE_SCHEMA_PROFILE:
+            return default
+        # Prefer an inventory row marked default; do not fall back to evidence datasets.
+        inventory = next(
+            (r for r in rows if r.schema_profile == BROWSE_SCHEMA_PROFILE and r.is_default),
+            None,
+        )
+        return inventory
 
     def create_dataset(
         self,
@@ -223,6 +244,8 @@ class EnvironmentDatasetService:
             table_fqn=table_fqn,
             local_path=local_path,
         )
+        if set_default:
+            require_browse_schema_profile(clean["schema_profile"])
 
         if not _db_enabled():
             now = _utcnow()
@@ -393,6 +416,7 @@ class EnvironmentDatasetService:
         rec = self.get_dataset(dataset_id)
         if not rec:
             raise ValueError("Dataset not found")
+        require_browse_schema_profile(rec.schema_profile)
 
         if not _db_enabled():
             self._clear_default_mem(rec.environment_id)
