@@ -10,7 +10,7 @@ from databricks import sql
 
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
-from shared.rca.evidence_pack import build_evidence_pack
+from shared.rca.evidence_pack import assemble_evidence_pack_for_run
 from shared.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -99,13 +99,14 @@ class SparkTelemetryCollector:
         job_run_date: Optional[str] = None,
         task_key: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
+        """Failed pipeline_end anchors (SQL errors come from get_sql_plans)."""
         table = self._metrics_table
         if not table:
             logger.warning("spark_metrics_table_not_set")
             return []
         clauses = [
             "CAST(job_run_id AS STRING) = ?",
-            "event_type IN ('pipeline_end', 'spark_sql_query_error')",
+            "event_type = 'pipeline_end'",
             "(successful = false OR lower(CAST(status AS STRING)) IN ('failure', 'failed', 'error'))",
         ]
         params: List[Any] = [job_run_id]
@@ -133,7 +134,53 @@ class SparkTelemetryCollector:
         FROM {table}
         WHERE {where}
         ORDER BY event_ts DESC
-        LIMIT 50
+        LIMIT 20
+        """
+        return self._execute(query, params)
+
+    def get_sql_plans(
+        self,
+        *,
+        job_run_id: str,
+        job_run_date: Optional[str] = None,
+        task_key: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """SQL error/observed events; plan fields live in attributes (parsed in pack builder)."""
+        table = self._metrics_table
+        if not table:
+            return []
+        clauses = [
+            "CAST(job_run_id AS STRING) = ?",
+            "event_type IN ('spark_sql_query_error', 'spark_sql_query_observed')",
+        ]
+        params: List[Any] = [job_run_id]
+        if job_run_date:
+            clauses.append("job_run_date = CAST(? AS DATE)")
+            params.append(job_run_date)
+        if task_key:
+            clauses.append("CAST(task_key AS STRING) = ?")
+            params.append(task_key)
+        where = " AND ".join(clauses)
+        query = f"""
+        SELECT
+          CAST(event_id AS STRING) AS event_id,
+          CAST(event_ts AS STRING) AS event_ts,
+          event_type,
+          CAST(job_id AS STRING) AS job_id,
+          CAST(job_run_id AS STRING) AS job_run_id,
+          CAST(job_run_date AS STRING) AS job_run_date,
+          CAST(task_key AS STRING) AS task_key,
+          CAST(spark_app_id AS STRING) AS spark_app_id,
+          status,
+          successful,
+          failure_reason,
+          CAST(attributes AS STRING) AS attributes
+        FROM {table}
+        WHERE {where}
+        ORDER BY
+          CASE WHEN event_type = 'spark_sql_query_error' THEN 0 ELSE 1 END,
+          event_ts DESC
+        LIMIT 40
         """
         return self._execute(query, params)
 
@@ -348,30 +395,11 @@ class SparkTelemetryCollector:
         task_key: Optional[str] = None,
         workspace_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        anchors = self.get_failure_anchors(
-            job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-        )
-        if not job_run_date and anchors:
-            job_run_date = anchors[0].get("job_run_date")
-        if not job_id and anchors:
-            job_id = anchors[0].get("job_id")
-        stages = self.get_stage_pressure(
-            job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-        )
-        logs = self.get_error_logs(
-            job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-        )
-        timeline = self.get_timeline(
-            job_run_id=job_run_id, job_run_date=job_run_date, task_key=task_key
-        )
-        return build_evidence_pack(
+        return assemble_evidence_pack_for_run(
+            self,
             job_run_id=job_run_id,
             job_id=job_id,
             job_run_date=job_run_date,
             task_key=task_key,
             workspace_id=workspace_id,
-            failure_anchors=anchors,
-            stage_pressure=stages,
-            error_logs=logs,
-            timeline=timeline,
         )

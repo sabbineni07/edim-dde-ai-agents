@@ -60,8 +60,18 @@ def test_rca_chain_messages_include_skills():
     system_text = messages[0][1]
     assert "## Domain skills" in system_text
     assert "RCA diagnostic workflow" in system_text
-    assert "contributing_factors" in system_text
-    assert "recommended_actions" in system_text
+    assert "Reliability & Performance Optimization Specialist" in system_text
+    assert "recommendations" in system_text
+    assert (
+        "RULE: Small file" in system_text
+        or "rca_small_files" in system_text
+        or "Small file / high metadata" in system_text
+    )
+    assert "Exit code 137" in system_text or "exit code 137" in system_text
     human_text = messages[1][1]
     assert "{evidence_pack}" in human_text
-    assert "Never return empty contributing_factors" in human_text
+    assert "{cluster_logs_section}" in human_text
+    assert "{spark_metrics_section}" in human_text
+    assert "{query_plans_section}" in human_text
+    assert "{workspace_id}" in human_text
+    assert "one JSON object" in human_text

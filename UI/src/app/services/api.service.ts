@@ -156,7 +156,20 @@ export interface RcaRootCause {
   category?: string;
   summary?: string;
   confidence?: number;
+  confidence_label?: string;
   failure_signature?: string;
+}
+
+export interface RcaEvidenceAnalysis {
+  log_signals?: string;
+  metric_anomalies?: string;
+  physical_plan_bottlenecks?: string;
+}
+
+export interface RcaRecommendationsDetail {
+  code_query_rewrites?: string[];
+  spark_delta_configs?: string[];
+  infrastructure?: string[];
 }
 
 export interface RcaAnalysisResponse {
@@ -165,7 +178,10 @@ export interface RcaAnalysisResponse {
   job_run_id: string;
   task_key?: string;
   status?: string;
+  job_status?: string;
   root_cause?: RcaRootCause;
+  evidence_analysis?: RcaEvidenceAnalysis;
+  recommendations?: RcaRecommendationsDetail;
   timeline?: Array<{ ts?: string; event_type?: string; summary?: string }>;
   evidence?: Array<{ source?: string; ref?: string; excerpt?: string }>;
   contributing_factors?: string[];

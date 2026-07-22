@@ -674,6 +674,7 @@ class AgentContentService:
         updated_by: str,
         title: Optional[str] = None,
         description: Optional[str] = None,
+        sort_order: Optional[int] = None,
     ) -> Dict[str, Any]:
         text = (content or "").strip()
         if not text:
@@ -708,6 +709,8 @@ class AgentContentService:
                 new_row["title"] = title
             if description is not None:
                 new_row["description"] = description
+            if sort_order is not None:
+                new_row["sort_order"] = int(sort_order)
             skills.append(new_row)
             return dict(new_row)
 
@@ -736,7 +739,7 @@ class AgentContentService:
                 content=text,
                 version=int(row.version or 1) + 1,
                 is_active=True,
-                sort_order=row.sort_order,
+                sort_order=int(sort_order) if sort_order is not None else row.sort_order,
                 updated_by=updated_by,
                 created_at=now,
                 updated_at=now,
@@ -916,7 +919,44 @@ class AgentContentService:
                     session.close()
 
             if current == seed["content"]:
-                continue
+                # Still refresh metadata (title/description/sort_order) when content matches.
+                meta_changed = False
+                if not _db_enabled():
+                    _init_mem_from_seed()
+                    for s in _MEM_SKILLS.get(agent_id, []):
+                        if s.get("skill_key") == skill_key and s.get("is_active", True):
+                            if (
+                                s.get("title") != seed.get("title")
+                                or s.get("description") != seed.get("description")
+                                or int(s.get("sort_order") or 0) != int(seed.get("sort_order") or 0)
+                            ):
+                                meta_changed = True
+                            break
+                else:
+                    from shared.database.connection import get_database_session
+                    from shared.database.models import AgentSkillRow
+
+                    session = get_database_session()
+                    try:
+                        row = (
+                            session.query(AgentSkillRow)
+                            .filter(
+                                AgentSkillRow.agent_id == agent_id,
+                                AgentSkillRow.skill_key == skill_key,
+                                AgentSkillRow.is_active.is_(True),
+                            )
+                            .first()
+                        )
+                        if row and (
+                            row.title != seed.get("title")
+                            or (row.description or None) != (seed.get("description") or None)
+                            or int(row.sort_order or 0) != int(seed.get("sort_order") or 0)
+                        ):
+                            meta_changed = True
+                    finally:
+                        session.close()
+                if not meta_changed:
+                    continue
             self.update_skill(
                 agent_id,
                 skill_key,
@@ -924,6 +964,7 @@ class AgentContentService:
                 updated_by=updated_by,
                 title=seed.get("title"),
                 description=seed.get("description"),
+                sort_order=int(seed.get("sort_order") or 0),
             )
             skills_reset += 1
 
@@ -976,6 +1017,7 @@ def update_agent_skill(
     updated_by: str,
     title: Optional[str] = None,
     description: Optional[str] = None,
+    sort_order: Optional[int] = None,
 ) -> Dict[str, Any]:
     return _svc.update_skill(
         agent_id,
@@ -984,6 +1026,7 @@ def update_agent_skill(
         updated_by=updated_by,
         title=title,
         description=description,
+        sort_order=sort_order,
     )
 
 

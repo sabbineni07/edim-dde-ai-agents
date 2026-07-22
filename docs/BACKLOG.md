@@ -77,15 +77,18 @@ Captured 2026-07-21 from post-run review (schema-mismatch failure: rich `summary
 
 **Apply locally:** reset Spark RCA agent content to seed (Agents UI → Reset, or API `POST /api/agents/spark_job_rca_agent/content/reset`), then restart API so the chain reloads prompts.
 
+### Done (2026-07-21) — collector section fetches + pack enrichment
+- [x] **Three section fetches** — `fetch_logs` / `fetch_stage_metrics` / `fetch_sql_plans` on Databricks + local collectors; `build_evidence_pack_for_run` assembles one pack.
+- [x] **Evidence pack enrichment** — First-class `sections` (`logs` / `stage_metrics` / `sql_plans`); preserve truncated `sql_text` / `physical_plan` / related attrs; spill fields on stage excerpts; human prompt prefers `pack.sections`.
+
 ### Still pending
 - [ ] **Validation backfill** — If LLM still returns empty actions/factors, derive fallbacks in `validate_rca_llm_output`.
-- [ ] **Evidence pack enrichment** — Surface truncated `sql_text` / `physical_plan` (and related attrs) for SQL error events so plan skills can fire; preserve fuller failure_reason/exception.
 - [ ] **Last-success comparison** — Attach last successful run evidence (or compact success-vs-fail diff) for drift/regression cases.
 - [ ] **UI** — Always show Recommended actions / Contributing factors (even if empty/low-confidence); distinguish hypotheses vs findings.
 - [ ] **Schema A−B (optional / deferred)** — Explicit expected-vs-actual column set-diff skill; not required for current refine.
 
-**Suggested next pickup:** evidence pack SQL/plan surfacing → validation backfill → last-success / UI.
+**Suggested next pickup:** validation backfill → last-success / UI.
 
 ---
 
-*Last updated: 2026-07-21 — RCA prompts/skills refine applied; schema A−B deferred; pack enrichment still pending.*
+*Last updated: 2026-07-21 — RCA collector sections + pack SQL/plan enrichment done; schema A−B deferred.*
