@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, FrozenSet, List, Optional, Tuple
 
 from shared.config.agent_content_seed import (
     AGENT_PROMPTS,
@@ -25,6 +25,63 @@ _RUNTIME_FORMAT_KEYS = frozenset({"auto_termination_minutes"})
 
 # Chains that append active skills to the system message at runtime.
 _CHAINS_WITH_SKILLS = frozenset({(SPARK_JOB_RCA_AGENT_ID, "rca")})
+
+# Placeholders ChatPromptTemplate may substitute at invoke time (human prompts).
+_CHAIN_INVOKE_PLACEHOLDERS: Dict[tuple[str, str], FrozenSet[str]] = {
+    (DBX_CLUSTER_TUNING_AGENT_ID, "sizing"): frozenset(
+        {
+            "current_config",
+            "job_run_ingest",
+            "sizing_hints",
+            "guardrail_feedback",
+            "historical_context",
+        }
+    ),
+    (DBX_CLUSTER_TUNING_AGENT_ID, "explanation"): frozenset(
+        {
+            "recommendation",
+            "job_run_ingest",
+            "pattern_analysis",
+            "risk_assessment",
+        }
+    ),
+    (SPARK_JOB_RCA_AGENT_ID, "rca"): frozenset(
+        {
+            "workspace_id",
+            "job_id",
+            "job_run_id",
+            "job_run_date",
+            "task_key",
+            "classification_hint",
+            "cluster_logs_section",
+            "spark_metrics_section",
+            "query_plans_section",
+            "evidence_pack",
+        }
+    ),
+}
+
+
+def _escape_non_placeholder_braces(text: str, keep: FrozenSet[str]) -> str:
+    """Double literal `{`/`}` so LangChain f-string templates ignore JSON examples.
+
+    Keeps `{name}` intact when `name` is in `keep` (invoke-time variables).
+    """
+    if not text:
+        return text
+    protected: Dict[str, str] = {}
+    out = text
+    for i, key in enumerate(sorted(keep)):
+        token = "{" + key + "}"
+        if token not in out:
+            continue
+        marker = f"\x00KEEP{i}\x00"
+        protected[marker] = token
+        out = out.replace(token, marker)
+    out = out.replace("{", "{{").replace("}", "}}")
+    for marker, token in protected.items():
+        out = out.replace(marker, token)
+    return out
 
 
 def _seed_prompt_map() -> Dict[tuple[str, str, str], str]:
@@ -120,6 +177,7 @@ def build_chain_messages(
         return [
             ("system", get_prompt_text(agent_id, chain_name, "system", format_kwargs=format_kwargs))
         ]
+    invoke_vars = _CHAIN_INVOKE_PLACEHOLDERS.get((agent_id, chain_name), frozenset())
     messages: List[Tuple[str, str]] = []
     for role in ("system", "human"):
         try:
@@ -133,6 +191,10 @@ def build_chain_messages(
                 skills = _skills_block_for_agent(agent_id)
                 if skills:
                     content = f"{content}\n\n## Domain skills\n\n{skills}"
+            # System prompts are literal (runtime tokens already substituted).
+            # Human prompts keep only declared invoke placeholders; escape JSON `{}` examples.
+            keep = invoke_vars if role == "human" else frozenset()
+            content = _escape_non_placeholder_braces(content, keep)
             messages.append((role, content))
         except KeyError:
             logger.warning("prompt_message_missing", agent_id=agent_id, chain=chain_name, role=role)

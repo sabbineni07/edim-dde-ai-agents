@@ -20,6 +20,7 @@ const CONTEXT_BAR_HIDDEN_PREFIXES = [
   '/app/environments',
   '/app/connections',
   '/app/datasets',
+  '/app/temp/sql',
 ];
 
 @Component({
@@ -208,6 +209,11 @@ export class ShellComponent implements OnInit {
 
   manageEnvironments(): void {
     void this.router.navigate(['/app/admin/environments']);
+  }
+
+  /** TEMPORARY — remove with temp-sql-executor feature */
+  openTempSqlExecutor(): void {
+    void this.router.navigate(['/app/temp/sql']);
   }
 
   private refreshSessionContext(): void {

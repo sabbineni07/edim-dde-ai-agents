@@ -14,6 +14,7 @@ from AI.src.core.prompts.loader import build_chain_messages
 from shared.config.agent_ids import SPARK_JOB_RCA_AGENT_ID
 from shared.config.settings import Settings
 from shared.config.settings import settings as default_settings
+from shared.rca.prompt_payload import format_rca_human_payload
 from shared.utils.logging import get_logger
 
 if TYPE_CHECKING:
@@ -57,10 +58,10 @@ class RcaSynthesisChain:
         classification_hint: str,
         token_tracker: Any = None,
     ) -> Dict[str, Any]:
-        payload = {
-            "evidence_pack": json.dumps(evidence_pack, default=str),
-            "classification_hint": classification_hint,
-        }
+        payload = format_rca_human_payload(
+            evidence_pack,
+            classification_hint=classification_hint,
+        )
         text = ""
         try:
             text = self.chain.invoke(payload) or ""

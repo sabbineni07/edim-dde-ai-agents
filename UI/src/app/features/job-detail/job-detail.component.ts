@@ -78,6 +78,8 @@ export class JobDetailComponent implements OnInit {
   startDate = '';
   endDate = '';
   includeExplanation = true;
+  /** When true, RCA analyze sends force=true (re-run even if an open lifecycle RCA exists). */
+  forceRcaReRun = false;
   historyKindFilter: '' | 'cluster_tuning' | 'spark_rca' = '';
   readonly historyKindFilterOptions: Array<{ value: '' | 'cluster_tuning' | 'spark_rca'; label: string }> = [
     { value: '', label: 'All types' },
@@ -805,7 +807,7 @@ export class JobDetailComponent implements OnInit {
         job_run_date: selectedRun?.job_run_date,
         workspace_id: this.workspaceId(),
         trigger_source: 'ui',
-        force: false,
+        force: this.forceRcaReRun,
       };
       this.runningRecommendation = true;
       this.error = '';
@@ -817,7 +819,9 @@ export class JobDetailComponent implements OnInit {
           this.lastRcaResult = result;
           this.activeTab = 'recommendations';
           this.loadRecommendations(true);
-          this.toast.success(result.cached ? 'Loaded cached RCA' : 'RCA completed');
+          this.toast.success(
+            result.cached ? 'Loaded existing open RCA' : 'RCA completed'
+          );
         },
         error: (err) => {
           this.runningRecommendation = false;
