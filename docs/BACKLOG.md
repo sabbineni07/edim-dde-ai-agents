@@ -6,6 +6,8 @@ Captured from product and engineering discussions. Not committed to priority or 
 
 **AI Foundry / LangChain upgrade:** see [BACKLOG_AI_FOUNDRY_UPGRADE.md](./BACKLOG_AI_FOUNDRY_UPGRADE.md) for phased design, diagrams, and progress (Phases 0–7 not started).
 
+**YAML-driven agent definitions (metadata → LangGraph):** see [BACKLOG_YAML_DRIVEN_AGENTS.md](./BACKLOG_YAML_DRIVEN_AGENTS.md) — hybrid design (YAML composes; Python node catalog); not started.
+
 ---
 
 ## AI platform & data (Postgres-first)
