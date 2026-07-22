@@ -53,6 +53,7 @@ Tracked in detail in [BACKLOG_REFACTOR.md](./BACKLOG_REFACTOR.md) **Phase 5**.
 - [ ] **Secrets hygiene** — Rotate any credentials that appeared in local `.env` or logs; keep `.env` out of images and VCS.
 - [ ] **Docker `env_file`** — After Compose changes, recreate `api` so host `.env` (incl. Search) is loaded; verify `POSTGRES_HOST` override for `postgres` service.
 - [ ] **500 troubleshooting** — Use `logger.exception` on recommendation errors and check response `detail`; confirm Azure OpenAI deployment names match the resource.
+- [ ] **Remove temporary SQL executor** — Admin-only ad-hoc Postgres console added for debugging. Delete: `API/src/routes/temp_sql_executor.py`, its import/`include_router` in `API/src/main.py`, UI folder `UI/src/app/features/temp-sql-executor/`, route `temp/sql` in `app.routes.ts`, and the shell account-menu link (`openTempSqlExecutor` + CONTEXT_BAR hide).
 
 ---
 
